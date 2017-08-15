@@ -12,6 +12,7 @@ find_package(catkin REQUIRED
 ## System dependencies are found with CMake's conventions
 # find_package(Boost REQUIRED COMPONENTS system)
 find_package(Eigen 3.3 REQUIRED)
+find_package(CUDA REQUIRED)
 
 ## Uncomment this if the package has a setup.py. This macro ensures
 ## modules and global scripts declared therein get installed
@@ -37,22 +38,34 @@ catkin_package(
 ###########
 ## Build ##
 ###########
-#set(CMAKE_CXX_COMPILER /usr/bin/clang++)
+set(CMAKE_CXX_COMPILER /usr/bin/clang++)
 set(CMAKE_CXX_STANDARD 11)
 add_definitions(-std=c++11)
+add_definitions(-Wno-deprecated-register)
 
 ## Specify additional locations of header files
 ## Your package locations should be listed before other locations
  include_directories(include
          ${Eigen_INCLUDE_DIRS}
+         ${CUDA_INCLUDE_DIRS}
          ${catkin_INCLUDE_DIRS}
          )
 
+set(PLANNER_SRC
+        src/${PROJECT_NAME}/planner/oracle/Oracle.cpp
+        src/${PROJECT_NAME}/planner/ompl/control/RampVelocityControl.cpp
+        src/${PROJECT_NAME}/planner/ompl/control/Interfaces.cpp
+        src/${PROJECT_NAME}/planner/ompl/control/OracleControlSampler.cpp
+)
 ## Declare a C++ library
  add_library(oracle_planner
-   src/${PROJECT_NAME}/planner/oracle/Oracle.cpp
+       ${PLANNER_SRC}
  )
 
+target_link_libraries(oracle_planner
+        ${catkin_LIBRARIES}
+        ${CUDA_CUBLAS_LIBRARIES}
+        )
 ## Add cmake target dependencies of the library
 ## as an example, code may need to be generated before libraries
 ## either from message generation or dynamic reconfigure
@@ -68,6 +81,7 @@ add_definitions(-std=c++11)
 ## Specify libraries to link a library or executable target against
  target_link_libraries(manual_test_node
    ${catkin_LIBRARIES}
+   ${CUDA_CUBLAS_LIBRARIES}
  )
 
 #############

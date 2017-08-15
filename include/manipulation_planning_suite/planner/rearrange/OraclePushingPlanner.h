@@ -1,0 +1,10 @@
+//
+// Created by joshua on 8/14/17.
+//
+
+#ifndef MANIPULATION_PLANNING_SUITE_ORACLEPUSHINGPLANNER_H
+#define MANIPULATION_PLANNING_SUITE_ORACLEPUSHINGPLANNER_H
+
+// TODO implement class that glues everything together for push planning
+
+#endif //MANIPULATION_PLANNING_SUITE_ORACLEPUSHINGPLANNER_H
