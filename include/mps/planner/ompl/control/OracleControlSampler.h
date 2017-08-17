@@ -6,8 +6,8 @@
 #define MANIPULATION_PLANNING_SUITE_ORACLECONTROLSAMPLER_H
 
 #include <ompl/control/DirectedControlSampler.h>
-#include <manipulation_planning_suite/planner/ompl/control/Interfaces.h>
-#include <manipulation_planning_suite/planner/oracle/Oracle.h>
+#include <mps/planner/ompl/control/Interfaces.h>
+#include <mps/planner/oracle/Oracle.h>
 
 namespace mps {
     namespace planner {

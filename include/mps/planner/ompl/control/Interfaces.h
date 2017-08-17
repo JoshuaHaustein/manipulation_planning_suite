@@ -55,15 +55,15 @@ namespace mps {
                 };
 
                 /**
-                 * A finite resting velocity control is a velocity control for which T is finite and v(T) = 0.
-                 * Furthermore, the total duration of this control may be segmented into two segments
+                 * A semi-dynamic velocity control is a velocity control for which T is finite and v(T) = 0.
+                 * Furthermore, the total duration of this control can be segmented into two segments
                  * T = T_active + T_rest, where t in [0, T_active) is the duration in which v(t) may be non-zero,
                  * whereas for t in [T_active, T_rest] it is v(t) = 0.
                  */
-                class FiniteRestingVelocityControl : public virtual VelocityControl {
+                class SemiDynamicVelocityControl : public virtual VelocityControl {
                 public:
                     // TODO what about copy constructor etc
-                    virtual ~FiniteRestingVelocityControl() = 0;
+                    virtual ~SemiDynamicVelocityControl() = 0;
                     /**
                      * Return the resting time of this control
                      * @return resting time in seconds

@@ -7,11 +7,13 @@ project(manipulation_planning_suite)
 find_package(catkin REQUIRED
         COMPONENTS
         cmake_modules
+        sim_env
         )
 
 ## System dependencies are found with CMake's conventions
 # find_package(Boost REQUIRED COMPONENTS system)
 find_package(Eigen 3.3 REQUIRED)
+find_package(OMPL REQUIRED)
 find_package(CUDA REQUIRED)
 
 ## Uncomment this if the package has a setup.py. This macro ensures
@@ -30,9 +32,9 @@ find_package(CUDA REQUIRED)
 ## DEPENDS: system dependencies of this project that dependent projects also need
 catkin_package(
   INCLUDE_DIRS include
-  LIBRARIES manipulation_planning_suite
-#  CATKIN_DEPENDS other_catkin_pkg
-  DEPENDS Eigen
+  LIBRARIES ${PROJECT_NAME}
+  CATKIN_DEPENDS sim_env
+  DEPENDS Eigen OMPL
 )
 
 ###########
@@ -42,30 +44,35 @@ set(CMAKE_CXX_COMPILER /usr/bin/clang++)
 set(CMAKE_CXX_STANDARD 11)
 add_definitions(-std=c++11)
 add_definitions(-Wno-deprecated-register)
+set(CMAKE_CXX_FLAGS_DEBUG "-g -O0 -Wall")
+set(CMAKE_CXX_FLAGS_RELEASE "-O3")
 
 ## Specify additional locations of header files
 ## Your package locations should be listed before other locations
  include_directories(include
          ${Eigen_INCLUDE_DIRS}
          ${CUDA_INCLUDE_DIRS}
+         ${ompl_INCLUDE_DIRS}
          ${catkin_INCLUDE_DIRS}
          )
 
 set(PLANNER_SRC
-        src/${PROJECT_NAME}/planner/oracle/Oracle.cpp
-        src/${PROJECT_NAME}/planner/ompl/control/RampVelocityControl.cpp
-        src/${PROJECT_NAME}/planner/ompl/control/Interfaces.cpp
-        src/${PROJECT_NAME}/planner/ompl/control/OracleControlSampler.cpp
+        src/mps/planner/oracle/Oracle.cpp
+        src/mps/planner/ompl/control/RampVelocityControl.cpp
+        src/mps/planner/ompl/control/Interfaces.cpp
+        src/mps/planner/ompl/control/OracleControlSampler.cpp
+        src/mps/planner/ompl/state/SimEnvState.cpp
+        src/mps/planner/util/Random.cpp
 )
 ## Declare a C++ library
- add_library(oracle_planner
+ add_library(${PROJECT_NAME}
        ${PLANNER_SRC}
  )
 
-target_link_libraries(oracle_planner
-        ${catkin_LIBRARIES}
-        ${CUDA_CUBLAS_LIBRARIES}
-        )
+#target_link_libraries(oracle_planner
+#        ${catkin_LIBRARIES}
+#        ${CUDA_CUBLAS_LIBRARIES}
+#        )
 ## Add cmake target dependencies of the library
 ## as an example, code may need to be generated before libraries
 ## either from message generation or dynamic reconfigure
