@@ -82,6 +82,7 @@ namespace mps {
                     };
 
                     SimEnvObjectConfigurationSpace(sim_env::ObjectConstPtr object,
+                                                   const Eigen::MatrixX2f& position_limits,
                                                    double pos_weight,
                                                    double orientation_weight,
                                                    double joint_weight);
@@ -95,14 +96,21 @@ namespace mps {
                     sim_env::ObjectConstWeakPtr _object;
                     std::vector<internal::SubstateTypeDescription> _state_descriptions;
                     const Eigen::VectorXi _active_dofs;
+                    Eigen::MatrixX2f _limits;
                     double _position_weight;
                     double _orientation_weight;
                     double _joint_weight;
+                    const std::string _log_prefix;
 
                     void addPoseSubspace(sim_env::ObjectConstPtr object);
+                    void addPoseSubspace2D(sim_env::ObjectConstPtr object);
+                    void addPoseSubspace3D(sim_env::ObjectConstPtr object);
                     void addJointsSubspace(sim_env::ObjectConstPtr object);
-                    void addSingleBasePoseSpace2D(int dof_idx);
-                    void addSingleBasePoseSpace3D(int dof_idx);
+                    // arguments: dof = _active_dofs[idx] if dof != -1
+                    void addSingleBasePoseSpace2D(int dof, unsigned int idx);
+                    void addSingleBasePoseSpace3D(int dof, unsigned int idx);
+                    sim_env::LoggerConstPtr getLogger() const;
+                    ::ompl::base::RealVectorBounds makeBounds(const std::vector<unsigned int>& indices);
                 };
                 typedef SimEnvObjectConfigurationSpace::StateType SimEnvObjectConfiguration;
 
@@ -127,6 +135,7 @@ namespace mps {
                     };
 
                     SimEnvObjectVelocitySpace(sim_env::ObjectConstPtr object,
+                                              const Eigen::MatrixX2f& velocity_limits,
                                               double pos_weight,
                                               double orientation_weight,
                                               double joint_weight);
@@ -140,12 +149,16 @@ namespace mps {
                     sim_env::ObjectConstWeakPtr _object;
                     std::vector<internal::SubstateTypeDescription> _state_descriptions;
                     const Eigen::VectorXi _active_dofs;
+                    Eigen::MatrixX2f _limits;
                     double _position_vel_weight;
                     double _orientation_vel_weight;
                     double _joint_vel_weight;
+                    const std::string _log_prefix;
 
                     void addPoseVelocitySubspace(sim_env::ObjectConstPtr object);
                     void addJointsVelocitySubspace(sim_env::ObjectConstPtr object);
+                    sim_env::LoggerConstPtr getLogger() const;
+                    ::ompl::base::RealVectorBounds makeBounds(const std::vector<unsigned int>& indices);
                 };
                 typedef SimEnvObjectVelocitySpace::StateType SimEnvObjectVelocity;
 
@@ -189,8 +202,24 @@ namespace mps {
                         bool _configuration_only;
                     };
 
-                    SimEnvObjectStateSpace(sim_env::ObjectConstPtr object, const DistanceWeights& weights=DistanceWeights(),
-                                           bool position_only=true);
+                    /**
+                     * Creates a new object state space for a sim_env::Object based on the currently active
+                     * degrees of freedom. This may also be a sim_env::Robot. All dofs are limited in position
+                     * and velocity by the limits provided by object. Optionally, different position
+                     * and velocity limits can be imposed by providing the respective arguments.
+                     *
+                     * @param object - the object/robot to create the state space for
+                     * @param position_only - (optional) flag on whether to include velocities in the state space
+                     * @param position_limits - (optional) position limits for all active dofs.
+                     * @param velocity_limits - (optional) velocity limits for all active dofs (ignored if position_only=true)
+                     * @param weights - (optional) a struct containing weights for the distance function
+                     */
+                    SimEnvObjectStateSpace(sim_env::ObjectConstPtr object,
+                                           bool position_only=true,
+                                           const Eigen::MatrixX2f& position_limits=Eigen::MatrixX2f(),
+                                           const Eigen::MatrixX2f& velocity_limits=Eigen::MatrixX2f(),
+                                           const DistanceWeights& weights=DistanceWeights());
+
                     ~SimEnvObjectStateSpace();
 
                     /** Overrides from CompoundStateSpace */
@@ -204,6 +233,17 @@ namespace mps {
                 };
                 typedef SimEnvObjectStateSpace::StateType SimEnvObjectState;
 
+
+                /**
+                 * Struct that represents pose and velocity limits for all objects in the planning scene.
+                 */
+                struct PlanningSceneBounds {
+                    Eigen::Array2f x_limits;
+                    Eigen::Array2f y_limits;
+                    Eigen::Array2f z_limits;
+                    float max_velocity;
+                    float max_rotation_vel;
+                };
 
                 class SimEnvWorldStateSpace : public ::ompl::base::CompoundStateSpace {
                 public:
@@ -221,7 +261,9 @@ namespace mps {
 
                     };
 
-                    SimEnvWorldStateSpace(sim_env::WorldConstPtr world);
+                    SimEnvWorldStateSpace(sim_env::WorldConstPtr world,
+                                          const PlanningSceneBounds& bounds,
+                                          bool position_only=true);
                     ~SimEnvWorldStateSpace();
 
                     sim_env::ObjectConstPtr getObject(unsigned int i) const;
@@ -235,6 +277,9 @@ namespace mps {
                     sim_env::WorldConstWeakPtr _world;
                     std::unordered_map<std::string, std::shared_ptr<SimEnvObjectStateSpace> > _state_space_map;
                     std::vector<std::string> _object_names;
+
+                    void constructLimits(sim_env::ObjectConstPtr object, const PlanningSceneBounds& bounds,
+                                         Eigen::ArrayX2f& position_limits, Eigen::ArrayX2f& velocity_limits) const;
                 };
                 typedef SimEnvWorldStateSpace::StateType SimEnvWorldState;
 
