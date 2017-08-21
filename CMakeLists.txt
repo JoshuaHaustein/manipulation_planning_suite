@@ -61,6 +61,7 @@ set(PLANNER_SRC
         src/mps/planner/ompl/control/RampVelocityControl.cpp
         src/mps/planner/ompl/control/Interfaces.cpp
         src/mps/planner/ompl/control/OracleControlSampler.cpp
+        src/mps/planner/ompl/control/SimEnvStatePropagator.cpp
         src/mps/planner/ompl/state/SimEnvState.cpp
         src/mps/planner/util/Random.cpp
 )

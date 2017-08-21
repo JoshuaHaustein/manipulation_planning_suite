@@ -6,7 +6,6 @@
 #define MANIPULATION_PLANNING_SUITE_SIMENVSTATE_H
 
 // STL includes
-#include <sstream>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -14,6 +13,8 @@
 #include <Eigen/Core>
 // ompl includes
 #include <ompl/base/StateSpace.h>
+#include <ompl/base/StateValidityChecker.h>
+#include <ompl/base/SpaceInformation.h>
 // sim_env includes
 #include <sim_env/SimEnv.h>
 
@@ -26,6 +27,12 @@ namespace mps {
                 typedef std::weak_ptr<SimEnvObjectStateSpace> SimEnvObjectStateSpaceWeakPtr;
                 typedef std::shared_ptr<const SimEnvObjectStateSpace> SimEnvObjectStateSpaceConstPtr;
                 typedef std::weak_ptr<const SimEnvObjectStateSpace> SimEnvObjectStateSpaceConstWeakPtr;
+
+                class SimEnvWorldStateSpace;
+                typedef std::shared_ptr<SimEnvWorldStateSpace> SimEnvWorldStateSpacePtr;
+                typedef std::shared_ptr<const SimEnvWorldStateSpace> SimEnvWorldStateSpaceConstPtr;
+                typedef std::weak_ptr<SimEnvWorldStateSpace> SimEnvWorldStateSpaceWeakPtr;
+                typedef std::weak_ptr<const SimEnvWorldStateSpace> SimEnvWorldStateSpaceConstWeakPtr;
 
                 namespace internal {
                     /**
@@ -46,21 +53,6 @@ namespace mps {
                                 type(type), dim(dim) {}
                     };
 
-                    /**
-                     * Create name for a state space for the specified dofs.
-                     * @param dofs - degrees of freedom the state space is for
-                     * @param type_name - type description of state space
-                     * @return a name for the state space
-                     */
-                    std::string createSpaceName(const std::vector<int>& dofs, const std::string& type_name) {
-                        std::stringstream ss;
-                        ss << "DOFs[";
-                        for (auto& dof : dofs) {
-                            ss << dof << ",";
-                        }
-                        ss << "]-" << type_name;
-                        return ss.str();
-                    }
                 }
 
                 /**
@@ -194,18 +186,24 @@ namespace mps {
 
                     class StateType : public ::ompl::base::CompoundStateSpace::StateType {
                     public:
-                        StateType(bool configuration_only=true);
+                        StateType(int num_dofs, bool configuration_only=true);
                         StateType() = delete;
                         ~StateType();
                         Eigen::VectorXf getConfiguration() const;
                         void getConfiguration(Eigen::VectorXf& vec) const;
                         void setConfiguration(const Eigen::VectorXf& vec);
                         bool hasVelocity() const;
+                        /**
+                         * Returns the velocity of the object in this state.
+                         * Velocities are always zero if this is only a configuration.
+                         * @return
+                         */
                         Eigen::VectorXf getVelocity() const;
                         void getVelocity(Eigen::VectorXf& vec) const;
                         void setVelocity(const Eigen::VectorXf& vec);
                     private:
                         bool _configuration_only;
+                        int _num_dofs;
                     };
 
                     /**
@@ -292,6 +290,7 @@ namespace mps {
                     ~SimEnvWorldStateSpace();
 
                     sim_env::ObjectConstPtr getObject(unsigned int i) const;
+                    std::string getObjectName(unsigned int i) const;
                     unsigned int getNumObjects() const;
 
                     /** Overrides from CompoundStateSpace */
@@ -308,13 +307,48 @@ namespace mps {
                 };
                 typedef SimEnvWorldStateSpace::StateType SimEnvWorldState;
 
-                class SimEnvValidityChecker {
-                    // TODO State validity checker using SimEnv
+                /**
+                 * A state validity checker for SimEnvWorldStates.
+                 */
+                class SimEnvValidityChecker : public ::ompl::base::StateValidityChecker {
+                public:
+                    /**
+                     * The collision policy determines what kind of collisions are allowed, i.e. are considered
+                     * valid. By default, all collisions are allowed.
+                     */
+                    class CollisionPolicy {
+                        // TODO implement this properly, at the moment everything is hardcoded to be always allowed
+                    public:
+                        void setStaticCollisions(bool allowed);
+                        bool staticCollisionsAllowed() const;
+                        void setCollision(const std::string& obj1, const std::string& obj2, bool allowed);
+                        void setCollision(sim_env::ObjectConstPtr obj1, sim_env::ObjectConstPtr obj2, bool allowed);
+                        bool collisionAllowed(const std::string& obj1, const std::string& obj2) const;
+                        bool collisionAllowed(sim_env::ObjectConstPtr obj1, sim_env::ObjectConstPtr obj2) const;
+                    };
+
+                    SimEnvValidityChecker(::ompl::base::SpaceInformationPtr si, sim_env::WorldPtr world);
+                    ~SimEnvValidityChecker();
+
+                    /**
+                     * Checks whether a state is valid or not.
+                     * A state is valid, if it is physically feasible (i.e. not overlaps between rigid bodies)
+                     * and within bounds. Optionally, collisions between certain objects may be prohibited.
+                     * @param state - must be an instance of SimEnvWorldStateSpace
+                     * @return
+                     */
+                    bool isValid(const ::ompl::base::State* state) const override;
+
+                    bool checkContact(const sim_env::Contact&) const;
+                    /**
+                     * Public access to collision policy
+                     */
+                    CollisionPolicy collision_policy;
+                private:
+                    sim_env::WorldPtr _world;
+                    SimEnvWorldStateSpaceConstWeakPtr _world_space;
                 };
 
-                class SimEnvStatePropagator {
-                    // TODO implement state propagator using sim_env. The state propagator operates on VelocityControls
-                };
             }
         }
     }

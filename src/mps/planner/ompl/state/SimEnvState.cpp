@@ -6,9 +6,35 @@
 #include <ompl/base/spaces/SE2StateSpace.h>
 #include <ompl/base/spaces/SE3StateSpace.h>
 #include <ompl/base/spaces/RealVectorStateSpace.h>
+#include <sstream>
+
+namespace mps {
+    namespace planner {
+        namespace ompl {
+            namespace state {
+                namespace internal {
+                    /**
+                     * Create name for a state space for the specified dofs.
+                     * @param dofs - degrees of freedom the state space is for
+                     * @param type_name - type description of state space
+                     * @return a name for the state space
+                     */
+                    std::string createSpaceName(const std::vector<int> &dofs, const std::string &type_name) {
+                        std::stringstream ss;
+                        ss << "DOFs[";
+                        for (auto& dof : dofs) {
+                            ss << dof << ",";
+                        }
+                        ss << "]-" << type_name;
+                        return ss.str();
+                    }
+                }
+            }
+        }
+    }
+}
 
 using namespace mps::planner::ompl::state;
-
 ////////////////////////////////////////////////////////////////////////////////////////
 /////////////////// SimEnvObjectVelocity aka SimEnvObjectVelocitySpace::StateType //////
 ////////////////////////////////////////////////////////////////////////////////////////
@@ -515,8 +541,9 @@ sim_env::LoggerConstPtr SimEnvObjectVelocitySpace::getLogger() const {
 ////////////////////////////////////////////////////////////////////////////////////////
 /////////////////// SimEnvObjectState aka SimEnvObjectState::StateType /////////////////
 ////////////////////////////////////////////////////////////////////////////////////////
-SimEnvObjectStateSpace::StateType::StateType(bool configuration_only) :
-        _configuration_only(configuration_only)
+SimEnvObjectStateSpace::StateType::StateType(int num_dofs, bool configuration_only) :
+        _configuration_only(configuration_only),
+        _num_dofs(num_dofs)
 {
 }
 
@@ -551,6 +578,8 @@ Eigen::VectorXf SimEnvObjectStateSpace::StateType::getVelocity() const {
 
 void SimEnvObjectStateSpace::StateType::getVelocity(Eigen::VectorXf& vel) const {
     if (not hasVelocity()) {
+        vel.resize(_num_dofs);
+        vel.setZero();
         return;
     }
     auto* vel_component = components[1]->as<SimEnvObjectVelocity>();
@@ -558,6 +587,9 @@ void SimEnvObjectStateSpace::StateType::getVelocity(Eigen::VectorXf& vel) const 
 }
 
 void SimEnvObjectStateSpace::StateType::setVelocity(const Eigen::VectorXf& vel) {
+    if (not hasVelocity()) {
+        return;
+    }
     auto* vel_component = components[1]->as<SimEnvObjectVelocity>();
     vel_component->setVelocity(vel);
 }
@@ -599,7 +631,7 @@ SimEnvObjectStateSpace::~SimEnvObjectStateSpace() {
 }
 
 ::ompl::base::State* SimEnvObjectStateSpace::allocState() const {
-    SimEnvObjectState* object_state = new SimEnvObjectState(_position_only);
+    SimEnvObjectState* object_state = new SimEnvObjectState(_position_only, _active_dofs.size());
     allocStateComponents(object_state);
     return object_state;
 }
@@ -612,6 +644,7 @@ void SimEnvObjectStateSpace::freeState(::ompl::base::State* state) const {
     delete[] object_state->components;
     delete object_state;
 }
+
 ////////////////////////////////////////////////////////////////////////////////
 //////////// SimEnvWorldState aka SimEnvWorldStateSpace::StateType//////////////
 ////////////////////////////////////////////////////////////////////////////////
@@ -689,7 +722,7 @@ void SimEnvWorldStateSpace::freeState(::ompl::base::State* state) const {
 }
 
 sim_env::ObjectConstPtr SimEnvWorldStateSpace::getObject(unsigned int i) const {
-    if (i > _object_names.size()) {
+    if (i >= _object_names.size()) {
         return nullptr;
     }
     sim_env::WorldConstPtr world = _world.lock();
@@ -698,6 +731,13 @@ sim_env::ObjectConstPtr SimEnvWorldStateSpace::getObject(unsigned int i) const {
             " The world of this state space does no longer exist.");
     }
     return world->getObjectConst(_object_names[i], false);
+}
+
+std::string SimEnvWorldStateSpace::getObjectName(unsigned int i) const {
+    if (i >= _object_names.size()) {
+        return "";
+    }
+   return _object_names[i];
 }
 
 unsigned int SimEnvWorldStateSpace::getNumObjects() const {
@@ -766,3 +806,110 @@ void SimEnvWorldStateSpace::constructLimits(sim_env::ObjectConstPtr object, cons
         }
     }
 }
+
+////////////////////////////////////////////////////////////////////////////////
+////////////////////////////// SimEnvValidityChecker ///////////////////////////
+////////////////////////////////////////////////////////////////////////////////
+
+void SimEnvValidityChecker::CollisionPolicy::setStaticCollisions(bool allowed) {
+    // TODO
+}
+
+bool SimEnvValidityChecker::CollisionPolicy::staticCollisionsAllowed() const {
+    // TODO
+    return true;
+}
+
+void SimEnvValidityChecker::CollisionPolicy::setCollision(const std::string& obj1,
+                                                          const std::string& obj2,
+                                                          bool allowed) {
+    // TODO
+}
+
+void SimEnvValidityChecker::CollisionPolicy::setCollision(sim_env::ObjectConstPtr obj1, sim_env::ObjectConstPtr obj2, bool allowed) {
+    // TODO
+}
+
+bool SimEnvValidityChecker::CollisionPolicy::collisionAllowed(const std::string& obj1, const std::string& obj2) const {
+    // TODO
+    return true;
+}
+
+bool SimEnvValidityChecker::CollisionPolicy::collisionAllowed(sim_env::ObjectConstPtr obj1, sim_env::ObjectConstPtr obj2) const {
+    // TODO
+    return true;
+}
+
+SimEnvValidityChecker::SimEnvValidityChecker(::ompl::base::SpaceInformationPtr si,
+                                             sim_env::WorldPtr world) :
+        StateValidityChecker(si), _world(world)
+{
+    _world_space = std::dynamic_pointer_cast<const SimEnvWorldStateSpace>(si->getStateSpace());
+    specs_.clearanceComputationType = ::ompl::base::StateValidityCheckerSpecs::ClearanceComputationType::NONE;
+}
+
+SimEnvValidityChecker::~SimEnvValidityChecker() {
+}
+
+bool SimEnvValidityChecker::isValid(const ::ompl::base::State *state) const {
+    auto world_space = _world_space.lock();
+    if (!world_space) {
+        throw std::logic_error("[mps::planner::ompl::state::SimEnvValidityChecker::isValid]"
+                                       "Could not access world state space. Invalid pointer.");
+    }
+    auto* world_state = state->as<SimEnvWorldState>();
+    // first check whether the provided state is within bounds
+    bool bounds_valid = world_space->satisfiesBounds(state);
+    if (!bounds_valid) {
+        _world->getLogger()->logDebug("State bounds violated. Rejecting state.",
+                                      "[mps::planner::ompl::state::SimEnvValidityChecker::isValid]");
+        return false;
+    }
+    // next check, whether the state is valid in terms of collisions
+    std::lock_guard<std::recursive_mutex> world_lock(_world->getMutex());
+    // save the state the world is in
+    _world->saveState();
+    // now set it to represent the given SimEnvWorldState
+    for (unsigned int obj_id = 0; obj_id < world_state->getNumObjects(); ++obj_id) {
+        auto* obj_state = world_state->getObjectState(obj_id);
+        std::string obj_name = world_space->getObjectName(obj_id);
+        sim_env::ObjectPtr obj = _world->getObject(obj_name, false);
+        obj->setDOFPositions(obj_state->getConfiguration());
+        obj->setDOFVelocities(obj_state->getVelocity());
+    }
+    // first check whether this state is physically feasible
+    if (not _world->isPhysicallyFeasible()) {
+        _world->getLogger()->logDebug("Rejecting state because it is physically infeasible.",
+                                      "[mps::planner::ompl::state::SimEnvValidityChecker::isValid]");
+    }
+    // check for collisions
+    std::vector<sim_env::ObjectPtr> objects;
+    _world->getObjects(objects, false);
+    for (auto object : objects) {
+        std::vector<sim_env::Contact> contacts;
+        _world->checkCollision(object, contacts);
+        for (auto contact : contacts) {
+            bool contact_ok = checkContact(contact);
+            if (!contact_ok) {
+                _world->getLogger()->logDebug("Rejecting state due to violation of contact constraints.",
+                                              "[mps::planner::ompl::state::SimEnvValidityChecker::isValid]");
+                return false;
+            }
+        }
+    }
+    // finally restore whatever state the world was in before
+    _world->restoreState();
+    return true;
+}
+
+bool SimEnvValidityChecker::checkContact(const sim_env::Contact& contact) const {
+    sim_env::ObjectPtr obj1 = contact.object_a.lock();
+    sim_env::ObjectPtr obj2 = contact.object_b.lock();
+    if (!obj1 or !obj2) {
+        throw std::logic_error("[mps::planner::ompl::state::SimEnvValidityChecker::checkContact]"
+                                       "Could not lock weak pointer to objects stored in contact.");
+    }
+    return collision_policy.collisionAllowed(obj1, obj2);
+}
+
+
