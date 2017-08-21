@@ -639,22 +639,30 @@ SimEnvObjectState* SimEnvWorldStateSpace::StateType::getObjectState(unsigned int
 ////////////////////////////////////////////////////////////////////////////////
 SimEnvWorldStateSpace::SimEnvWorldStateSpace(sim_env::WorldConstPtr world,
                                              const PlanningSceneBounds& bounds,
-                                             bool position_only):
+                                             bool position_only,
+                                             const WeightMap& weights):
     _world(world)
 {
     std::vector<sim_env::ObjectConstPtr> objects;
     world->getObjects(objects, false);
     for (auto& object : objects) {
         if (object->getNumActiveDOFs() > 0) {
+            // get limits for this object
             Eigen::ArrayX2f position_limits;
             Eigen::ArrayX2f velocity_limits;
             constructLimits(object, bounds, position_limits, velocity_limits);
-            // TODO what about distance weights
+            // get distance weights if we have some, else use default
+            SimEnvObjectStateSpace::DistanceWeights obj_weight;
+            auto weight_iter = weights.find(object->getName());
+            if (weight_iter != weights.end()) {
+                obj_weight = weight_iter->second;
+            }
             SimEnvObjectStateSpacePtr state_space =
                     std::make_shared<SimEnvObjectStateSpace>(object,
                                                              position_only,
                                                              position_limits,
-                                                             velocity_limits);
+                                                             velocity_limits,
+                                                             obj_weight);
             _state_space_map[object->getName()] = state_space;
             addSubspace(state_space, 1.0);
             _object_names.push_back(object->getName());

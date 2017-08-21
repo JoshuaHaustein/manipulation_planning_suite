@@ -170,6 +170,9 @@ namespace mps {
                  */
                 class SimEnvObjectStateSpace : public ::ompl::base::CompoundStateSpace {
                 public:
+                    /**
+                     * Distance weights used in the distance function implemented by ::ompl::base::CompoundStateSpace
+                     */
                     struct DistanceWeights {
                         double position_weight;
                         double orientation_weight;
@@ -177,6 +180,9 @@ namespace mps {
                         double configuration_weight;
                         double velocity_weight;
 
+                        /**
+                         * The default constructor assigns some default values.
+                         */
                         DistanceWeights() {
                             position_weight = 1.0;
                             orientation_weight = 0.5;
@@ -245,6 +251,10 @@ namespace mps {
                     float max_rotation_vel;
                 };
 
+                /**
+                 * Class that represents the planning state of a world scene. May be
+                 * Cartesian product of configuration spaces or of state spaces.
+                 */
                 class SimEnvWorldStateSpace : public ::ompl::base::CompoundStateSpace {
                 public:
                     class StateType : public ::ompl::base::CompoundStateSpace::StateType {
@@ -261,9 +271,24 @@ namespace mps {
 
                     };
 
+                    typedef std::unordered_map<std::string, SimEnvObjectStateSpace::DistanceWeights> WeightMap;
+
+                    /**
+                     * Creates a new state space for the provided world. The state space of a world is the
+                     * Cartesian product of the state spaces of all active objects/robots in it. An object
+                     * is considered active if it has at least one active degree of freedom.
+                     * @param world - the world to create the state space for
+                     * @param bounds - bounds limiting the base positions of objects to a certain workspace area
+                     * @param position_only - if true, the resulting state space is the Cartesian product of
+                     *                      configuration spaces, i.e. does not include any velocities. Otherwise the
+                     *                      state spaces include velocities.
+                     * @param weight - a map that maps object/robot names to SimEnvObjectStateSpace::DistanceWeight instances.
+                     *              If there is no DistanceWeight for an object/robot in the map, the default DistanceWeight is used.
+                     */
                     SimEnvWorldStateSpace(sim_env::WorldConstPtr world,
                                           const PlanningSceneBounds& bounds,
-                                          bool position_only=true);
+                                          bool position_only=true,
+                                          const WeightMap& weight=WeightMap());
                     ~SimEnvWorldStateSpace();
 
                     sim_env::ObjectConstPtr getObject(unsigned int i) const;
