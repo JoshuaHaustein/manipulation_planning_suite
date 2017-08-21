@@ -293,6 +293,22 @@ namespace mps {
                     std::string getObjectName(unsigned int i) const;
                     unsigned int getNumObjects() const;
 
+                    /**
+                     * Sets the state of the given world to the given state. The state is assumed to originate
+                     * from this state space.
+                     * @param world - world to set the state for.
+                     * @param state - state to set
+                     */
+                    void setToState(sim_env::WorldPtr world, const StateType* state) const;
+
+                    /**
+                     * Extracts the state of the given world and stores it in state. The state is assumed
+                     * to originate from this state space.
+                     * @param world - world to get the state from
+                     * @param state - state variable to save in
+                     */
+                    void extractState(sim_env::WorldConstPtr world, StateType* state) const;
+
                     /** Overrides from CompoundStateSpace */
                     ::ompl::base::State* allocState() const override;
                     void freeState(::ompl::base::State* state) const override;

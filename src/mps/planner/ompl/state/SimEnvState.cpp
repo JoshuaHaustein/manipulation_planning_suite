@@ -744,6 +744,25 @@ unsigned int SimEnvWorldStateSpace::getNumObjects() const {
     return (unsigned int) _object_names.size();
 }
 
+void SimEnvWorldStateSpace::setToState(sim_env::WorldPtr world, const StateType* state) const {
+    for (unsigned int obj_id = 0; obj_id < state->getNumObjects(); ++obj_id) {
+        auto* obj_state = state->getObjectState(obj_id);
+        std::string obj_name = getObjectName(obj_id);
+        sim_env::ObjectPtr obj = world->getObject(obj_name, false);
+        obj->setDOFPositions(obj_state->getConfiguration());
+        obj->setDOFVelocities(obj_state->getVelocity());
+    }
+}
+
+void SimEnvWorldStateSpace::extractState(sim_env::WorldConstPtr world, StateType* state) const {
+    for (unsigned int i = 0; i < getNumObjects(); ++i) {
+        sim_env::ObjectConstPtr object = world->getObjectConst(_object_names[i], false);
+        SimEnvObjectState* obj_state = state->getObjectState(i);
+        obj_state->setConfiguration(object->getDOFPositions());
+        obj_state->setVelocity(object->getDOFVelocities());
+    }
+}
+
 void SimEnvWorldStateSpace::constructLimits(sim_env::ObjectConstPtr object, const PlanningSceneBounds& bounds,
                      Eigen::ArrayX2f& position_limits, Eigen::ArrayX2f& velocity_limits) const {
     Eigen::VectorXi active_dofs = object->getActiveDOFs();
@@ -870,13 +889,7 @@ bool SimEnvValidityChecker::isValid(const ::ompl::base::State *state) const {
     // save the state the world is in
     _world->saveState();
     // now set it to represent the given SimEnvWorldState
-    for (unsigned int obj_id = 0; obj_id < world_state->getNumObjects(); ++obj_id) {
-        auto* obj_state = world_state->getObjectState(obj_id);
-        std::string obj_name = world_space->getObjectName(obj_id);
-        sim_env::ObjectPtr obj = _world->getObject(obj_name, false);
-        obj->setDOFPositions(obj_state->getConfiguration());
-        obj->setDOFVelocities(obj_state->getVelocity());
-    }
+    world_space->setToState(_world, world_state);
     // first check whether this state is physically feasible
     if (not _world->isPhysicallyFeasible()) {
         _world->getLogger()->logDebug("Rejecting state because it is physically infeasible.",
