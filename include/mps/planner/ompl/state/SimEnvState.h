@@ -365,6 +365,11 @@ namespace mps {
                     SimEnvWorldStateSpaceConstWeakPtr _world_space;
                 };
 
+                typedef std::shared_ptr<SimEnvValidityChecker> SimEnvValidityCheckerPtr;
+                typedef std::shared_ptr<const SimEnvValidityChecker> SimEnvValidityCheckerConstPtr;
+                typedef std::weak_ptr<SimEnvValidityChecker> SimEnvValidityCheckerWeakPtr;
+                typedef std::weak_ptr<const SimEnvValidityChecker> SimEnvValidityCheckerWeakConstPtr;
+
             }
         }
     }

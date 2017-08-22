@@ -121,9 +121,15 @@ RampVelocityControlSpace::RampVelocityControlSpace(const ::ompl::base::StateSpac
                                                    const Eigen::VectorXf &velocity_limits,
                                                    const Eigen::VectorXf &acceleration_limits,
                                                    const Eigen::Array2f &duration_limits) :
-        omc::ControlSpace(stateSpace), _acceleration_limits(acceleration_limits), _velocity_limits(velocity_limits),
-        _duration_limits(duration_limits) {
+        omc::ControlSpace(stateSpace), _acceleration_limits(acceleration_limits),
+        _velocity_limits(velocity_limits), _duration_limits(duration_limits) {
+}
 
+RampVelocityControlSpace::RampVelocityControlSpace(const ::ompl::base::StateSpacePtr &stateSpace,
+                                                   const ControlLimits& limits) :
+        RampVelocityControlSpace(stateSpace, limits.velocity_limits,
+                                 limits.acceleration_limits, limits.duration_limits)
+{
 }
 
 RampVelocityControlSpace::~RampVelocityControlSpace() {

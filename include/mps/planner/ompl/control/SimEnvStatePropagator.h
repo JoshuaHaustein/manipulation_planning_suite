@@ -18,7 +18,6 @@ namespace mps {
     namespace planner {
         namespace ompl {
             namespace control {
-                // TODO implement state propagator using sim_env. The state propagator operates on VelocityControls
                 /**
                  * State propagator that operates on a sim_env world.
                  * It only supports SimEnvWorldState as state type and VelocityControl as control types.
@@ -55,6 +54,11 @@ namespace mps {
                     float _t_max;
                     state::SimEnvWorldStateSpaceConstWeakPtr _state_space;
                 };
+
+                typedef std::shared_ptr<SimEnvStatePropagator> SimEnvStatePropagatorPtr;
+                typedef std::shared_ptr<const SimEnvStatePropagator> SimEnvStatePropagatorConstPtr;
+                typedef std::weak_ptr<SimEnvStatePropagator> SimEnvStatePropagatorWeakPtr;
+                typedef std::weak_ptr<const SimEnvStatePropagator> SimEnvStatePropagatorWeakConstPtr;
             }
         }
     }

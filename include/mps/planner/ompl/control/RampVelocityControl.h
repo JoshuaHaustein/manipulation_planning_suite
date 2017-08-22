@@ -82,6 +82,11 @@ namespace mps {
                 class RampVelocityControlSpace : public ::ompl::control::ControlSpace,
                                                  public std::enable_shared_from_this<RampVelocityControlSpace>{
                 public:
+                    struct ControlLimits {
+                        Eigen::VectorXf velocity_limits;
+                        Eigen::VectorXf acceleration_limits;
+                        Eigen::Array2f duration_limits;
+                    };
                     /**
                      * Creates a new ramp velocity control space.
                      * @param velocity_limits - absolute maximal velocity for each dof
@@ -92,6 +97,8 @@ namespace mps {
                                              const Eigen::VectorXf &velocity_limits,
                                              const Eigen::VectorXf &acceleration_limits,
                                              const Eigen::Array2f &duration_limits);
+                    RampVelocityControlSpace(const ::ompl::base::StateSpacePtr &stateSpace,
+                                             const ControlLimits& limits);
                     ~RampVelocityControlSpace();
 
                     /** ControlSpace */
