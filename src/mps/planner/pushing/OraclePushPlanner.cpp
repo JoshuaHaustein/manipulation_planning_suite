@@ -14,10 +14,22 @@ PlanningProblem::PlanningProblem() {
 }
 
 PlanningProblem::PlanningProblem(sim_env::WorldPtr world, sim_env::RobotPtr robot,
-                                 sim_env::RobotVelocityControllerPtr controller, sim_env::ObjectPtr target_object) {
+                                 sim_env::RobotVelocityControllerPtr controller,
+                                 sim_env::ObjectPtr target_object):
+        world(world), robot(robot), robot_controller(controller), target_object(target_object)
+{
+
     planning_time_out = 60.0f;
     b_semi_dynamic = true;
     t_max = 8.0f;
+    workspace_bounds.x_limits[0] = std::numeric_limits<float>::lowest();
+    workspace_bounds.x_limits[1] = std::numeric_limits<float>::max();
+    workspace_bounds.y_limits[0] = std::numeric_limits<float>::lowest();
+    workspace_bounds.y_limits[1] = std::numeric_limits<float>::max();
+    workspace_bounds.z_limits[0] = std::numeric_limits<float>::lowest();
+    workspace_bounds.z_limits[1] = std::numeric_limits<float>::max();
+    workspace_bounds.max_rotation_vel = 10.0f; // arbitrary maximum velocity in rad/s
+    workspace_bounds.max_velocity = 30.0f; // arbitrary maximum velocity in m/s
 }
 
 OraclePushPlanner::OraclePushPlanner() {
@@ -45,6 +57,8 @@ bool OraclePushPlanner::setup(PlanningProblem& problem) {
                                                                     problem.control_limits);
     _space_information =
             std::make_shared<::ompl::control::SpaceInformation>(_state_space, _control_space);
+    _space_information->setPropagationStepSize(1.0); // NOT USED
+    _space_information->setMinMaxControlDuration(1, 1); // NOT USED
     _validity_checker =
             std::make_shared<mps::planner::ompl::state::SimEnvValidityChecker>(_space_information,
                                                                                _planning_problem.world);
@@ -72,7 +86,7 @@ void OraclePushPlanner::dummyTest() {
     // TODO can put manual tests here
     ::ompl::base::StateSamplerPtr state_sampler = _space_information->allocStateSampler();
     ::ompl::base::State* state = _space_information->allocState();
-    for (unsigned int i = 0; i < 1000; ++i) {
+    for (unsigned int i = 0; i < 10; ++i) {
         state_sampler->sampleUniform(state);
         auto* world_state = state->as<mps_state::SimEnvWorldState>();
         _state_space->setToState(_planning_problem.world, world_state);
