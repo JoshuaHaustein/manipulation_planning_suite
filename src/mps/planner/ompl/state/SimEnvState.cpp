@@ -603,8 +603,8 @@ SimEnvObjectStateSpace::SimEnvObjectStateSpace(sim_env::ObjectConstPtr object,
                                                const Eigen::MatrixX2f& velocity_limits,
                                                const DistanceWeights& weights):
     _object(object),
-    _active_dofs(object->getActiveDOFs()),
-    _position_only(position_only)
+    _position_only(position_only),
+    _active_dofs(object->getActiveDOFs())
 {
     assert(_active_dofs.size() > 0);
     setName("sim_env::Object(" + object->getName() + ")-StateSpace");
@@ -631,7 +631,7 @@ SimEnvObjectStateSpace::~SimEnvObjectStateSpace() {
 }
 
 ::ompl::base::State* SimEnvObjectStateSpace::allocState() const {
-    SimEnvObjectState* object_state = new SimEnvObjectState(_position_only, _active_dofs.size());
+    SimEnvObjectState* object_state = new SimEnvObjectState(_active_dofs.size(), _position_only);
     allocStateComponents(object_state);
     return object_state;
 }
