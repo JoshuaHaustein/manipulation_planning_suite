@@ -35,9 +35,9 @@ namespace mps {
 }
 
 using namespace mps::planner::ompl::state;
-////////////////////////////////////////////////////////////////////////////////////////
-/////////////////// SimEnvObjectVelocity aka SimEnvObjectVelocitySpace::StateType //////
-////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////
+/////////////////// SimEnvObjectConfigurationSpace::StateType aka SimEnvConfiguration //////
+////////////////////////////////////////////////////////////////////////////////////////////
 SimEnvObjectConfigurationSpace::StateType::StateType(const std::vector<internal::SubstateTypeDescription>& desc,
                                                      unsigned int dimension) :
         _state_descriptions(desc),
@@ -61,7 +61,7 @@ void SimEnvObjectConfigurationSpace::StateType::getConfiguration(Eigen::VectorXf
         switch (_state_descriptions.at(space_idx).type ) {
             case internal::SubspaceType::RealVector:
             {
-                ::ompl::base::RealVectorStateSpace::StateType* real_vector_state =
+                auto * real_vector_state =
                         static_cast<::ompl::base::RealVectorStateSpace::StateType*>(components[space_idx]);
                 for (unsigned int i = 0; i < _state_descriptions.at(space_idx).dim; ++i) {
                     config[dof_idx] = (float) real_vector_state->values[i];
@@ -71,7 +71,7 @@ void SimEnvObjectConfigurationSpace::StateType::getConfiguration(Eigen::VectorXf
             }
             case internal::SubspaceType::SO3:
             {
-                ::ompl::base::SO3StateSpace::StateType* so3_state =
+                auto * so3_state =
                         static_cast<::ompl::base::SO3StateSpace::StateType*>(components[space_idx]);
                 Eigen::Vector3f euler;
                 Eigen::Quaternionf quat((const float &) so3_state->w, (const float &) so3_state->x,
@@ -84,7 +84,7 @@ void SimEnvObjectConfigurationSpace::StateType::getConfiguration(Eigen::VectorXf
             }
             case internal::SubspaceType ::SO2:
             {
-                ::ompl::base::SO2StateSpace::StateType* so2_state =
+                auto * so2_state =
                         static_cast<::ompl::base::SO2StateSpace::StateType*>(components[space_idx]);
                 config[dof_idx++] = (float)so2_state->value;
                 break;
@@ -99,7 +99,7 @@ void SimEnvObjectConfigurationSpace::StateType::setConfiguration(const Eigen::Ve
         switch (_state_descriptions.at(space_idx).type ) {
             case internal::SubspaceType::RealVector:
             {
-                ::ompl::base::RealVectorStateSpace::StateType* real_vector_state =
+                auto * real_vector_state =
                         static_cast<::ompl::base::RealVectorStateSpace::StateType*>(components[space_idx]);
                 for (unsigned int i = 0; i < _state_descriptions.at(space_idx).dim; ++i) {
                     real_vector_state->values[i] = (double) config[dof_idx++];
@@ -108,7 +108,7 @@ void SimEnvObjectConfigurationSpace::StateType::setConfiguration(const Eigen::Ve
             }
             case internal::SubspaceType::SO3:
             {
-                ::ompl::base::SO3StateSpace::StateType* so3_state =
+                auto * so3_state =
                         static_cast<::ompl::base::SO3StateSpace::StateType*>(components[space_idx]);
                 Eigen::Quaternionf quat;
                 sim_env::utils::eigen::eulerToQuaternion(config[dof_idx],
@@ -124,9 +124,9 @@ void SimEnvObjectConfigurationSpace::StateType::setConfiguration(const Eigen::Ve
             }
             case internal::SubspaceType ::SO2:
             {
-                ::ompl::base::SO2StateSpace::StateType* so2_state =
+                auto * so2_state =
                         static_cast<::ompl::base::SO2StateSpace::StateType*>(components[space_idx]);
-                so2_state->value =(double)config[dof_idx++];
+                so2_state->value = (double)config[dof_idx++];
                 break;
             }
         }
@@ -198,7 +198,7 @@ void SimEnvObjectConfigurationSpace::addPoseSubspace2D(sim_env::ObjectConstPtr o
     // else idx_helper[i] = -1 for i = 0 .. 2
     Eigen::VectorXi idx_helper(3);
     for (unsigned int i = 0; i < idx_helper.size(); ++i) {
-        idx_helper[i] = _active_dofs.size() > i + 1 ? _active_dofs[i] : -1;
+        idx_helper[i] = _active_dofs.size() > i ? _active_dofs[i] : -1;
     }
     if (idx_helper[0] == 0 and idx_helper[1] == 1) {
         // we have both x and y, so let's add a 2d real vector space
@@ -223,7 +223,7 @@ void SimEnvObjectConfigurationSpace::addPoseSubspace3D(sim_env::ObjectConstPtr o
     // else idx_helper[i] = -1 for i = 0 .. 5
     Eigen::VectorXi idx_helper(6);
     for (unsigned int i = 0; i < idx_helper.size(); ++i) {
-        idx_helper[i] = _active_dofs.size() > i + 1 ? _active_dofs[i] : -1;
+        idx_helper[i] = _active_dofs.size() > i ? _active_dofs[i] : -1;
     }
     unsigned int rdio = 0; // rotation dof index offset
 
