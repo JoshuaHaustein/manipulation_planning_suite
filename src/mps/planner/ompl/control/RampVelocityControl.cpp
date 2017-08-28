@@ -219,6 +219,7 @@ bool RampVelocityControlSpace::isCompound() const {
     return false;
 }
 
+
 void RampVelocityControlSpace::getAccelerationLimits(Eigen::VectorXf& limits) const {
     limits = _acceleration_limits;
 }

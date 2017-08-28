@@ -17,6 +17,8 @@
 #include <ompl/base/SpaceInformation.h>
 // sim_env includes
 #include <sim_env/SimEnv.h>
+// mps includes
+#include <mps/planner/util/Serialize.h>
 
 namespace mps {
     namespace planner {
@@ -60,7 +62,9 @@ namespace mps {
                  */
                 class SimEnvObjectConfigurationSpace : public ::ompl::base::CompoundStateSpace {
                 public:
-                    class StateType : public ::ompl::base::CompoundStateSpace::StateType {
+                    class StateType : public ::ompl::base::CompoundStateSpace::StateType,
+                                      public ::mps::planner::util::serialize::RealValueSerializable
+                    {
                     public:
                         StateType(const std::vector<internal::SubstateTypeDescription>& desc, unsigned int dimension);
                         StateType() = delete;
@@ -68,6 +72,7 @@ namespace mps {
                         Eigen::VectorXf getConfiguration() const;
                         void getConfiguration(Eigen::VectorXf& vec) const;
                         void setConfiguration(const Eigen::VectorXf& config);
+                        void serializeInNumbers(std::ostream& ostream) const;
                     private:
                         const std::vector<internal::SubstateTypeDescription> _state_descriptions;
                         unsigned int _dimension;
@@ -113,7 +118,9 @@ namespace mps {
                 class SimEnvObjectVelocitySpace : public ::ompl::base::CompoundStateSpace {
                 public:
 
-                    class StateType : public ::ompl::base::CompoundStateSpace::StateType {
+                    class StateType : public ::ompl::base::CompoundStateSpace::StateType,
+                                      public ::mps::planner::util::serialize::RealValueSerializable
+                    {
                     public:
                         StateType(const std::vector<internal::SubstateTypeDescription>& desc, unsigned int dimension);
                         StateType() = delete;
@@ -121,6 +128,7 @@ namespace mps {
                         Eigen::VectorXf getVelocity() const;
                         void getVelocity(Eigen::VectorXf& vec) const;
                         void setVelocity(const Eigen::VectorXf& vel);
+                        void serializeInNumbers(std::ostream& ostream) const;
                     private:
                         const std::vector<internal::SubstateTypeDescription> _state_descriptions;
                         unsigned int _dimension;
@@ -184,7 +192,10 @@ namespace mps {
                         }
                     };
 
-                    class StateType : public ::ompl::base::CompoundStateSpace::StateType {
+                    class StateType :
+                            public ::ompl::base::CompoundStateSpace::StateType,
+                            public ::mps::planner::util::serialize::RealValueSerializable
+                    {
                     public:
                         StateType(int num_dofs, bool configuration_only=true);
                         StateType() = delete;
@@ -201,6 +212,7 @@ namespace mps {
                         Eigen::VectorXf getVelocity() const;
                         void getVelocity(Eigen::VectorXf& vec) const;
                         void setVelocity(const Eigen::VectorXf& vec);
+                        void serializeInNumbers(std::ostream& ostream) const;
                     private:
                         bool _configuration_only;
                         int _num_dofs;
@@ -255,7 +267,9 @@ namespace mps {
                  */
                 class SimEnvWorldStateSpace : public ::ompl::base::CompoundStateSpace {
                 public:
-                    class StateType : public ::ompl::base::CompoundStateSpace::StateType {
+                    class StateType : public ::ompl::base::CompoundStateSpace::StateType,
+                                      public ::mps::planner::util::serialize::RealValueSerializable
+                    {
                     public:
                         StateType(unsigned int num_objects);
                         StateType() = delete;
@@ -263,6 +277,7 @@ namespace mps {
 
                         unsigned int getNumObjects() const;
                         SimEnvObjectState* getObjectState(unsigned int i) const;
+                        void serializeInNumbers(std::ostream& ostream) const;
 
                     private:
                         unsigned int _num_objects;

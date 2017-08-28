@@ -6,6 +6,7 @@
 #define MANIPULATION_PLANNING_SUITE_VELOCITYCONTROL_H
 
 #include <ompl/control/Control.h>
+#include <mps/planner/util/Serialize.h>
 #include <Eigen/Core>
 
 namespace mps {
@@ -16,12 +17,16 @@ namespace mps {
                  * Technically not a control, a RealValueParameterizedControl is a control that can be fully described
                  * by a finite number of real values (parameters).
                  */
-                class RealValueParameterizedControl {
+                class RealValueParameterizedControl :
+                        public ::mps::planner::util::serialize::RealValueSerializable
+                {
                 public:
                     virtual ~RealValueParameterizedControl() = 0;
                     virtual Eigen::VectorXf getParameters() const = 0;
                     virtual void getParameters(Eigen::VectorXf& params) const = 0;
                     virtual void setParameters(const Eigen::VectorXf& params) = 0;
+                    // for oracle serialization
+                    virtual void serializeInNumbers(std::ostream& ostream) const;
                 };
 
                 /**

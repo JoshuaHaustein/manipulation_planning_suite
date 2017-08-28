@@ -7,6 +7,7 @@
 #include <ompl/base/spaces/SE3StateSpace.h>
 #include <ompl/base/spaces/RealVectorStateSpace.h>
 #include <sstream>
+#include <mps/planner/util/Serialize.h>
 
 namespace mps {
     namespace planner {
@@ -131,6 +132,10 @@ void SimEnvObjectConfigurationSpace::StateType::setConfiguration(const Eigen::Ve
             }
         }
     }
+}
+
+void SimEnvObjectConfigurationSpace::StateType::serializeInNumbers(std::ostream &ostream) const {
+    ostream << getConfiguration().transpose().format(eigen_format);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////
@@ -406,6 +411,11 @@ void SimEnvObjectVelocitySpace::StateType::setVelocity(const Eigen::VectorXf& ve
     assert(dof_idx == _dimension - 1);
 }
 
+void SimEnvObjectVelocitySpace::StateType::serializeInNumbers(std::ostream& ostream) const {
+    ostream << getVelocity().transpose().format(eigen_format);
+}
+
+
 ////////////////////////////////////////////////////////////////////////////////////////
 //////////////////////////// SimEnvObjectVelocitySpace ////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////
@@ -594,6 +604,15 @@ void SimEnvObjectStateSpace::StateType::setVelocity(const Eigen::VectorXf& vel) 
     vel_component->setVelocity(vel);
 }
 
+void SimEnvObjectStateSpace::StateType::serializeInNumbers(std::ostream& ostream) const {
+    auto* serializable_component = dynamic_cast<util::serialize::RealValueSerializable*>(components[0]);
+    serializable_component->serializeInNumbers(ostream);
+    if (hasVelocity()) {
+        ostream << ", ";
+        serializable_component = dynamic_cast<util::serialize::RealValueSerializable*>(components[1]);
+        serializable_component->serializeInNumbers(ostream);
+    }
+}
 ////////////////////////////////////////////////////////////////////////////////////////
 //////////////////////////// SimEnvObjectStateSpace ////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////
@@ -665,6 +684,16 @@ SimEnvObjectState* SimEnvWorldStateSpace::StateType::getObjectState(unsigned int
         return static_cast<SimEnvObjectState*>(components[i]);
     }
     return nullptr;
+}
+
+void SimEnvWorldStateSpace::StateType::serializeInNumbers(std::ostream& ostream) const {
+    for (unsigned int i = 0; i < getNumObjects(); i++) {
+        auto* state = getObjectState(i);
+        state->serializeInNumbers(ostream);
+        if (i < getNumObjects() - 1) {
+            ostream << ", ";
+        }
+    }
 }
 
 ////////////////////////////////////////////////////////////////////////////////

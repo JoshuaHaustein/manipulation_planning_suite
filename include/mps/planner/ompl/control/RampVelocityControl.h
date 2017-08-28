@@ -80,7 +80,8 @@ namespace mps {
                 };
 
                 class RampVelocityControlSpace : public ::ompl::control::ControlSpace,
-                                                 public std::enable_shared_from_this<RampVelocityControlSpace>{
+                                                 public std::enable_shared_from_this<RampVelocityControlSpace>
+                {
                 public:
                     struct ControlLimits {
                         Eigen::VectorXf velocity_limits;
