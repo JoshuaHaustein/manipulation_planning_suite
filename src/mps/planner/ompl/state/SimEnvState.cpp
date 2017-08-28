@@ -274,17 +274,17 @@ void SimEnvObjectConfigurationSpace::addJointsSubspace(sim_env::ObjectConstPtr o
     std::vector<unsigned int> indices;
     for (unsigned int i = 0; i < _active_dofs.size(); ++i) {
         int dof = _active_dofs[i];
-        if (dof > object->getNumBaseDOFs()) {
+        if (dof >= object->getNumBaseDOFs()) {
             joint_idx.push_back(dof);
             indices.push_back(i);
         }
     }
-    if (joint_idx.size() == 0) return;
+    if (joint_idx.empty()) return;
     auto space = std::make_shared<::ompl::base::RealVectorStateSpace>(joint_idx.size());
     space->setName(internal::createSpaceName(joint_idx, "ConfigurationSpace"));
     space->setBounds(makeBounds(indices));
     addSubspace(space, _joint_weight);
-    _state_descriptions.push_back(internal::SubstateTypeDescription(internal::SubspaceType::RealVector,
+    _state_descriptions.emplace_back(internal::SubstateTypeDescription(internal::SubspaceType::RealVector,
                                                                     (unsigned int) joint_idx.size()));
 }
 
@@ -505,7 +505,7 @@ void SimEnvObjectVelocitySpace::addJointsVelocitySubspace(sim_env::ObjectConstPt
     std::vector<unsigned int> indices;
     for (unsigned int i = 0; i < _active_dofs.size(); ++i) {
         int dof = _active_dofs[i];
-        if (dof > object->getNumBaseDOFs()) {
+        if (dof >= object->getNumBaseDOFs()) {
             joint_idx.push_back(dof);
             indices.push_back(i);
         }
