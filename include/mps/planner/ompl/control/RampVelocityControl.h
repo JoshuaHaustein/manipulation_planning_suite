@@ -86,6 +86,9 @@ namespace mps {
                         Eigen::VectorXf velocity_limits;
                         Eigen::VectorXf acceleration_limits;
                         Eigen::Array2f duration_limits;
+                        ControlLimits(const Eigen::VectorXf& velocity_limits,
+                                      const Eigen::VectorXf& acceleration_limits,
+                                      const Eigen::Array2f& duration_limits);
                     };
                     /**
                      * Creates a new ramp velocity control space.

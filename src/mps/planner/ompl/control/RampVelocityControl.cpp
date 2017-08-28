@@ -117,6 +117,15 @@ void RampVelocityControl::computeRamp() {
 //////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////// RampVelocityControlSpace //////////////////////////////
 //////////////////////////////////////////////////////////////////////////////////////
+RampVelocityControlSpace::ControlLimits::ControlLimits(const Eigen::VectorXf &velocity_limits,
+                                                       const Eigen::VectorXf &acceleration_limits,
+                                                       const Eigen::Array2f &duration_limits) :
+        velocity_limits(velocity_limits),
+        acceleration_limits(acceleration_limits),
+        duration_limits(duration_limits)
+{
+}
+
 RampVelocityControlSpace::RampVelocityControlSpace(const ::ompl::base::StateSpacePtr &stateSpace,
                                                    const Eigen::VectorXf &velocity_limits,
                                                    const Eigen::VectorXf &acceleration_limits,
