@@ -306,6 +306,7 @@ namespace mps {
 
                     sim_env::ObjectConstPtr getObject(unsigned int i) const;
                     std::string getObjectName(unsigned int i) const;
+                    int getObjectIndex(const std::string& obj_name) const;
                     unsigned int getNumObjects() const;
 
                     /**

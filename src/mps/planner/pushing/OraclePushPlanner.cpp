@@ -4,8 +4,10 @@
 
 #include <mps/planner/pushing/OraclePushPlanner.h>
 #include <mps/planner/util/Serialize.h>
+#include <mps/planner/ompl/state/goal/ObjectRelocationGoal.h>
 #include <thread>
 #include <chrono>
+
 
 using namespace mps::planner::pushing;
 namespace mps_state = mps::planner::ompl::state;
@@ -18,14 +20,18 @@ PlanningProblem::PlanningProblem() :
 
 PlanningProblem::PlanningProblem(sim_env::WorldPtr world, sim_env::RobotPtr robot,
                                  sim_env::RobotVelocityControllerPtr controller,
-                                 sim_env::ObjectPtr target_object):
+                                 sim_env::ObjectPtr target_object,
+                                 const Eigen::Vector3f& goal_position):
         world(world), robot(robot), robot_controller(controller), target_object(target_object),
-        control_limits(Eigen::VectorXf(robot->getNumActiveDOFs()), Eigen::VectorXf(robot->getNumActiveDOFs()), Eigen::Array2f())
+        control_limits(Eigen::VectorXf(robot->getNumActiveDOFs()), Eigen::VectorXf(robot->getNumActiveDOFs()),
+                       Eigen::Array2f()),
+        goal_position(goal_position)
 {
 
     planning_time_out = 60.0f;
     b_semi_dynamic = true;
     t_max = 8.0f;
+    goal_region_radius = 0.05f;
     // create default workspace limits
     workspace_bounds.x_limits[0] = std::numeric_limits<float>::lowest();
     workspace_bounds.x_limits[1] = std::numeric_limits<float>::max();
@@ -105,20 +111,35 @@ void OraclePushPlanner::dummyTest() {
     ::ompl::base::State* state = _space_information->allocState();
     ::ompl::base::State* new_state = _space_information->allocState();
     ::ompl::control::Control* control = _space_information->allocControl();
-    mps::planner::util::serialize::OracleDataDumper data_dumper;
-    data_dumper.setFile("/home/joshua/test/oracle_training_data.cvs");
-    for (unsigned int i = 0; i < 10000; ++i) {
-        state_sampler->sampleUniform(state);
-        control_sampler->sample(control);
+    // CODE FOR TESTING GOAL SAMPLING
+    ompl::state::goal::ObjectRelocationGoal or_goal(_space_information,
+                                                    _planning_problem.target_object->getName(),
+                                                    _planning_problem.goal_position,
+                                                    Eigen::Quaternionf(),
+                                                    _planning_problem.goal_region_radius,
+                                                    0.0f);
+    for (unsigned int i = 0; i < 10; ++i) {
+        or_goal.sampleGoal(state);
         auto* world_state = state->as<mps_state::SimEnvWorldState>();
         _state_space->setToState(_planning_problem.world, world_state);
-        _planning_problem.world->getLogger()->logDebug("Sampled state");
-        _state_propagator->propagate(state, control, new_state);
-        _planning_problem.world->getLogger()->logDebug("Propagated state");
-        world_state = new_state->as<mps_state::SimEnvWorldState>();
-        _state_space->setToState(_planning_problem.world, world_state);
-        data_dumper.saveData(state, new_state, control);
+        std::chrono::milliseconds sleeping_duration(500);
+        std::this_thread::sleep_for(sleeping_duration);
     }
+    // CODE FOR GENERATING DUMMY DATA
+//    mps::planner::util::serialize::OracleDataDumper data_dumper;
+//    data_dumper.setFile("/home/joshua/test/oracle_training_data.cvs");
+//    for (unsigned int i = 0; i < 10000; ++i) {
+//        state_sampler->sampleUniform(state);
+//        control_sampler->sample(control);
+//        auto* world_state = state->as<mps_state::SimEnvWorldState>();
+//        _state_space->setToState(_planning_problem.world, world_state);
+//        _planning_problem.world->getLogger()->logDebug("Sampled state");
+//        _state_propagator->propagate(state, control, new_state);
+//        _planning_problem.world->getLogger()->logDebug("Propagated state");
+//        world_state = new_state->as<mps_state::SimEnvWorldState>();
+//        _state_space->setToState(_planning_problem.world, world_state);
+//        data_dumper.saveData(state, new_state, control);
+//    }
     _space_information->freeState(state);
     _space_information->freeState(new_state);
     _space_information->freeControl(control);

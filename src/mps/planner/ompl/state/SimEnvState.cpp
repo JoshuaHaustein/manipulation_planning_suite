@@ -769,6 +769,13 @@ std::string SimEnvWorldStateSpace::getObjectName(unsigned int i) const {
    return _object_names[i];
 }
 
+int SimEnvWorldStateSpace::getObjectIndex(const std::string& obj_name) const {
+    for (unsigned int i = 0; i < _object_names.size(); ++i) {
+        if (_object_names.at(i) == obj_name) return i;
+    }
+    return -1;
+}
+
 unsigned int SimEnvWorldStateSpace::getNumObjects() const {
     return (unsigned int) _object_names.size();
 }

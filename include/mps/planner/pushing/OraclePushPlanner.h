@@ -39,6 +39,9 @@ namespace mps {
                 // parameters for semi-dynamic planning
                 bool b_semi_dynamic;
                 float t_max;
+                // goal region
+                Eigen::Vector3f goal_position;
+                float goal_region_radius;
                 // TODO more parameters, like distance weights, workspace bounds, goal region
 
                 /**
@@ -48,7 +51,8 @@ namespace mps {
                 PlanningProblem(sim_env::WorldPtr world,
                                 sim_env::RobotPtr robot,
                                 sim_env::RobotVelocityControllerPtr controller,
-                                sim_env::ObjectPtr target_object);
+                                sim_env::ObjectPtr target_object,
+                                const Eigen::Vector3f& goal_position);
             protected:
                 // constructor that doesn't force you to provide mandatory arguments - used internally
                 PlanningProblem();

@@ -63,6 +63,7 @@ set(PLANNER_SRC
         src/mps/planner/ompl/control/OracleControlSampler.cpp
         src/mps/planner/ompl/control/SimEnvStatePropagator.cpp
         src/mps/planner/ompl/state/SimEnvState.cpp
+        src/mps/planner/ompl/state/goal/ObjectRelocationGoal.cpp
         src/mps/planner/util/Random.cpp
         src/mps/planner/util/Serialize.cpp
         src/mps/planner/pushing/OraclePushPlanner.cpp
