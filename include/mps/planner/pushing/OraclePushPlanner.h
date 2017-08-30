@@ -12,6 +12,7 @@
 #include <mps/planner/ompl/control/SimEnvStatePropagator.h>
 #include <mps/planner/ompl/control/Interfaces.h>
 #include <mps/planner/ompl/control/RampVelocityControl.h>
+#include <mps/planner/pushing/PushPlannerDistanceMeasure.h>
 
 namespace mps {
     namespace planner {
@@ -33,6 +34,7 @@ namespace mps {
                 // time out for planner
                 float planning_time_out;
                 // distance function
+                std::map<std::string, float> object_weights;
                 mps::planner::ompl::state::SimEnvWorldStateSpace::WeightMap weight_map;
                 // parameters restricting action space
                 mps::planner::ompl::control::RampVelocityControlSpace::ControlLimits control_limits;
@@ -42,6 +44,9 @@ namespace mps {
                 // goal region
                 Eigen::Vector3f goal_position;
                 float goal_region_radius;
+                // settings for control sampler
+                bool use_oracle;
+                unsigned int num_control_samples;
                 // TODO more parameters, like distance weights, workspace bounds, goal region
 
                 /**
@@ -88,8 +93,12 @@ namespace mps {
                 ::ompl::control::SpaceInformationPtr _space_information;
                 mps::planner::ompl::state::SimEnvValidityCheckerPtr _validity_checker;
                 mps::planner::ompl::control::SimEnvStatePropagatorPtr _state_propagator;
+                PushPlannerDistanceMeasurePtr _distance_measure;
                 PlanningProblem _planning_problem;
                 PlanningSolution _planning_solution;
+
+                void prepareDistanceWeights(std::vector<float>& weights);
+                ::ompl::control::DirectedControlSamplerPtr allocateDirectedControlSampler(const ::ompl::control::SpaceInformation* si);
             };
         }
     }

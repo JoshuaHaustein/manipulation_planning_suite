@@ -61,11 +61,15 @@ set(PLANNER_SRC
         src/mps/planner/ompl/control/RampVelocityControl.cpp
         src/mps/planner/ompl/control/Interfaces.cpp
         src/mps/planner/ompl/control/OracleControlSampler.cpp
+        src/mps/planner/ompl/control/NaiveControlSampler.cpp
         src/mps/planner/ompl/control/SimEnvStatePropagator.cpp
         src/mps/planner/ompl/state/SimEnvState.cpp
         src/mps/planner/ompl/state/goal/ObjectRelocationGoal.cpp
+        src/mps/planner/ompl/state/Interfaces.cpp
         src/mps/planner/util/Random.cpp
         src/mps/planner/util/Serialize.cpp
+        src/mps/planner/util/Logging.cpp
+        src/mps/planner/pushing/PushPlannerDistanceMeasure.cpp
         src/mps/planner/pushing/OraclePushPlanner.cpp
 )
 ## Declare a C++ library

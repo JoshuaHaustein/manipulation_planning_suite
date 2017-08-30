@@ -25,8 +25,8 @@ void RampVelocityControl::setMaxVelocities(const Eigen::VectorXf &max_velocities
 
 void RampVelocityControl::setParameters(const Eigen::VectorXf& parameters) {
     assert(parameters.size() > 2);
-    Eigen::VectorXf velocities;
-    for (size_t i = 0; i < parameters.size() - 2; ++i) {
+    Eigen::VectorXf velocities(parameters.size() - 2);
+    for (size_t i = 0; i < velocities.size(); ++i) {
         velocities[i] = parameters[i];
     }
     float duration = parameters[parameters.size() - 2];
@@ -146,7 +146,7 @@ RampVelocityControlSpace::~RampVelocityControlSpace() {
 
 unsigned int RampVelocityControlSpace::getDimension() const {
     // 1 dimension per dof velocity + duration of plateau (resting time is not part of the dimension)
-    return (unsigned int) (_velocity_limits.size() + 1);
+    return (unsigned int) (_velocity_limits.rows() + 1);
 }
 
 omc::Control* RampVelocityControlSpace::allocControl() const {
@@ -174,7 +174,7 @@ bool RampVelocityControlSpace::equalControls(const omc::Control* control_1,
 
 void RampVelocityControlSpace::nullControl(omc::Control* control) const {
     RampVelocityControl* ramp_control = castControl(control);
-    Eigen::VectorXf vel(getDimension());
+    Eigen::VectorXf vel(_velocity_limits.rows());
     vel.setZero();
     ramp_control->setMaxVelocities(vel, 0.0f);
 }

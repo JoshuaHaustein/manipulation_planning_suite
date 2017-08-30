@@ -16,6 +16,31 @@ namespace mps {
                 class OracleControlSampler : public ::ompl::control::DirectedControlSampler {
                     // TODO implement oracle control sampler here; use oracle to sample a control
                     // TODO operate on RealValueParameterizedControl
+                public:
+                    OracleControlSampler(const ::ompl::control::SpaceInformation* si);
+                    ~OracleControlSampler();
+                    /**
+                     *
+                     * @param control
+                     * @param source
+                     * @param dest
+                     * @return
+                     */
+                    unsigned int sampleTo(::ompl::control::Control* control,
+                                          const ::ompl::base::State* source,
+                                          ::ompl::base::State* dest) override;
+                    /**
+                     *
+                     * @param control
+                     * @param prev
+                     * @param source
+                     * @param dest
+                     * @return
+                     */
+                    unsigned int sampleTo(::ompl::control::Control* control,
+                                          const ::ompl::control::Control* prev,
+                                          const ::ompl::base::State* source,
+                                          ::ompl::base::State* dest) override;
                 };
             }
         }

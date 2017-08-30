@@ -19,6 +19,7 @@
 #include <sim_env/SimEnv.h>
 // mps includes
 #include <mps/planner/util/Serialize.h>
+#include <mps/planner/ompl/state/Interfaces.h>
 
 namespace mps {
     namespace planner {
@@ -325,14 +326,25 @@ namespace mps {
                      */
                     void extractState(sim_env::WorldConstPtr world, StateType* state) const;
 
+                    /**
+                     * Sets a StateDistanceMeasure for this state space. By providing a state distance measure,
+                     * the distance function used within this state space can be modified.
+                     * @param measure - a state distance measure to measure distance in this space. If null, default
+                     *              distance function is used.
+                     */
+                    void setDistanceMeasure(StateDistanceMeasureConstPtr measure);
+
                     /** Overrides from CompoundStateSpace */
                     ::ompl::base::State* allocState() const override;
                     void freeState(::ompl::base::State* state) const override;
+                    double distance(const ::ompl::base::State* state_1, const ::ompl::base::State* state_2) const override;
+
 
                 private:
                     sim_env::WorldConstWeakPtr _world;
                     std::unordered_map<std::string, std::shared_ptr<SimEnvObjectStateSpace> > _state_space_map;
                     std::vector<std::string> _object_names;
+                    StateDistanceMeasureConstPtr _distance_measure;
 
                     void constructLimits(sim_env::ObjectConstPtr object, const PlanningSceneBounds& bounds,
                                          Eigen::ArrayX2f& position_limits, Eigen::ArrayX2f& velocity_limits) const;

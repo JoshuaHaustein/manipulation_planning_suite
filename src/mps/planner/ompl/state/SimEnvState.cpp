@@ -750,6 +750,13 @@ void SimEnvWorldStateSpace::freeState(::ompl::base::State* state) const {
     delete world_state;
 }
 
+double SimEnvWorldStateSpace::distance(const ::ompl::base::State* state_1, const ::ompl::base::State* state_2) const {
+    if (_distance_measure) {
+        return _distance_measure->distance(state_1, state_2);
+    }
+    return ::ompl::base::CompoundStateSpace::distance(state_1, state_2);
+}
+
 sim_env::ObjectConstPtr SimEnvWorldStateSpace::getObject(unsigned int i) const {
     if (i >= _object_names.size()) {
         return nullptr;
@@ -797,6 +804,10 @@ void SimEnvWorldStateSpace::extractState(sim_env::WorldConstPtr world, StateType
         obj_state->setConfiguration(object->getDOFPositions());
         obj_state->setVelocity(object->getDOFVelocities());
     }
+}
+
+void SimEnvWorldStateSpace::setDistanceMeasure(StateDistanceMeasureConstPtr measure) {
+    _distance_measure = measure;
 }
 
 void SimEnvWorldStateSpace::constructLimits(sim_env::ObjectConstPtr object, const PlanningSceneBounds& bounds,
