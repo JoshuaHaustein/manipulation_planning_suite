@@ -57,7 +57,6 @@ set(CMAKE_CXX_FLAGS_RELEASE "-O3")
          )
 
 set(PLANNER_SRC
-        src/mps/planner/oracle/Oracle.cpp
         src/mps/planner/ompl/control/RampVelocityControl.cpp
         src/mps/planner/ompl/control/Interfaces.cpp
         src/mps/planner/ompl/control/OracleControlSampler.cpp
@@ -71,6 +70,7 @@ set(PLANNER_SRC
         src/mps/planner/util/Logging.cpp
         src/mps/planner/pushing/PushPlannerDistanceMeasure.cpp
         src/mps/planner/pushing/OraclePushPlanner.cpp
+        src/mps/planner/pushing/algorithm/RRT.cpp
 )
 ## Declare a C++ library
  add_library(${PROJECT_NAME}

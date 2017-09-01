@@ -20,9 +20,10 @@ namespace mps {
             class PushPlannerDistanceMeasure : public ompl::state::StateDistanceMeasure {
             public:
                 PushPlannerDistanceMeasure(ompl::state::SimEnvWorldStateSpacePtr state_space,
-                                           std::vector<float>& weights);
+                                           const std::vector<float>& weights=std::vector<float>());
                 ~PushPlannerDistanceMeasure();
 
+                void setWeights(const std::vector<float>& weights);
                 // call to compute distance
                 double distance(const ::ompl::base::State* state1, const ::ompl::base::State* state2) const override;
 

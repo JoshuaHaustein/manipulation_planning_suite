@@ -25,9 +25,19 @@ void mps::planner::util::logging::logDebug(const std::string &msg, const std::st
     logger->logDebug(msg, prefix);
 }
 
+void mps::planner::util::logging::logDebug(const boost::format& bf, const std::string &prefix) {
+    auto logger = getLogger();
+    logger->logDebug(bf, prefix);
+}
+
 void mps::planner::util::logging::logWarn(const std::string &msg, const std::string &prefix) {
     auto logger = getLogger();
     logger->logWarn(msg, prefix);
+}
+
+void mps::planner::util::logging::logWarn(const boost::format& bf, const std::string &prefix) {
+    auto logger = getLogger();
+    logger->logWarn(bf, prefix);
 }
 
 void mps::planner::util::logging::logErr(const std::string &msg, const std::string &prefix) {
@@ -35,7 +45,17 @@ void mps::planner::util::logging::logErr(const std::string &msg, const std::stri
     logger->logErr(msg, prefix);
 }
 
+void mps::planner::util::logging::logErr(const boost::format& bf, const std::string &prefix) {
+    auto logger = getLogger();
+    logger->logErr(bf, prefix);
+}
+
 void mps::planner::util::logging::logInfo(const std::string &msg, const std::string &prefix) {
     auto logger = getLogger();
     logger->logInfo(msg, prefix);
+}
+
+void mps::planner::util::logging::logInfo(const boost::format& bf, const std::string &prefix) {
+    auto logger = getLogger();
+    logger->logInfo(bf, prefix);
 }

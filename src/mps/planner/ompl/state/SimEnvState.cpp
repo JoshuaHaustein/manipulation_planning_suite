@@ -8,6 +8,8 @@
 #include <ompl/base/spaces/RealVectorStateSpace.h>
 #include <sstream>
 #include <mps/planner/util/Serialize.h>
+#include <mps/planner/util/Logging.h>
+#include <boost/format.hpp>
 
 namespace mps {
     namespace planner {
@@ -35,6 +37,7 @@ namespace mps {
     }
 }
 
+typedef boost::format bf;
 using namespace mps::planner::ompl::state;
 ////////////////////////////////////////////////////////////////////////////////////////////
 /////////////////// SimEnvObjectConfigurationSpace::StateType aka SimEnvConfiguration //////
@@ -153,6 +156,7 @@ SimEnvObjectConfigurationSpace::SimEnvObjectConfigurationSpace(sim_env::ObjectCo
     _joint_weight(joint_weight),
     _log_prefix("[mps::planner::ompl::state::SimEnvObjectConfigurationSpace::")
 {
+    static const std::string log_prefix(_log_prefix + "SimEnvObjectConfigurationSpace]");
     assert(_active_dofs.size() > 0);
     setName("sim_env::Object(" + object->getName() + ")-ConfigurationSpace");
     _limits = position_limits;
@@ -162,6 +166,12 @@ SimEnvObjectConfigurationSpace::SimEnvObjectConfigurationSpace(sim_env::ObjectCo
     addPoseSubspace(object);
     addJointsSubspace(object);
     lock();
+    mps::planner::util::logging::logDebug(bf("Created configurations space for object %s") % object->getName(),
+                                          log_prefix);
+    mps::planner::util::logging::logDebug(bf("The dimension of this space is %i") % getDimension(),
+                                          log_prefix);
+    mps::planner::util::logging::logDebug(bf("The bounds are\n %d") % _limits,
+                                          log_prefix);
 }
 
 SimEnvObjectConfigurationSpace::~SimEnvObjectConfigurationSpace() {
@@ -428,8 +438,10 @@ SimEnvObjectVelocitySpace::SimEnvObjectVelocitySpace(sim_env::ObjectConstPtr obj
     _active_dofs(object->getActiveDOFs()),
     _position_vel_weight(pos_weight),
     _orientation_vel_weight(orientation_weight),
-    _joint_vel_weight(joint_weight)
+    _joint_vel_weight(joint_weight),
+    _log_prefix("[mps::planner::ompl::state::SimEnvObjectVelocitySpace::")
 {
+    static const std::string log_prefix(_log_prefix + "SimEnvObjectVelocitySpace]");
     assert(_active_dofs.size() > 0);
     setName("sim_env::Object(" + object->getName() + ")-VelocitySpace");
     if (velocity_limits.rows() == 0) {
@@ -440,6 +452,12 @@ SimEnvObjectVelocitySpace::SimEnvObjectVelocitySpace(sim_env::ObjectConstPtr obj
     addPoseVelocitySubspace(object);
     addJointsVelocitySubspace(object);
     lock();
+    mps::planner::util::logging::logDebug(bf("Created velocity space for object %s") % object->getName(),
+                                          log_prefix);
+    mps::planner::util::logging::logDebug(bf("The dimension of this space is %i") % getDimension(),
+                                          log_prefix);
+    mps::planner::util::logging::logDebug(bf("The bounds are\n %d") % _limits,
+                                          log_prefix);
 }
 
 SimEnvObjectVelocitySpace::~SimEnvObjectVelocitySpace() {
@@ -613,6 +631,11 @@ void SimEnvObjectStateSpace::StateType::serializeInNumbers(std::ostream& ostream
         serializable_component->serializeInNumbers(ostream);
     }
 }
+
+void SimEnvObjectStateSpace::StateType::print(std::ostream& ostream) const {
+    // TODO do we want to print more here?
+    serializeInNumbers(ostream);
+}
 ////////////////////////////////////////////////////////////////////////////////////////
 //////////////////////////// SimEnvObjectStateSpace ////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////
@@ -696,6 +719,15 @@ void SimEnvWorldStateSpace::StateType::serializeInNumbers(std::ostream& ostream)
     }
 }
 
+void SimEnvWorldStateSpace::StateType::print(std::ostream& ostream) const {
+    for (unsigned int i = 0; i < getNumObjects(); i++) {
+        auto* state = getObjectState(i);
+        state->print(ostream);
+        if (i < getNumObjects() - 1) {
+            ostream << ", ";
+        }
+    }
+}
 ////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////// SimEnvWorldStateSpace ///////////////////////////
 ////////////////////////////////////////////////////////////////////////////////

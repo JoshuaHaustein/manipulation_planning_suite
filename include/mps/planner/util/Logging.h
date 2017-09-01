@@ -18,9 +18,13 @@ namespace mps {
                 void setLogger(sim_env::LoggerPtr logger);
                 void resetLogger();
                 void logDebug(const std::string& msg, const std::string& prefix);
+                void logDebug(const boost::format& bf, const std::string& prefix);
                 void logWarn(const std::string& msg, const std::string& prefix);
+                void logWarn(const boost::format& bf, const std::string& prefix);
                 void logErr(const std::string& msg, const std::string& prefix);
+                void logErr(const boost::format& bf, const std::string& prefix);
                 void logInfo(const std::string& msg, const std::string& prefix);
+                void logInfo(const boost::format& bf, const std::string& prefix);
             }
         }
     }

@@ -4,19 +4,31 @@
 
 #include <mps/planner/pushing/PushPlannerDistanceMeasure.h>
 #include <boost/format.hpp>
+#include <mps/planner/util/Logging.h>
 
 using namespace mps::planner::pushing;
 
 PushPlannerDistanceMeasure::PushPlannerDistanceMeasure(ompl::state::SimEnvWorldStateSpacePtr state_space,
-                                                       std::vector<float> &weights):
+                                                       const std::vector<float> &weights):
     _weak_state_space(state_space),
     _weights(weights)
 {
     _active_flags = std::vector<bool>(state_space->getNumObjects(), true);
-    assert(_weights.size() == _active_flags.size());
+    if (_weights.size() == 0) {
+        _weights.resize(_active_flags.size(), 1.0f);
+    }
 }
 
 PushPlannerDistanceMeasure::~PushPlannerDistanceMeasure() = default;
+
+void PushPlannerDistanceMeasure::setWeights(const std::vector<float> &weights) {
+    if (weights.size() == _weights.size()) {
+        _weights = weights;
+    } else {
+        mps::planner::util::logging::logErr("Insufficient number of weights provided. Not resetting weights.",
+                                            "[mps::planner::pushing::PushPlannerDistanceMeasure::setWeights]");
+    }
+}
 
 double PushPlannerDistanceMeasure::distance(const ::ompl::base::State *state1,
                                             const ::ompl::base::State *state2) const {

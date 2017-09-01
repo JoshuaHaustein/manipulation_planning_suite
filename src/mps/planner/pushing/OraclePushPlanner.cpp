@@ -163,7 +163,7 @@ void OraclePushPlanner::dummyTest() {
     // CODE FOR GENERATING DUMMY DATA
     mps::planner::util::serialize::OracleDataDumper data_dumper;
     data_dumper.setFile("/home/joshua/test/oracle_training_data.cvs");
-    for (unsigned int i = 0; i < 30000; ++i) {
+    for (unsigned int i = 0; i < 50; ++i) {
         state_sampler->sampleUniform(state);
         control_sampler->sample(control);
         auto* world_state = state->as<mps_state::SimEnvWorldState>();

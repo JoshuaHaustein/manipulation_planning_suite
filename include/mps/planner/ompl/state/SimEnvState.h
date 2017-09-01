@@ -214,6 +214,7 @@ namespace mps {
                         void getVelocity(Eigen::VectorXf& vec) const;
                         void setVelocity(const Eigen::VectorXf& vec);
                         void serializeInNumbers(std::ostream& ostream) const;
+                        void print(std::ostream& out) const;
                     private:
                         bool _configuration_only;
                         int _num_dofs;
@@ -279,6 +280,7 @@ namespace mps {
                         unsigned int getNumObjects() const;
                         SimEnvObjectState* getObjectState(unsigned int i) const;
                         void serializeInNumbers(std::ostream& ostream) const;
+                        void print(std::ostream& out) const;
 
                     private:
                         unsigned int _num_objects;
