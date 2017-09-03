@@ -842,6 +842,10 @@ void SimEnvWorldStateSpace::setDistanceMeasure(StateDistanceMeasureConstPtr meas
     _distance_measure = measure;
 }
 
+StateDistanceMeasureConstPtr SimEnvWorldStateSpace::getDistanceMeasure() {
+    return _distance_measure;
+}
+
 void SimEnvWorldStateSpace::constructLimits(sim_env::ObjectConstPtr object, const PlanningSceneBounds& bounds,
                      Eigen::ArrayX2f& position_limits, Eigen::ArrayX2f& velocity_limits) const {
     Eigen::VectorXi active_dofs = object->getActiveDOFs();

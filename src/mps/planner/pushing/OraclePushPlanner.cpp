@@ -103,19 +103,38 @@ bool OraclePushPlanner::setup(PlanningProblem& problem) {
                                                                                  _planning_problem.t_max);
     std::vector<float> weights;
     prepareDistanceWeights(weights);
-    _distance_measure = std::make_shared<PushPlannerDistanceMeasure>(_state_space, weights);
-    _state_space->setDistanceMeasure(_distance_measure);
     _space_information->setStatePropagator(_state_propagator);
     _space_information->setup();
-    // TODO create planning algorithm
-//    _rrt = std::make_shared<mps::planner::algorithm::RRT>(_space_information);
+    _algorithm = std::make_shared<mps::planner::pushing::algorithm::SemiDynamicRRT>(_space_information, weights);
+    _algorithm->setup();
+    // TODO this is only for debug
+    algorithm::SemiDynamicRRT::DebugDrawerPtr debug_drawer = std::make_shared<algorithm::SemiDynamicRRT::DebugDrawer>(_planning_problem.world->getViewer());
+    _algorithm->setDebugDrawer(debug_drawer);
+    // TODO we probably don't need to reconstruct everything all the time
     _is_initialized = true;
     return _is_initialized;
 }
 
 bool OraclePushPlanner::solve(PlanningSolution& solution) {
     // TODO run planning algorithm, extract solution and return it
-    return false;
+    // start state
+    auto* start_state = _state_space->allocState();
+    _state_space->extractState(_planning_problem.world,
+                               dynamic_cast<ompl::state::SimEnvWorldStateSpace::StateType *>(start_state));
+    // goal
+    ompl::state::goal::ObjectRelocationGoalPtr goal_region =
+            std::make_shared<ompl::state::goal::ObjectRelocationGoal>(_space_information,
+                                                                      _planning_problem.target_object->getName(),
+                                                                      _planning_problem.goal_position,
+                                                                      Eigen::Quaternionf(),
+                                                                      _planning_problem.goal_region_radius,
+                                                                      0.0f);
+    // planning query
+    algorithm::SemiDynamicRRT::PlanningQuery pq(goal_region, start_state, _planning_problem.planning_time_out);
+    algorithm::SemiDynamicRRT::Path path(_space_information);
+    bool success = _algorithm->plan(pq, path);
+    _state_space->freeState(start_state);
+    return success;
 }
 
 void OraclePushPlanner::dummyTest() {

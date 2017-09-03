@@ -62,6 +62,7 @@ namespace mps {
                         ::ompl::RNGPtr _rng;
 
                     };
+                    typedef std::shared_ptr<ObjectRelocationGoal> ObjectRelocationGoalPtr;
                 }
             }
         }

@@ -335,6 +335,7 @@ namespace mps {
                      *              distance function is used.
                      */
                     void setDistanceMeasure(StateDistanceMeasureConstPtr measure);
+                    StateDistanceMeasureConstPtr getDistanceMeasure();
 
                     /** Overrides from CompoundStateSpace */
                     ::ompl::base::State* allocState() const override;

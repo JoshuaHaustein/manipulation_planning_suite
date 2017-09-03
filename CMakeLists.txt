@@ -68,6 +68,7 @@ set(PLANNER_SRC
         src/mps/planner/util/Random.cpp
         src/mps/planner/util/Serialize.cpp
         src/mps/planner/util/Logging.cpp
+        src/mps/planner/util/Time.cpp
         src/mps/planner/pushing/PushPlannerDistanceMeasure.cpp
         src/mps/planner/pushing/OraclePushPlanner.cpp
         src/mps/planner/pushing/algorithm/RRT.cpp

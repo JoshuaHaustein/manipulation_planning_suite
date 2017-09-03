@@ -48,7 +48,9 @@ bool SimEnvStatePropagator::propagate(const ::ompl::base::State* state, ::ompl::
     auto* result_world_state = result->as<state::SimEnvWorldState>();
     auto* velocity_control = control->as<control::VelocityControl>();
     // lock the world for the whole propagation
+    _world->getLogger()->logDebug("Attempting to lock world", log_prefix);
     std::lock_guard<std::recursive_mutex> world_lock(_world->getMutex());
+    _world->getLogger()->logDebug("Locked world", log_prefix);
     // save current world state
     _world->saveState();
     // set the world to the start state
@@ -58,6 +60,7 @@ bool SimEnvStatePropagator::propagate(const ::ompl::base::State* state, ::ompl::
     bool propagation_success = true;
     assert (_world->getPhysicsTimeStep() > 0.0f);
     Eigen::VectorXf vel(_controller->getTargetDimension());
+    _world->getLogger()->logDebug("Starting physics loop", log_prefix);
     while (time < velocity_control->getMaxDuration()) {
         // TODO we could do intermediate state checks here so we can abort prematurely in case of invalid collisions
         velocity_control->getVelocity(time, vel);
@@ -65,6 +68,7 @@ bool SimEnvStatePropagator::propagate(const ::ompl::base::State* state, ::ompl::
         _world->stepPhysics();
         time += _world->getPhysicsTimeStep();
     }
+    _world->getLogger()->logDebug("Physics loop terminated", log_prefix);
 
     // in case we have a semi dynamic propagation, continue propagating until rest
     if (_semi_dynamic) {
@@ -75,18 +79,22 @@ bool SimEnvStatePropagator::propagate(const ::ompl::base::State* state, ::ompl::
         vel.setZero();
         _controller->setTargetVelocity(vel); // constant zero target velocity
         // propagate until either t_max is reached, or the world is at rest
+        _world->getLogger()->logDebug("Semi-dynamic propagation enabled - starting 2nd physics loop", log_prefix);
         while (resting_time <= _t_max and not _world->atRest()) {
             _world->stepPhysics(1);
             resting_time += _world->getPhysicsTimeStep();
         }
         semi_dyn_control->setRestTime(resting_time);
         propagation_success = resting_time <= _t_max and _world->atRest();
+        _world->getLogger()->logDebug("2nd physics loop terminated", log_prefix);
     }
 
     state_space->extractState(_world, result_world_state);
     _world->restoreState();
     // TODO there are currently no validity checks performed here, i.e. is the outcoming state physicaly feasible
     // TODO (remember squeezing issue). Also no invalidation based on collisions.
+    _world->getLogger()->logDebug(boost::format("Propagation finished. Success: %1%") % propagation_success,
+                                  log_prefix);
     return propagation_success;
 }
 

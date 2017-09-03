@@ -8,11 +8,11 @@
 #include <map>
 #include <sim_env/SimEnv.h>
 #include <mps/planner/ompl/state/SimEnvState.h>
-//#include <mps/planner/ompl/state/goal/CircularWorkSpaceRegion.h>
 #include <mps/planner/ompl/control/SimEnvStatePropagator.h>
 #include <mps/planner/ompl/control/Interfaces.h>
 #include <mps/planner/ompl/control/RampVelocityControl.h>
 #include <mps/planner/pushing/PushPlannerDistanceMeasure.h>
+#include <mps/planner/pushing/algorithm/RRT.h>
 
 namespace mps {
     namespace planner {
@@ -93,9 +93,9 @@ namespace mps {
                 ::ompl::control::SpaceInformationPtr _space_information;
                 mps::planner::ompl::state::SimEnvValidityCheckerPtr _validity_checker;
                 mps::planner::ompl::control::SimEnvStatePropagatorPtr _state_propagator;
-                PushPlannerDistanceMeasurePtr _distance_measure;
                 PlanningProblem _planning_problem;
                 PlanningSolution _planning_solution;
+                mps::planner::pushing::algorithm::SemiDynamicRRTPtr _algorithm;
 
                 void prepareDistanceWeights(std::vector<float>& weights);
                 ::ompl::control::DirectedControlSamplerPtr allocateDirectedControlSampler(const ::ompl::control::SpaceInformation* si);

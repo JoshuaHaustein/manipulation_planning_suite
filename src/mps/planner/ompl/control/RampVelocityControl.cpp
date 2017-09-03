@@ -12,6 +12,9 @@ namespace omc = ::ompl::control;
 //////////////////////////////////////////////////////////////////////////////////////
 RampVelocityControl::RampVelocityControl(RampVelocityControlSpaceConstPtr control_space):
         _control_space(control_space) {
+    _rest_time = 0.0f;
+    _plateau_duration = 0.0f;
+    _acceleration_duration = 0.0f;
 }
 
 RampVelocityControl::~RampVelocityControl() {

@@ -8,16 +8,17 @@
 #include <ompl/control/SpaceInformation.h>
 #include <ompl/control/DirectedControlSampler.h>
 #include <ompl/control/Control.h>
+#include <mps/planner/ompl/control/SimEnvStatePropagator.h>
 
 namespace mps {
     namespace planner {
         namespace ompl {
             namespace control {
                 /**
-                 * A nairve control sampler similar to SimpleDirectedControlSampler which can be used in combination
+                 * A naive control sampler similar to SimpleDirectedControlSampler which can be used in combination
                  * with a SimEnvStatePropagator, i.e. it allows semi-dynamic control sampling.
                  * The sampler samples k controls, propagates each of them and selects the one that reached
-                 * the state closest to the target state.
+                 * the state closest to the target state and is valid.
                  */
                 class NaiveControlSampler : public ::ompl::control::DirectedControlSampler {
                 public:
@@ -36,8 +37,8 @@ namespace mps {
                      * Samples a control approximately moving the system from state source towards dest.
                      * @param control - the output control
                      * @param source - the start state (must be an instance of SimEnvWorldState)
-                     * @param dest - the destination state
-                     * @return 1
+                     * @param dest - the destination state, gets updated to dest = f(source, control)
+                     * @return 0 if no valid control found, else 1
                      */
                     unsigned int sampleTo(::ompl::control::Control* control,
                                           const ::ompl::base::State* source,
@@ -60,7 +61,9 @@ namespace mps {
                 private:
                     ::ompl::control::ControlSamplerPtr _control_sampler;
                     ::ompl::control::Control* _best_control;
+                    ::ompl::base::State* _best_state;
                     ::ompl::base::State* _result_state;
+                    mps::planner::ompl::control::SimEnvStatePropagatorPtr _state_propagator;
                     unsigned int _k;
                 };
             }

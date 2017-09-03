@@ -13,6 +13,7 @@
 // MPS includes
 #include <mps/planner/ompl/control/SimEnvStatePropagator.h>
 #include <mps/planner/util/Random.h>
+#include <mps/planner/util/Time.h>
 #include <mps/planner/pushing/PushPlannerDistanceMeasure.h>
 // stl
 #include <stack>
@@ -69,6 +70,22 @@ namespace mps {
                         MotionPtr _parent;
                     };
 
+                    // TODO this class may be overfit to a 2d planning case.
+                    class DebugDrawer {
+                    public:
+                        DebugDrawer(sim_env::WorldViewerPtr world);
+                        ~DebugDrawer();
+                        void addNewMotion(MotionPtr motion);
+                        void clear();
+                        void drawStateTransition(const ompl::state::SimEnvObjectState* parent_state,
+                                                 const ompl::state::SimEnvObjectState* new_state,
+                                                 const Eigen::Vector3f& color);
+
+                    private:
+                        sim_env::WorldViewerPtr _world_viewer;
+                        std::vector<sim_env::WorldViewer::Handle> _handles;
+                    };
+                    typedef std::shared_ptr<DebugDrawer> DebugDrawerPtr;
 
                     class Path : public ::ompl::base::Path {
                     public:
@@ -111,13 +128,18 @@ namespace mps {
                      * of type SimEnvStatePropagator. Accordingly the control space is expected to be a space of controls
                      * that inherit from SemiDynamicVelocityControl.
                      * @param si
+                     * @param weights (optional) - a vector of weights used in the distance function used.
+                     *                          If provided weights[i] must be a weight factor for object i
                      */
-                    SemiDynamicRRT(::ompl::control::SpaceInformationPtr si);
+                    SemiDynamicRRT(::ompl::control::SpaceInformationPtr si,
+                                    const std::vector<float>& weights=std::vector<float>());
                     ~SemiDynamicRRT();
 
                     void setup();
 
                     bool plan(const PlanningQuery& pq, Path& path);
+
+                    void setDebugDrawer(DebugDrawerPtr debug_drawer);
 
                 private:
                     ::ompl::control::SpaceInformationPtr _si;
@@ -127,15 +149,23 @@ namespace mps {
                     mps::planner::pushing::PushPlannerDistanceMeasurePtr _distance_measure;
                     ::ompl::RNGPtr _rng;
                     unsigned int _num_objects;
+                    mps::planner::util::time::Timer _timer;
 
                     std::string _log_prefix;
                     bool _is_setup;
                     std::shared_ptr<::ompl::NearestNeighbors< MotionPtr > > _tree;
                     std::stack<MotionPtr> _motions_cache;
 
+                    DebugDrawerPtr _debug_drawer;
+
                     MotionPtr getNewMotion();
                     void cacheMotion(MotionPtr ptr);
+                    double treeDistanceFunction(const MotionPtr& a, const MotionPtr& b) const;
                 };
+                typedef std::shared_ptr<SemiDynamicRRT> SemiDynamicRRTPtr;
+                typedef std::shared_ptr<const SemiDynamicRRT> SemiDynamicRRTConstPtr;
+                typedef std::weak_ptr<SemiDynamicRRT> SemiDynamicRRTWeakPtr;
+                typedef std::weak_ptr<const SemiDynamicRRT> SemiDynamicRRTWeakConstPtr;
             }
         }
     }
