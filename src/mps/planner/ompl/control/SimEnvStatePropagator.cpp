@@ -61,7 +61,7 @@ bool SimEnvStatePropagator::propagate(const ::ompl::base::State* state, ::ompl::
     bool propagation_success = true;
     assert (_world->getPhysicsTimeStep() > 0.0f);
     Eigen::VectorXf vel(_controller->getTargetDimension());
-    logger->logDebug("Starting physics loop", log_prefix);
+//    logger->logDebug("Starting physics loop", log_prefix);
     while (time < velocity_control->getMaxDuration()) {
         // TODO we could do intermediate state checks here so we can abort prematurely in case of invalid collisions
         velocity_control->getVelocity(time, vel);
@@ -80,16 +80,16 @@ bool SimEnvStatePropagator::propagate(const ::ompl::base::State* state, ::ompl::
         vel.setZero();
         _controller->setTargetVelocity(vel); // constant zero target velocity
         // propagate until either t_max is reached, or the world is at rest
-        _world->getLogger()->logDebug("Semi-dynamic propagation enabled - starting 2nd physics loop", log_prefix);
+//        _world->getLogger()->logDebug("Semi-dynamic propagation enabled - starting 2nd physics loop", log_prefix);
         while (resting_time <= _t_max and not _world->atRest()) {
             _world->stepPhysics(1);
             resting_time += _world->getPhysicsTimeStep();
         }
         semi_dyn_control->setRestTime(resting_time);
         propagation_success = resting_time <= _t_max and _world->atRest();
-        _world->getLogger()->logDebug(boost::format("Semi-dynamic propagation terminated. Resting time is: %f")
-                                      % resting_time,
-                                      log_prefix);
+//        _world->getLogger()->logDebug(boost::format("Semi-dynamic propagation terminated. Resting time is: %f")
+//                                      % resting_time,
+//                                      log_prefix);
     }
 
     state_space->extractState(_world, result_world_state);

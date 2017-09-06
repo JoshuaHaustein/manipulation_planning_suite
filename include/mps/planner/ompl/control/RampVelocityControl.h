@@ -145,10 +145,10 @@ namespace mps {
 
                 class RampVelocityControlSampler : public ::ompl::control::ControlSampler {
                 public:
-                    RampVelocityControlSampler(RampVelocityControlSpaceConstPtr control_space);
-                    ~RampVelocityControlSampler();
+                    explicit RampVelocityControlSampler(RampVelocityControlSpaceConstPtr control_space);
+                    ~RampVelocityControlSampler() override;
 
-                    virtual void sample(::ompl::control::Control* control) override;
+                    void sample(::ompl::control::Control* control) override;
                 private:
                     const RampVelocityControlSpaceConstWeakPtr _control_space;
 

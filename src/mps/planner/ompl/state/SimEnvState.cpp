@@ -1,15 +1,16 @@
 //
 // Created by joshua on 8/16/17.
 //
-#include <sim_env/utils/EigenUtils.h>
-#include <mps/planner/ompl/state/SimEnvState.h>
 #include <ompl/base/spaces/SE2StateSpace.h>
 #include <ompl/base/spaces/SE3StateSpace.h>
 #include <ompl/base/spaces/RealVectorStateSpace.h>
-#include <sstream>
+#include <sim_env/utils/EigenUtils.h>
+#include <mps/planner/ompl/state/SimEnvState.h>
 #include <mps/planner/util/Serialize.h>
 #include <mps/planner/util/Logging.h>
+#include <mps/planner/util/Math.h>
 #include <boost/format.hpp>
+#include <sstream>
 
 namespace mps {
     namespace planner {
@@ -131,6 +132,7 @@ void SimEnvObjectConfigurationSpace::StateType::setConfiguration(const Eigen::Ve
                 auto * so2_state =
                         static_cast<::ompl::base::SO2StateSpace::StateType*>(components[space_idx]);
                 so2_state->value = (double)config[dof_idx++];
+                util::math::normalize_orientation(so2_state->value);
                 break;
             }
         }

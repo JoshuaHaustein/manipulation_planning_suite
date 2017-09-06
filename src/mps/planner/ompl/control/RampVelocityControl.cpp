@@ -272,6 +272,7 @@ void RampVelocityControlSampler::sample(omc::Control *control) {
     Eigen::VectorXf velocity_limits;
     Eigen::VectorXf velocity;
     control_space->getVelocityLimits(velocity_limits);
+    // TODO should we sample from a ball instead? or from a ring, i.e. to prevent too small velocities
     mps::planner::util::random::sampleUniform(-velocity_limits, velocity_limits, velocity);
     // now sample duration
     Eigen::Array2f duration_limits;

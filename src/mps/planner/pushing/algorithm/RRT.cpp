@@ -52,11 +52,11 @@ void SemiDynamicRRT::DebugDrawer::addNewMotion(MotionPtr motion) {
     // TODO is it guaranteed that object 0 is the robot?
     auto* parent_object_state = parent_state->getObjectState(0);
     auto* new_object_state = new_state->getObjectState(0);
-    drawStateTransition(parent_object_state, new_object_state, Eigen::Vector4f(0, 0, 1, 1));
+    drawStateTransition(parent_object_state, new_object_state, Eigen::Vector4f(0.1, 0, 0.7, 1));
     // TODO the target object may not be object 1
     parent_object_state = parent_state->getObjectState(1);
     new_object_state = new_state->getObjectState(1);
-    drawStateTransition(parent_object_state, new_object_state, Eigen::Vector4f(0, 1, 0, 1));
+    drawStateTransition(parent_object_state, new_object_state, Eigen::Vector4f(0, 0.7, 0, 1));
 }
 
 void SemiDynamicRRT::DebugDrawer::clear() {
