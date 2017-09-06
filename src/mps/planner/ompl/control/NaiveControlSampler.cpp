@@ -37,8 +37,7 @@ unsigned int NaiveControlSampler::sampleTo(::ompl::control::Control *control,
     static const std::string prefix("[mps::planner::ompl::control::NaiveControlSampler::sampleTo]");
     logging::logDebug("Sampling control towards a state", prefix);
     // sample k controls and return the best
-    // initial guess is that it's best to do nothing
-    double best_distance = si_->distance(source, dest);
+    double best_distance = std::numeric_limits<double>::max();
     unsigned int num_steps = 0;
     si_->nullControl(_best_control);
     si_->copyState(_best_state, source);

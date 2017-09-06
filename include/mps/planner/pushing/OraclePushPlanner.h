@@ -33,6 +33,7 @@ namespace mps {
                 mps::planner::ompl::state::PlanningSceneBounds workspace_bounds;
                 // time out for planner
                 float planning_time_out;
+                std::function<bool()> stopping_condition;
                 // distance function
                 std::map<std::string, float> object_weights;
                 mps::planner::ompl::state::SimEnvWorldStateSpace::WeightMap weight_map;
@@ -47,6 +48,8 @@ namespace mps {
                 // settings for control sampler
                 bool use_oracle;
                 unsigned int num_control_samples;
+                // flag whether to enable debug info
+                bool debug;
                 // TODO more parameters, like distance weights, workspace bounds, goal region
 
                 /**
@@ -67,7 +70,9 @@ namespace mps {
              * Solution to a push planning problem.
              */
             struct PlanningSolution {
-                // TODO some encoding of the solution, probably a sequence of state, action pairs
+                mps::planner::ompl::planning::essentials::PathPtr path;
+                bool solved;
+                PlanningSolution();
             };
 
             /**
@@ -85,6 +90,9 @@ namespace mps {
 
                 bool setup(PlanningProblem& problem);
                 bool solve(PlanningSolution& solution);
+                // TODO should we move this playback function somewhere else?
+                void playback(const PlanningSolution& solution);
+                void clearVisualizations();
                 void dummyTest();
             private:
                 bool _is_initialized;
@@ -94,10 +102,11 @@ namespace mps {
                 mps::planner::ompl::state::SimEnvValidityCheckerPtr _validity_checker;
                 mps::planner::ompl::control::SimEnvStatePropagatorPtr _state_propagator;
                 PlanningProblem _planning_problem;
-                PlanningSolution _planning_solution;
                 mps::planner::pushing::algorithm::SemiDynamicRRTPtr _algorithm;
+                mps::planner::pushing::algorithm::SemiDynamicRRT::DebugDrawerPtr _debug_drawer;
 
-                void prepareDistanceWeights(std::vector<float>& weights);
+                std::vector<float> _distance_weights;
+                void prepareDistanceWeights();
                 ::ompl::control::DirectedControlSamplerPtr allocateDirectedControlSampler(const ::ompl::control::SpaceInformation* si);
             };
         }

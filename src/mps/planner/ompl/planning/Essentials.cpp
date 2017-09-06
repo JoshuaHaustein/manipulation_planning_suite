@@ -1,0 +1,173 @@
+//
+// Created by joshua on 9/5/17.
+//
+
+#include <mps/planner/ompl/planning/Essentials.h>
+#include <mps/planner/util/Logging.h>
+#include <mps/planner/ompl/state/SimEnvState.h>
+#include <mps/planner/ompl/control/Interfaces.h>
+
+namespace oc = ompl::control;
+namespace ob = ompl::base;
+namespace mps_state = mps::planner::ompl::state;
+namespace mps_control = mps::planner::ompl::control;
+using namespace mps::planner::ompl::planning::essentials;
+using namespace mps::planner::util;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////// Motion ////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////
+Motion::Motion(oc::SpaceInformationPtr si) {
+    _state = si->allocState();
+    _control = si->allocControl();
+    _weak_si = si;
+    _parent = nullptr;
+}
+
+Motion::Motion(const Motion &other) {
+    _weak_si = other._weak_si;
+    auto si = _weak_si.lock();
+    if (!si) {
+        std::logic_error("[mps::planner::ompl::planning::essentials::Motion::Motion(const Motion&)]"
+                                 " Could not access space information. The other motion is invalid.");
+    }
+    si->copyState(_state, other._state);
+    si->copyControl(_control, other._control);
+    _parent = other._parent;
+}
+
+Motion::~Motion() {
+    auto si = _weak_si.lock();
+    if (!si) {
+        logging::logErr("Could not access space information. This will result in memory leaked.",
+                        "[mps::planner::ompl::planning::essentials::Motion::~Motion]");
+        return;
+    }
+    if (_control) {
+        si->freeControl(_control);
+    }
+    if (_state) {
+        si->freeState(_state);
+    }
+}
+
+Motion& Motion::operator=(const Motion& other) {
+    _weak_si = other._weak_si;
+    auto si = _weak_si.lock();
+    if (!si) {
+        std::logic_error("[mps::planner::ompl::planning::essentials::Motion::operator=]"
+                                 " Could not access space information. The other motion is invalid.");
+    }
+    si->copyState(_state, other._state);
+    si->copyControl(_control, other._control);
+    _parent = other._parent;
+    return *this;
+}
+
+ob::State* Motion::getState() {
+    return _state;
+}
+
+ob::State const* Motion::getConstState() const {
+    return _state;
+}
+
+oc::Control* Motion::getControl() {
+    return _control;
+}
+
+oc::Control const* Motion::getConstControl() const {
+    return _control;
+}
+
+MotionPtr Motion::getParent() {
+    return _parent;
+}
+
+MotionConstPtr Motion::getConstParent() const{
+    return _parent;
+}
+
+void Motion::setParent(MotionPtr parent) {
+    _parent = parent;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////// Path //////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////
+Path::Path(oc::SpaceInformationPtr si) :
+        ::ompl::base::Path(si)
+{
+    _sic = si;
+}
+
+Path::~Path() = default;
+
+double Path::length() const {
+    return _length;
+}
+
+::ompl::base::Cost Path::cost(const ob::OptimizationObjectivePtr& oo) const {
+    throw std::logic_error("[mps::planner::ompl::planning::essentials::Path::cost] Not implemented");
+}
+
+bool Path::check() const {
+    for (auto motion : _motions) {
+        if (not _sic->isValid(motion->getState())) {
+            return false;
+        }
+    }
+    return true;
+}
+
+void Path::print(std::ostream &out) const {
+    out << "Path: /n";
+    for (auto motion : _motions) {
+        out << "State: ";
+        // TODO cast these states to some interface that allows printing.
+        // TODO it's unnecessary to restrict this class to SimEnvWorldStates and SemiDYnamicVelocityControl
+        motion->getState()->as<mps_state::SimEnvWorldState>()->print(out);
+        out << " Control: ";
+        auto control = dynamic_cast<mps_control::SemiDynamicVelocityControl*>(motion->getControl());
+        if (!control) {
+            throw std::logic_error("[mps::planner::ompl::planning::essentials::Path::print] Could not cast control to SemiDynamicVelocityControl");
+        }
+        control->serializeInNumbers(out);
+        out << "/n";
+    }
+}
+
+void Path::append(MotionPtr motion) {
+    if (_motions.size() > 0) {
+        _length += _sic->distance(_motions.at(_motions.size() - 1)->getState(), motion->getState());
+    }
+    _motions.push_back(motion);
+}
+
+void Path::initBacktrackMotion(MotionPtr motion) {
+    clear();
+    _motions.push_back(motion);
+    MotionPtr parent_motion = motion->getParent();
+    while (parent_motion != nullptr) {
+        _motions.push_back(parent_motion);
+        parent_motion = parent_motion->getParent();
+    }
+    std::reverse(_motions.begin(), _motions.end());
+}
+
+void Path::clear() {
+    _motions.clear();
+}
+
+unsigned int Path::getNumMotions() const {
+    return _motions.size();
+}
+
+MotionPtr Path::getMotion(unsigned int i) {
+    return _motions.at(i);
+}
+
+MotionConstPtr Path::getConstMotion(unsigned int i) const {
+    return _motions.at(i);
+}
+

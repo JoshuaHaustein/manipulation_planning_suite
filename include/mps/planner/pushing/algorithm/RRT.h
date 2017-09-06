@@ -12,6 +12,7 @@
 #include <ompl/datastructures/NearestNeighbors.h>
 // MPS includes
 #include <mps/planner/ompl/control/SimEnvStatePropagator.h>
+#include <mps/planner/ompl/planning/Essentials.h>
 #include <mps/planner/util/Random.h>
 #include <mps/planner/util/Time.h>
 #include <mps/planner/pushing/PushPlannerDistanceMeasure.h>
@@ -24,11 +25,12 @@ namespace mps {
             namespace algorithm {
                 // TODO we could inherit from ::ompl::base::Planner or could define our own planner interface, if needed
                 /**
-                 * This class implements the semi-dynamic RRT algorithm. The semi-dynamic RRT algorithm
-                 * is essentially the same as the normal RRT algorithm with the slight difference, that it utilizes
-                 * a state propagator that may adjust the control. The term 'semi-dynamic' refers to such an adjustment
-                 * in the case of push planning. Here, the state propagator may add an additional waiting time to a robot
-                 * control action to allow the environment to come to rest.
+                 * This class implements the semi-dynamic RRT algorithm for non-prehensile rearrangement.
+                 * The algorithm searches for a sequence of robot actions that push a target object into some goal region.
+                 * The special aspect about the semi-dynamic RRT is that the state propagator may add an
+                 * additional waiting time to a robot control action to allow the environment to come to rest. After
+                 * each action. This allows utilizing dynamical physical interactions between the robot and its environment
+                 * without planning on full state space.
                  *
                  * This planner operates on SimEnvWorldStateSpace only as it utilizes the SimEnvStatePropagator.
                  * Also, the control space needs to be compatible to SemiDynamicVelocityControl, i.e. the controls
@@ -39,47 +41,32 @@ namespace mps {
                     struct PlanningQuery {
                         std::shared_ptr<::ompl::base::GoalSampleableRegion> goal_region; // goal region
                         ::ompl::base::State* start_state; // start state of the problem (SimEnvWorldStateSpace)
+                        std::string target_name;
+                        std::string robot_name;
                         float time_out; // time out in seconds
                         float goal_bias;
+                        float target_bias; // fraction of times the planner should focus at least on moving the target
+                        float robot_bias; // fraction of times the planner should focus at least on moving the robot
+                        std::vector<float> weights; // optional weights for the distance function
                         std::function<bool()> stopping_condition; // optionally a customized stopping condition
                         PlanningQuery(std::shared_ptr<::ompl::base::GoalSampleableRegion> goal_region,
                                       ::ompl::base::State* start_state,
-                                      float time_out);
+                                      float time_out,
+                                      const std::string& target_name,
+                                      const std::string& robot_name);
                     };
 
-                    class Motion;
-                    typedef std::shared_ptr<Motion> MotionPtr;
-                    typedef std::shared_ptr<const Motion> MotionConstPtr;
-
-                    class Motion {
-                    public:
-                        Motion() = delete;
-                        Motion(::ompl::control::SpaceInformationPtr si);
-                        Motion(const Motion& other);
-                        ~Motion();
-                        Motion& operator=(const Motion& other);
-                        ::ompl::base::State* getState();
-                        ::ompl::control::Control* getControl();
-                        MotionPtr getParent();
-                        MotionConstPtr getConstParent();
-                        void setParent(MotionPtr parent);
-                    private:
-                        std::weak_ptr<::ompl::control::SpaceInformation> _weak_si;
-                        ::ompl::base::State* _state;
-                        ::ompl::control::Control* _control;
-                        MotionPtr _parent;
-                    };
 
                     // TODO this class may be overfit to a 2d planning case.
                     class DebugDrawer {
                     public:
                         DebugDrawer(sim_env::WorldViewerPtr world);
                         ~DebugDrawer();
-                        void addNewMotion(MotionPtr motion);
+                        void addNewMotion(mps::planner::ompl::planning::essentials::MotionPtr motion);
                         void clear();
                         void drawStateTransition(const ompl::state::SimEnvObjectState* parent_state,
                                                  const ompl::state::SimEnvObjectState* new_state,
-                                                 const Eigen::Vector3f& color);
+                                                 const Eigen::Vector4f& color);
 
                     private:
                         sim_env::WorldViewerPtr _world_viewer;
@@ -87,62 +74,25 @@ namespace mps {
                     };
                     typedef std::shared_ptr<DebugDrawer> DebugDrawerPtr;
 
-                    class Path : public ::ompl::base::Path {
-                    public:
-                        Path(::ompl::control::SpaceInformationPtr si);
-                        ~Path();
-
-                        double length() const override;
-                        ::ompl::base::Cost cost(const ::ompl::base::OptimizationObjectivePtr& oo) const override;
-                        bool check() const override;
-                        void print(std::ostream& out) const override;
-
-                        /**
-                         * Append a motion to this path. The motion is not copied!
-                         * @param motion - motion to append to this path.
-                         */
-                        void append(MotionPtr motion);
-                        /**
-                         * Resets this path and initializes this path by backtracking the path leading
-                         * to motion. None of the motions are copied!
-                         * @param motion - final motion of a path.
-                         */
-                        void initBacktrackMotion(MotionPtr motion);
-                        /**
-                         * Clear this path.
-                         */
-                        void clear();
-                        unsigned int getNumMotions() const;
-                        MotionPtr getMotion(unsigned int i);
-                        MotionConstPtr getConstMotion(unsigned int i) const;
-                        //TODO could also define iterator for this
-
-                    private:
-                        ::ompl::control::SpaceInformationPtr _sic;
-                        std::vector<MotionPtr> _motions;
-                        double _length;
-                    };
 
                     /**
                      * Creates a new semi-dynamic RRT algorithm. The state propagator provided in si is expected to be
                      * of type SimEnvStatePropagator. Accordingly the control space is expected to be a space of controls
                      * that inherit from SemiDynamicVelocityControl.
                      * @param si
-                     * @param weights (optional) - a vector of weights used in the distance function used.
-                     *                          If provided weights[i] must be a weight factor for object i
                      */
-                    SemiDynamicRRT(::ompl::control::SpaceInformationPtr si,
-                                    const std::vector<float>& weights=std::vector<float>());
+                    SemiDynamicRRT(::ompl::control::SpaceInformationPtr si);
                     ~SemiDynamicRRT();
 
                     void setup();
 
-                    bool plan(const PlanningQuery& pq, Path& path);
+                    bool plan(const PlanningQuery& pq, mps::planner::ompl::planning::essentials::PathPtr path);
 
                     void setDebugDrawer(DebugDrawerPtr debug_drawer);
 
                 private:
                     ::ompl::control::SpaceInformationPtr _si;
+                    mps::planner::ompl::state::SimEnvWorldStateSpacePtr _state_space;
                     ::ompl::base::StateSamplerPtr _state_sampler;
                     ::ompl::control::DirectedControlSamplerPtr _control_sampler;
                     mps::planner::ompl::control::SimEnvStatePropagatorPtr _state_propagator;
@@ -153,14 +103,18 @@ namespace mps {
 
                     std::string _log_prefix;
                     bool _is_setup;
-                    std::shared_ptr<::ompl::NearestNeighbors< MotionPtr > > _tree;
-                    std::stack<MotionPtr> _motions_cache;
+                    std::shared_ptr<::ompl::NearestNeighbors< mps::planner::ompl::planning::essentials::MotionPtr > > _tree;
+                    std::stack<mps::planner::ompl::planning::essentials::MotionPtr> _motions_cache;
 
                     DebugDrawerPtr _debug_drawer;
 
-                    MotionPtr getNewMotion();
-                    void cacheMotion(MotionPtr ptr);
-                    double treeDistanceFunction(const MotionPtr& a, const MotionPtr& b) const;
+                    unsigned int sampleActiveObject(const PlanningQuery& pq,
+                                                    unsigned int target_id,
+                                                    unsigned int robot_id) const;
+                    mps::planner::ompl::planning::essentials::MotionPtr getNewMotion();
+                    void cacheMotion(mps::planner::ompl::planning::essentials::MotionPtr ptr);
+                    double treeDistanceFunction(const mps::planner::ompl::planning::essentials::MotionPtr& a,
+                                                const mps::planner::ompl::planning::essentials::MotionPtr& b) const;
                 };
                 typedef std::shared_ptr<SemiDynamicRRT> SemiDynamicRRTPtr;
                 typedef std::shared_ptr<const SemiDynamicRRT> SemiDynamicRRTConstPtr;

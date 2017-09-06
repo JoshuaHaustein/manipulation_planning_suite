@@ -56,6 +56,27 @@ set(CMAKE_CXX_FLAGS_RELEASE "-O3")
          ${catkin_INCLUDE_DIRS}
          )
 
+## Define all headers (clion needs this)
+set(PLANNER_H
+        include/mps/planner/ompl/control/Interfaces.h
+        include/mps/planner/ompl/control/NaiveControlSampler.h
+        include/mps/planner/ompl/control/RampVelocityControl.h
+        include/mps/planner/ompl/control/SimEnvStatePropagator.h
+        include/mps/planner/ompl/state/Interfaces.h
+        include/mps/planner/ompl/state/SimEnvState.h
+        include/mps/planner/ompl/state/goal/ObjectRelocationGoal.h
+        include/mps/planner/ompl/planning/Essentials.h
+        include/mps/planner/pushing/PushPlannerDistanceMeasure.h
+        include/mps/planner/pushing/OraclePushPlanner.h
+        include/mps/planner/pushing/algorithm/RRT.h
+        include/mps/planner/util/Logging.h
+        include/mps/planner/util/Playback.h
+        include/mps/planner/util/Serialize.h
+        include/mps/planner/util/Random.h
+        include/mps/planner/util/Time.h
+        )
+
+## Define all source files
 set(PLANNER_SRC
         src/mps/planner/ompl/control/RampVelocityControl.cpp
         src/mps/planner/ompl/control/Interfaces.cpp
@@ -65,17 +86,21 @@ set(PLANNER_SRC
         src/mps/planner/ompl/state/SimEnvState.cpp
         src/mps/planner/ompl/state/goal/ObjectRelocationGoal.cpp
         src/mps/planner/ompl/state/Interfaces.cpp
+        src/mps/planner/ompl/planning/Essentials.cpp
         src/mps/planner/util/Random.cpp
         src/mps/planner/util/Serialize.cpp
         src/mps/planner/util/Logging.cpp
         src/mps/planner/util/Time.cpp
+        src/mps/planner/util/Playback.cpp
         src/mps/planner/pushing/PushPlannerDistanceMeasure.cpp
         src/mps/planner/pushing/OraclePushPlanner.cpp
         src/mps/planner/pushing/algorithm/RRT.cpp
 )
+
 ## Declare a C++ library
  add_library(${PROJECT_NAME}
        ${PLANNER_SRC}
+         ${PLANNER_H}
  )
 
 #target_link_libraries(oracle_planner

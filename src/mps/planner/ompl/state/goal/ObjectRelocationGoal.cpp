@@ -73,7 +73,8 @@ double ObjectRelocationGoal::distanceGoal(const ::ompl::base::State *st) const {
     auto object_state = sim_env_state->getObjectState(_target_id);
     Eigen::VectorXf config = object_state->getConfiguration();
     // TODO this distance is also specific to SE(2)
-    return sqrt(pow(_goal_position[0] - config[0], 2) + pow(_goal_position[1] - config[1], 2));
+    double dist_to_center = sqrt(pow(_goal_position[0] - config[0], 2) + pow(_goal_position[1] - config[1], 2));
+    return std::max(dist_to_center - _position_tolerance, 0.0);
 }
 
 void ObjectRelocationGoal::print(std::ostream& out) const {

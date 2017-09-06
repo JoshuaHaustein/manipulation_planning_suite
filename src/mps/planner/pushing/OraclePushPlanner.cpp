@@ -10,6 +10,7 @@
 #include <mps/planner/ompl/control/OracleControlSampler.h>
 #include <mps/planner/ompl/control/NaiveControlSampler.h>
 #include <mps/planner/util/Logging.h>
+#include <mps/planner/util/Playback.h>
 
 
 using namespace mps::planner::pushing;
@@ -56,7 +57,13 @@ PlanningProblem::PlanningProblem(sim_env::WorldPtr world, sim_env::RobotPtr robo
         control_limits.velocity_limits[i] = std::min(std::abs(velocity_limits(i, 0)), velocity_limits(i, 1));
     }
     use_oracle = true;
+    debug = false;
     num_control_samples = 10;
+    stopping_condition = [](){return false;};
+}
+
+PlanningSolution::PlanningSolution() : path(nullptr), solved(false) {
+
 }
 
 OraclePushPlanner::OraclePushPlanner() {
@@ -73,7 +80,6 @@ bool OraclePushPlanner::setup(PlanningProblem& problem) {
     _validity_checker.reset();
     _state_propagator.reset();
     _planning_problem = problem;
-    _planning_solution = PlanningSolution();
     _planning_problem.use_oracle = false; // TODO remove
     // now create new instances
     _state_space = std::make_shared<mps_state::SimEnvWorldStateSpace>(_planning_problem.world,
@@ -101,15 +107,18 @@ bool OraclePushPlanner::setup(PlanningProblem& problem) {
                                                                                  _planning_problem.robot_controller,
                                                                                  _planning_problem.b_semi_dynamic,
                                                                                  _planning_problem.t_max);
-    std::vector<float> weights;
-    prepareDistanceWeights(weights);
+    prepareDistanceWeights();
     _space_information->setStatePropagator(_state_propagator);
     _space_information->setup();
-    _algorithm = std::make_shared<mps::planner::pushing::algorithm::SemiDynamicRRT>(_space_information, weights);
+    _algorithm = std::make_shared<mps::planner::pushing::algorithm::SemiDynamicRRT>(_space_information);
     _algorithm->setup();
     // TODO this is only for debug
-    algorithm::SemiDynamicRRT::DebugDrawerPtr debug_drawer = std::make_shared<algorithm::SemiDynamicRRT::DebugDrawer>(_planning_problem.world->getViewer());
-    _algorithm->setDebugDrawer(debug_drawer);
+     if (_planning_problem.debug) {
+         if (!_debug_drawer) {
+             _debug_drawer = std::make_shared<algorithm::SemiDynamicRRT::DebugDrawer>(_planning_problem.world->getViewer());
+         }
+         _algorithm->setDebugDrawer(_debug_drawer);
+     }
     // TODO we probably don't need to reconstruct everything all the time
     _is_initialized = true;
     return _is_initialized;
@@ -130,11 +139,32 @@ bool OraclePushPlanner::solve(PlanningSolution& solution) {
                                                                       _planning_problem.goal_region_radius,
                                                                       0.0f);
     // planning query
-    algorithm::SemiDynamicRRT::PlanningQuery pq(goal_region, start_state, _planning_problem.planning_time_out);
-    algorithm::SemiDynamicRRT::Path path(_space_information);
-    bool success = _algorithm->plan(pq, path);
+    algorithm::SemiDynamicRRT::PlanningQuery pq(goal_region,
+                                                start_state,
+                                                _planning_problem.planning_time_out,
+                                                _planning_problem.target_object->getName(),
+                                                _planning_problem.robot->getName());
+    pq.stopping_condition = _planning_problem.stopping_condition;
+    pq.weights = _distance_weights;
+    solution.path = std::make_shared<mps::planner::ompl::planning::essentials::Path>(_space_information);
+    solution.solved = _algorithm->plan(pq, solution.path);
     _state_space->freeState(start_state);
-    return success;
+    return solution.solved;
+}
+
+void OraclePushPlanner::playback(const PlanningSolution& solution) {
+    if (solution.solved) {
+        mps::planner::util::playback::playPath(_planning_problem.world,
+                                               _planning_problem.robot_controller,
+                                               _state_space,
+                                               solution.path);
+    }
+}
+
+void OraclePushPlanner::clearVisualizations() {
+    if (_debug_drawer) {
+        _debug_drawer->clear();
+    }
 }
 
 void OraclePushPlanner::dummyTest() {
@@ -199,15 +229,15 @@ void OraclePushPlanner::dummyTest() {
     _space_information->freeControl(control);
 }
 
-void OraclePushPlanner::prepareDistanceWeights(std::vector<float> &weights) {
-    weights.resize(_state_space->getNumObjects());
-    for (unsigned int i = 0; i < weights.size(); ++i) {
+void OraclePushPlanner::prepareDistanceWeights() {
+    _distance_weights.resize(_state_space->getNumObjects());
+    for (unsigned int i = 0; i < _distance_weights.size(); ++i) {
         std::string name = _state_space->getObjectName(i);
         auto iter = _planning_problem.object_weights.find(name);
         if (iter != _planning_problem.object_weights.end()) {
-            weights.at(i) = iter->second;
+            _distance_weights.at(i) = iter->second;
         } else {
-            weights.at(i) = 1.0f;
+            _distance_weights.at(i) = 1.0f;
         }
     }
 }
