@@ -101,10 +101,12 @@ bool OraclePushPlanner::setup(PlanningProblem& problem) {
             std::make_shared<mps::planner::ompl::state::SimEnvValidityChecker>(_space_information,
                                                                                _planning_problem.world);
     _space_information->setStateValidityChecker(_validity_checker);
+    prepareCollisionPolicy();
     _state_propagator =
             std::make_shared<mps::planner::ompl::control::SimEnvStatePropagator>(_space_information,
                                                                                  _planning_problem.world,
                                                                                  _planning_problem.robot_controller,
+                                                                                 _collision_policy,
                                                                                  _planning_problem.b_semi_dynamic,
                                                                                  _planning_problem.t_max);
     prepareDistanceWeights();
@@ -249,5 +251,11 @@ void OraclePushPlanner::prepareDistanceWeights() {
         return std::make_shared<mps::planner::ompl::control::NaiveControlSampler>(
                si, _planning_problem.num_control_samples);
     }
+}
+
+void OraclePushPlanner::prepareCollisionPolicy() {
+    // TODO make this settable from the outside
+    std::string robot_name = _planning_problem.robot->getName();
+    _collision_policy.setStaticCollisions(robot_name, false);
 }
 

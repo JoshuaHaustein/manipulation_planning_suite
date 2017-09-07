@@ -11,6 +11,7 @@
 #include <mps/planner/util/Math.h>
 #include <boost/format.hpp>
 #include <sstream>
+#include <string>
 
 namespace mps {
     namespace planner {
@@ -39,6 +40,7 @@ namespace mps {
 }
 
 typedef boost::format bf;
+namespace mps_logging = mps::planner::util::logging;
 using namespace mps::planner::ompl::state;
 ////////////////////////////////////////////////////////////////////////////////////////////
 /////////////////// SimEnvObjectConfigurationSpace::StateType aka SimEnvConfiguration //////
@@ -168,16 +170,15 @@ SimEnvObjectConfigurationSpace::SimEnvObjectConfigurationSpace(sim_env::ObjectCo
     addPoseSubspace(object);
     addJointsSubspace(object);
     lock();
-    mps::planner::util::logging::logDebug(bf("Created configurations space for object %s") % object->getName(),
-                                          log_prefix);
-    mps::planner::util::logging::logDebug(bf("The dimension of this space is %i") % getDimension(),
-                                          log_prefix);
-    mps::planner::util::logging::logDebug(bf("The bounds are\n %d") % _limits,
-                                          log_prefix);
+    mps_logging::logDebug(bf("Created configurations space for object %s") % object->getName(),
+                          log_prefix);
+    mps_logging::logDebug(bf("The dimension of this space is %i") % getDimension(),
+                          log_prefix);
+    mps_logging::logDebug(bf("The bounds are\n %d") % _limits,
+                          log_prefix);
 }
 
-SimEnvObjectConfigurationSpace::~SimEnvObjectConfigurationSpace() {
-}
+SimEnvObjectConfigurationSpace::~SimEnvObjectConfigurationSpace() = default;
 
 ::ompl::base::State* SimEnvObjectConfigurationSpace::allocState() const {
     SimEnvObjectConfiguration* configuration = new SimEnvObjectConfiguration(_state_descriptions,
@@ -454,25 +455,24 @@ SimEnvObjectVelocitySpace::SimEnvObjectVelocitySpace(sim_env::ObjectConstPtr obj
     addPoseVelocitySubspace(object);
     addJointsVelocitySubspace(object);
     lock();
-    mps::planner::util::logging::logDebug(bf("Created velocity space for object %s") % object->getName(),
-                                          log_prefix);
-    mps::planner::util::logging::logDebug(bf("The dimension of this space is %i") % getDimension(),
-                                          log_prefix);
-    mps::planner::util::logging::logDebug(bf("The bounds are\n %d") % _limits,
-                                          log_prefix);
+    mps_logging::logDebug(bf("Created velocity space for object %s") % object->getName(),
+                          log_prefix);
+    mps_logging::logDebug(bf("The dimension of this space is %i") % getDimension(),
+                          log_prefix);
+    mps_logging::logDebug(bf("The bounds are\n %d") % _limits,
+                          log_prefix);
 }
 
-SimEnvObjectVelocitySpace::~SimEnvObjectVelocitySpace() {
-}
+SimEnvObjectVelocitySpace::~SimEnvObjectVelocitySpace() = default;
 
 ::ompl::base::State* SimEnvObjectVelocitySpace::allocState() const {
-    SimEnvObjectVelocity* velocity = new SimEnvObjectVelocity(_state_descriptions, _active_dofs.size());
+    auto* velocity = new SimEnvObjectVelocity(_state_descriptions, _active_dofs.size());
     allocStateComponents(velocity);
     return velocity;
 }
 
 void SimEnvObjectVelocitySpace::freeState(::ompl::base::State* state) const {
-    SimEnvObjectVelocity* velocity = static_cast<SimEnvObjectVelocity*>(state);
+    auto* velocity = static_cast<SimEnvObjectVelocity*>(state);
     for (unsigned int i = 0; i < componentCount_; ++i) {
         components_[i]->freeState(velocity->components[i]);
     }
@@ -508,24 +508,24 @@ void SimEnvObjectVelocitySpace::addPoseVelocitySubspace(sim_env::ObjectConstPtr 
             orientation_dof_indices.push_back(i);
         }
     }
-    if (position_dofs.size() > 0) {
+    if (!position_dofs.empty()) {
         // TODO we shouldn't use RealVector spaces here (they are box shaped).
         // TODO Should use a ball shaped space
         auto velocity_space = std::make_shared<::ompl::base::RealVectorStateSpace>(position_dofs.size());
         velocity_space->setName(internal::createSpaceName(position_dofs, "VelocitySpace"));
         velocity_space->setBounds(makeBounds(position_dof_indices));
         addSubspace(velocity_space, _position_vel_weight);
-        _state_descriptions.push_back(internal::SubstateTypeDescription(internal::SubspaceType::RealVector,
+        _state_descriptions.emplace_back(internal::SubstateTypeDescription(internal::SubspaceType::RealVector,
                                                                         (unsigned int) position_dofs.size()));
     }
-    if (orientation_dofs.size() > 0) {
+    if (!orientation_dofs.empty()) {
         // TODO we shouldn't use RealVector spaces here (they are box shaped).
         // TODO Should use a ball shaped space
         auto velocity_space = std::make_shared<::ompl::base::RealVectorStateSpace>(orientation_dofs.size());
         velocity_space->setName(internal::createSpaceName(orientation_dofs, "VelocitySpace"));
         velocity_space->setBounds(makeBounds(orientation_dof_indices));
         addSubspace(velocity_space, _orientation_vel_weight);
-        _state_descriptions.push_back(internal::SubstateTypeDescription(internal::SubspaceType::RealVector,
+        _state_descriptions.emplace_back(internal::SubstateTypeDescription(internal::SubspaceType::RealVector,
                                                                         (unsigned int) orientation_dofs.size()));
     }
 }
@@ -540,12 +540,12 @@ void SimEnvObjectVelocitySpace::addJointsVelocitySubspace(sim_env::ObjectConstPt
             indices.push_back(i);
         }
     }
-    if (joint_idx.size() == 0) return;
+    if (joint_idx.empty()) return;
     auto space = std::make_shared<::ompl::base::RealVectorStateSpace>(joint_idx.size());
     space->setName(internal::createSpaceName(joint_idx, "VelocitySpace"));
     space->setBounds(makeBounds(indices));
     addSubspace(space, _joint_vel_weight);
-    _state_descriptions.push_back(internal::SubstateTypeDescription(internal::SubspaceType::RealVector,
+    _state_descriptions.emplace_back(internal::SubstateTypeDescription(internal::SubspaceType::RealVector,
                                                                     (unsigned int) joint_idx.size()));
 }
 
@@ -914,56 +914,121 @@ void SimEnvWorldStateSpace::constructLimits(sim_env::ObjectConstPtr object, cons
 ////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////// SimEnvValidityChecker ///////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
+SimEnvValidityChecker::CollisionPolicy::CollisionPolicy() :
+        _b_static_col_allowed(true)
+{
+}
+
+SimEnvValidityChecker::CollisionPolicy::CollisionPolicy(const CollisionPolicy& other) = default;
+
+SimEnvValidityChecker::CollisionPolicy::~CollisionPolicy() = default;
+
+SimEnvValidityChecker::CollisionPolicy& SimEnvValidityChecker::CollisionPolicy::operator=(const CollisionPolicy &other) {
+    if (this != &other) {
+        _b_static_col_allowed = other._b_static_col_allowed;
+        _forbidden_collisions = other._forbidden_collisions;
+        _static_collisions = other._static_collisions;
+    }
+    return *this;
+}
 
 void SimEnvValidityChecker::CollisionPolicy::setStaticCollisions(bool allowed) {
-    // TODO
+    _b_static_col_allowed = allowed;
+}
+
+void SimEnvValidityChecker::CollisionPolicy::setStaticCollisions(const std::string& obj, bool allowed) {
+    _static_collisions[obj] = allowed;
+}
+
+void SimEnvValidityChecker::CollisionPolicy::setStaticCollisions(sim_env::ObjectConstPtr obj, bool allowed) {
+    setStaticCollisions(obj->getName(), allowed);
 }
 
 bool SimEnvValidityChecker::CollisionPolicy::staticCollisionsAllowed() const {
-    // TODO
-    return true;
+    return _b_static_col_allowed;
+}
+
+bool SimEnvValidityChecker::CollisionPolicy::staticCollisionsAllowed(const std::string& obj) const {
+    auto iter = _static_collisions.find(obj);
+    if (iter != _static_collisions.end()) {
+        return iter->second;
+    }
+    return staticCollisionsAllowed();
+}
+
+bool SimEnvValidityChecker::CollisionPolicy::staticCollisionsAllowed(sim_env::ObjectConstPtr obj) const {
+    return staticCollisionsAllowed(obj->getName());
 }
 
 void SimEnvValidityChecker::CollisionPolicy::setCollision(const std::string& obj1,
                                                           const std::string& obj2,
                                                           bool allowed) {
-    // TODO
+    auto pair = std::make_pair(obj1, obj2);
+    auto iter = _forbidden_collisions.find(pair);
+    if (iter != _forbidden_collisions.end()) { // if we have (obj1, obj2) already stored
+        iter->second = allowed;
+    } else {
+        _forbidden_collisions[pair] = allowed; // else store it
+    }
 }
 
-void SimEnvValidityChecker::CollisionPolicy::setCollision(sim_env::ObjectConstPtr obj1, sim_env::ObjectConstPtr obj2, bool allowed) {
-    // TODO
+void SimEnvValidityChecker::CollisionPolicy::setCollision(sim_env::ObjectConstPtr obj1,
+                                                          sim_env::ObjectConstPtr obj2,
+                                                          bool allowed) {
+    setCollision(obj1->getName(), obj2->getName(), allowed);
 }
 
 bool SimEnvValidityChecker::CollisionPolicy::collisionAllowed(const std::string& obj1, const std::string& obj2) const {
-    // TODO
-    return true;
+    auto pair = std::make_pair(obj1, obj2);
+    auto iter = _forbidden_collisions.find(pair);
+    if (iter != _forbidden_collisions.end()) {
+        return iter->second;
+    }
+    return true; // if we don't know about it, it is allowed
 }
 
 bool SimEnvValidityChecker::CollisionPolicy::collisionAllowed(sim_env::ObjectConstPtr obj1, sim_env::ObjectConstPtr obj2) const {
-    // TODO
-    return true;
+    if (obj1->isStatic() and obj2->isStatic()) {
+        mps_logging::logWarn("Request made whether two static objects are allowed to contact each other.",
+                             "[mps::planner::ompl::state::SimEnvValidityChecker::CollisionPolicy::collisionAllowed]");
+    }
+    if (obj1->isStatic()) {
+        return staticCollisionsAllowed(obj2->getName());
+    }
+    if (obj2->isStatic()) {
+        return staticCollisionsAllowed(obj1->getName());
+    }
+    return collisionAllowed(obj1->getName(), obj2->getName());
 }
 
+std::size_t SimEnvValidityChecker::CollisionPolicy::PairHash::operator()(
+        const std::pair<std::string, std::string> &key) const {
+    auto hash_fn = std::hash<std::string>();
+    return key.first == key.second ? hash_fn(key.first) : hash_fn(key.first) ^ hash_fn(key.second);
+}
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////// SimEnvValidityChecker /////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 SimEnvValidityChecker::SimEnvValidityChecker(::ompl::base::SpaceInformationPtr si,
                                              sim_env::WorldPtr world) :
         StateValidityChecker(si), _world(world)
 {
     _world_space = std::dynamic_pointer_cast<const SimEnvWorldStateSpace>(si->getStateSpace());
+    _world_state = dynamic_cast<mps::planner::ompl::state::SimEnvWorldState*>(_world_space->allocState());
     specs_.clearanceComputationType = ::ompl::base::StateValidityCheckerSpecs::ClearanceComputationType::NONE;
+    assert(_world);
+    assert(_world_space);
 }
 
 SimEnvValidityChecker::~SimEnvValidityChecker() {
+    _world_space->freeState(_world_state);
 }
 
 bool SimEnvValidityChecker::isValid(const ::ompl::base::State *state) const {
-    auto world_space = _world_space.lock();
-    if (!world_space) {
-        throw std::logic_error("[mps::planner::ompl::state::SimEnvValidityChecker::isValid]"
-                                       "Could not access world state space. Invalid pointer.");
-    }
     auto* world_state = state->as<SimEnvWorldState>();
     // first check whether the provided state is within bounds
-    bool bounds_valid = world_space->satisfiesBounds(state);
+    bool bounds_valid = _world_space->satisfiesBounds(state);
     if (!bounds_valid) {
         _world->getLogger()->logDebug("State bounds violated. Rejecting state.",
                                       "[mps::planner::ompl::state::SimEnvValidityChecker::isValid]");
@@ -974,7 +1039,7 @@ bool SimEnvValidityChecker::isValid(const ::ompl::base::State *state) const {
     // save the state the world is in
     _world->saveState();
     // now set it to represent the given SimEnvWorldState
-    world_space->setToState(_world, world_state);
+    _world_space->setToState(_world, world_state);
     // first check whether this state is physically feasible
     if (not _world->isPhysicallyFeasible()) {
         _world->getLogger()->logDebug("Rejecting state because it is physically infeasible.",
@@ -997,6 +1062,45 @@ bool SimEnvValidityChecker::isValid(const ::ompl::base::State *state) const {
     }
     // finally restore whatever state the world was in before
     _world->restoreState();
+    return true;
+}
+
+bool SimEnvValidityChecker::isValidIntermediate(const ::ompl::base::State* state) const {
+    auto* world_state = state->as<SimEnvWorldState>();
+    std::lock_guard<std::recursive_mutex> world_lock(_world->getMutex());
+    _world->saveState();
+    _world_space->setToState(_world, world_state);
+    bool valid = isValidIntermediate();
+    _world->restoreState();
+    return valid;
+}
+
+bool SimEnvValidityChecker::isValidIntermediate() const {
+    _world_space->extractState(_world, _world_state);
+    // first check whether the current state is within bounds
+    bool bounds_valid = _world_space->satisfiesBounds(_world_state);
+    if (!bounds_valid) {
+        _world->getLogger()->logDebug("State bounds violated. Rejecting state.",
+                                      "[mps::planner::ompl::state::SimEnvValidityChecker::isValidIntermediate]");
+        return false;
+    }
+    // next check, whether the state is valid in terms of collisions
+    std::lock_guard<std::recursive_mutex> world_lock(_world->getMutex());
+    // check for collisions
+    std::vector<sim_env::ObjectPtr> objects;
+    _world->getObjects(objects, false);
+    for (const auto &object : objects) {
+        std::vector<sim_env::Contact> contacts;
+        _world->checkCollision(object, contacts);
+        for (const auto &contact : contacts) {
+            bool contact_ok = checkContact(contact);
+            if (!contact_ok) {
+                _world->getLogger()->logDebug("Rejecting state due to violation of contact constraints.",
+                                              "[mps::planner::ompl::state::SimEnvValidityChecker::isValidIntermediate]");
+                return false;
+            }
+        }
+    }
     return true;
 }
 

@@ -104,9 +104,10 @@ namespace mps {
                 PlanningProblem _planning_problem;
                 mps::planner::pushing::algorithm::SemiDynamicRRTPtr _algorithm;
                 mps::planner::pushing::algorithm::SemiDynamicRRT::DebugDrawerPtr _debug_drawer;
-
+                mps::planner::ompl::state::SimEnvValidityChecker::CollisionPolicy _collision_policy;
                 std::vector<float> _distance_weights;
                 void prepareDistanceWeights();
+                void prepareCollisionPolicy();
                 ::ompl::control::DirectedControlSamplerPtr allocateDirectedControlSampler(const ::ompl::control::SpaceInformation* si);
             };
         }

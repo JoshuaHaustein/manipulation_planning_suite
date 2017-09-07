@@ -364,14 +364,66 @@ namespace mps {
                      * valid. By default, all collisions are allowed.
                      */
                     class CollisionPolicy {
-                        // TODO implement this properly, at the moment everything is hardcoded to be always allowed
                     public:
+                        CollisionPolicy();
+                        CollisionPolicy(const CollisionPolicy& other);
+                        ~CollisionPolicy();
+                        CollisionPolicy& operator=(const CollisionPolicy& other);
+                        /**
+                         * Sets whether any collisions with static objects are allowed.
+                         * @param allowed
+                         */
                         void setStaticCollisions(bool allowed);
+                        /**
+                         * Sets whether the specified object is allowed to contact static obstacles.
+                         * @param obj  - name of the object
+                         * @param allowed
+                         */
+                        void setStaticCollisions(const std::string& obj, bool allowed);
+                        void setStaticCollisions(sim_env::ObjectConstPtr obj, bool allowed);
+                        /**
+                         * Returns whether any collisions with static objects are allowed
+                         * @return
+                         */
                         bool staticCollisionsAllowed() const;
+                        /**
+                         * Returns whether the specified object is allowed to contact static obstacles.
+                         * @param obj
+                         * @return
+                         */
+                        bool staticCollisionsAllowed(const std::string& obj) const;
+                        bool staticCollisionsAllowed(sim_env::ObjectConstPtr obj) const;
+                        /**
+                         * Sets whether the object with names obj1 and obj2 are allowed to contact each other
+                         * @param obj1
+                         * @param obj2
+                         * @param allowed
+                         */
                         void setCollision(const std::string& obj1, const std::string& obj2, bool allowed);
                         void setCollision(sim_env::ObjectConstPtr obj1, sim_env::ObjectConstPtr obj2, bool allowed);
-                        bool collisionAllowed(const std::string& obj1, const std::string& obj2) const;
-                        bool collisionAllowed(sim_env::ObjectConstPtr obj1, sim_env::ObjectConstPtr obj2) const;
+                        /**
+                         * Returns whether the non-static object obj1 and the non-static obj2 are allowed to
+                         * contact each other.
+                         * @param obj1
+                         * @param obj2
+                         * @return
+                         */
+                        inline bool collisionAllowed(const std::string& obj1, const std::string& obj2) const;
+                        /**
+                         * Returns whether object obj1 and obj2 are allowed to contact each other.
+                         * Either object may be static.
+                         * @param obj1
+                         * @param obj2
+                         * @return
+                         */
+                        inline bool collisionAllowed(sim_env::ObjectConstPtr obj1, sim_env::ObjectConstPtr obj2) const;
+                        struct PairHash {
+                            std::size_t operator()(const std::pair<std::string, std::string>& key) const;
+                        };
+                    private:
+                        bool _b_static_col_allowed;
+                        std::unordered_map< std::pair<std::string, std::string>, bool, PairHash> _forbidden_collisions;
+                        std::unordered_map< std::string, bool> _static_collisions;
                     };
 
                     SimEnvValidityChecker(::ompl::base::SpaceInformationPtr si, sim_env::WorldPtr world);
@@ -386,6 +438,22 @@ namespace mps {
                      */
                     bool isValid(const ::ompl::base::State* state) const override;
 
+                    /**
+                     * Checks whether a state is a valid intermediate state during action execution.
+                     * @param state  - the state to check
+                     * @return true iff the provided state is a valid intermediate state.
+                     */
+                    bool isValidIntermediate(const ::ompl::base::State* state) const;
+
+                    /**
+                     * Checks whether the state of the underlying sim_env::World is a valid intermediate state
+                     * during action execution. In contrast to isValidIntermediate(... state) this function
+                     * does not reset the state of the underlying sim_env::World, making this function
+                     * more suitable to be called when performing state propagation using the same world.
+                     * @return true iff the current state of the underlying sim_env::World is a valid intermediate state.
+                     */
+                    bool isValidIntermediate() const;
+
                     bool checkContact(const sim_env::Contact&) const;
                     /**
                      * Public access to collision policy
@@ -393,7 +461,8 @@ namespace mps {
                     CollisionPolicy collision_policy;
                 private:
                     sim_env::WorldPtr _world;
-                    SimEnvWorldStateSpaceConstWeakPtr _world_space;
+                    SimEnvWorldStateSpaceConstPtr _world_space;
+                    SimEnvWorldStateSpace::StateType* _world_state;
                 };
 
                 typedef std::shared_ptr<SimEnvValidityChecker> SimEnvValidityCheckerPtr;

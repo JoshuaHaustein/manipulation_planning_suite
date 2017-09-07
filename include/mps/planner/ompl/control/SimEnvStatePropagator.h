@@ -27,6 +27,7 @@ namespace mps {
                     SimEnvStatePropagator(::ompl::control::SpaceInformationPtr si,
                                           sim_env::WorldPtr world,
                                           sim_env::RobotVelocityControllerPtr controller,
+                                          const mps::planner::ompl::state::SimEnvValidityChecker::CollisionPolicy& collision_policy,
                                           bool semi_dynamic=true,
                                           float t_max=8.0f);
                     ~SimEnvStatePropagator();
@@ -50,6 +51,7 @@ namespace mps {
                 private:
                     mutable sim_env::WorldPtr _world;
                     mutable sim_env::RobotVelocityControllerPtr _controller;
+                    mps::planner::ompl::state::SimEnvValidityCheckerPtr _validity_checker;
                     bool _semi_dynamic;
                     float _t_max;
                     state::SimEnvWorldStateSpaceConstWeakPtr _state_space;
