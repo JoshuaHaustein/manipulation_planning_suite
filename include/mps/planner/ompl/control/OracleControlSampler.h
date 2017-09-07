@@ -7,7 +7,7 @@
 
 #include <ompl/control/DirectedControlSampler.h>
 #include <mps/planner/ompl/control/Interfaces.h>
-#include <mps/planner/oracle/Oracle.h>
+#include <mps/planner/pushing/oracle/Oracle.h>
 
 namespace mps {
     namespace planner {

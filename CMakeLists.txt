@@ -62,12 +62,14 @@ set(PLANNER_H
         include/mps/planner/ompl/control/NaiveControlSampler.h
         include/mps/planner/ompl/control/RampVelocityControl.h
         include/mps/planner/ompl/control/SimEnvStatePropagator.h
+        include/mps/planner/ompl/control/OracleControlSampler.h
         include/mps/planner/ompl/state/Interfaces.h
         include/mps/planner/ompl/state/SimEnvState.h
         include/mps/planner/ompl/state/goal/ObjectRelocationGoal.h
         include/mps/planner/ompl/planning/Essentials.h
         include/mps/planner/pushing/PushPlannerDistanceMeasure.h
         include/mps/planner/pushing/OraclePushPlanner.h
+        include/mps/planner/pushing/oracle/Oracle.h
         include/mps/planner/pushing/algorithm/RRT.h
         include/mps/planner/util/Logging.h
         include/mps/planner/util/Playback.h
