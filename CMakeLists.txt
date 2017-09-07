@@ -70,6 +70,8 @@ set(PLANNER_H
         include/mps/planner/pushing/PushPlannerDistanceMeasure.h
         include/mps/planner/pushing/OraclePushPlanner.h
         include/mps/planner/pushing/oracle/Oracle.h
+        include/mps/planner/pushing/oracle/LearnedOracle.h
+        include/mps/planner/pushing/oracle/HumanOracle.h
         include/mps/planner/pushing/algorithm/RRT.h
         include/mps/planner/util/Logging.h
         include/mps/planner/util/Playback.h
@@ -98,6 +100,9 @@ set(PLANNER_SRC
         src/mps/planner/util/Math.cpp
         src/mps/planner/pushing/PushPlannerDistanceMeasure.cpp
         src/mps/planner/pushing/OraclePushPlanner.cpp
+        src/mps/planner/pushing/oracle/Oracle.cpp
+        src/mps/planner/pushing/oracle/LearnedOracle.cpp
+        src/mps/planner/pushing/oracle/HumanOracle.cpp
         src/mps/planner/pushing/algorithm/RRT.cpp
 )
 
