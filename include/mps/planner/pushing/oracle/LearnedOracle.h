@@ -13,6 +13,28 @@ namespace mps {
             namespace oracle {
                 class LearnedPipeOracle : public PushingOracle {
                    // TODO implement me
+                public:
+                    LearnedPipeOracle();
+                    ~LearnedPipeOracle() override;
+
+                    void
+                    prepareOracle(const Eigen::VectorXf &current_robot_state, const Eigen::VectorXf &current_obj_state,
+                                  const Eigen::VectorXf &next_obj_state) override;
+
+                    float predictPushability(const Eigen::VectorXf &current_obj_state,
+                                             const Eigen::VectorXf &next_obj_state) override;
+
+                    float predictFeasibility(const Eigen::VectorXf &current_robot_state,
+                                             const Eigen::VectorXf &current_obj_state,
+                                             const Eigen::VectorXf &next_obj_state) override;
+
+                    void
+                    predictAction(const Eigen::VectorXf &current_robot_state, const Eigen::VectorXf &current_obj_state,
+                                  const Eigen::VectorXf &next_obj_state, Eigen::VectorXf &control) override;
+
+                    void sampleFeasibleState(const Eigen::VectorXf &new_robot_state,
+                                             const Eigen::VectorXf &current_obj_state,
+                                             const Eigen::VectorXf &next_obj_state) override;
 
                 };
             }

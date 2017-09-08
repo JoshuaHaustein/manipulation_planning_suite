@@ -14,19 +14,20 @@ namespace mps {
         namespace ompl {
             namespace control {
                 /**
-                 * Technically not a control, a RealValueParameterizedControl is a control that can be fully described
+                 * A RealValueParameterizedControl is a control that can be fully described
                  * by a finite number of real values (parameters).
                  */
                 class RealValueParameterizedControl :
+                        public ::ompl::control::Control,
                         public ::mps::planner::util::serialize::RealValueSerializable
                 {
                 public:
-                    virtual ~RealValueParameterizedControl() = 0;
+                    ~RealValueParameterizedControl() override = 0;
                     virtual Eigen::VectorXf getParameters() const = 0;
                     virtual void getParameters(Eigen::VectorXf& params) const = 0;
                     virtual void setParameters(const Eigen::VectorXf& params) = 0;
                     // for oracle serialization
-                    virtual void serializeInNumbers(std::ostream& ostream) const;
+                    void serializeInNumbers(std::ostream& ostream) const override;
                 };
 
                 /**
@@ -34,10 +35,10 @@ namespace mps {
                  * T is the maximum duration of the velocity profile (which may be infinite). For each time t in [0, T]
                  * ([0, infinity)) the velocity profile defines a desired velocity v(t) in V.
                  */
-                class VelocityControl : public ::ompl::control::Control, public RealValueParameterizedControl {
+                class VelocityControl : public RealValueParameterizedControl {
                 public:
                     // TODO what about copy constructor etc
-                    virtual ~VelocityControl() = 0;
+                    ~VelocityControl() override = 0;
                     /**
                      * Returns the desired velocity for each degree of freedom at the given time
                      * (relative to the start of this control).
@@ -68,7 +69,7 @@ namespace mps {
                 class SemiDynamicVelocityControl : public virtual VelocityControl {
                 public:
                     // TODO what about copy constructor etc
-                    virtual ~SemiDynamicVelocityControl() = 0;
+                    ~SemiDynamicVelocityControl() override = 0;
                     /**
                      * Return the resting time of this control
                      * @return resting time in seconds

@@ -7,10 +7,13 @@
 #include <mps/planner/ompl/state/goal/ObjectRelocationGoal.h>
 #include <thread>
 #include <chrono>
-#include <mps/planner/ompl/control/OracleControlSampler.h>
+#include <mps/planner/pushing/oracle/OracleControlSampler.h>
 #include <mps/planner/ompl/control/NaiveControlSampler.h>
 #include <mps/planner/util/Logging.h>
 #include <mps/planner/util/Playback.h>
+#include <mps/planner/pushing/oracle/HumanOracle.h>
+#include <mps/planner/pushing/oracle/LearnedOracle.h>
+#include <mps/planner/pushing/oracle/RampComputer.h>
 
 
 using namespace mps::planner::pushing;
@@ -56,7 +59,7 @@ PlanningProblem::PlanningProblem(sim_env::WorldPtr world, sim_env::RobotPtr robo
         control_limits.acceleration_limits[i] = std::min(std::abs(acceleration_limits(i, 0)), acceleration_limits(i, 1));
         control_limits.velocity_limits[i] = std::min(std::abs(velocity_limits(i, 0)), velocity_limits(i, 1));
     }
-    use_oracle = true;
+    oracle_type = OracleType::None;
     debug = false;
     num_control_samples = 10;
     stopping_condition = [](){return false;};
@@ -80,7 +83,6 @@ bool OraclePushPlanner::setup(PlanningProblem& problem) {
     _validity_checker.reset();
     _state_propagator.reset();
     _planning_problem = problem;
-    _planning_problem.use_oracle = false; // TODO remove
     // now create new instances
     _state_space = std::make_shared<mps_state::SimEnvWorldStateSpace>(_planning_problem.world,
                                                                       _planning_problem.workspace_bounds,
@@ -91,10 +93,10 @@ bool OraclePushPlanner::setup(PlanningProblem& problem) {
                                                                     problem.control_limits);
     _space_information =
             std::make_shared<::ompl::control::SpaceInformation>(_state_space, _control_space);
-    using namespace std::placeholders;
-    ::ompl::control::DirectedControlSamplerAllocator allocator_fn =
-            std::bind(&OraclePushPlanner::allocateDirectedControlSampler, this, _1);
-    _space_information->setDirectedControlSamplerAllocator(allocator_fn);
+//    using namespace std::placeholders;
+//    ::ompl::control::DirectedControlSamplerAllocator allocator_fn =
+//            std::bind(&OraclePushPlanner::allocateDirectedControlSampler, this, _1);
+//    _space_information->setDirectedControlSamplerAllocator(allocator_fn);
     _space_information->setPropagationStepSize(1.0); // NOT USED
     _space_information->setMinMaxControlDuration(1, 1); // NOT USED
     _validity_checker =
@@ -112,12 +114,44 @@ bool OraclePushPlanner::setup(PlanningProblem& problem) {
     prepareDistanceWeights();
     _space_information->setStatePropagator(_state_propagator);
     _space_information->setup();
-    _algorithm = std::make_shared<mps::planner::pushing::algorithm::SemiDynamicRRT>(_space_information);
+    auto robot_state_space = _state_space->getObjectStateSpace(_planning_problem.robot->getName());
+    auto robot_configuration_space = robot_state_space->getConfigurationSpace();
+    switch (_planning_problem.oracle_type) {
+        case PlanningProblem::OracleType::Human:
+        {
+            oracle::PushingOraclePtr pushing_oracle = std::make_shared<oracle::HumanOracle>();
+            oracle::RobotOraclePtr robot_oracle = std::make_shared<oracle::RampComputer>(robot_configuration_space,
+                                                                                         _control_space);
+            _algorithm = std::make_shared<algorithm::OracleRearangementRRT>(_space_information,
+                                                                            pushing_oracle,
+                                                                            robot_oracle,
+                                                                            _planning_problem.robot->getName());
+            break;
+        }
+        case PlanningProblem::OracleType::Learned:
+        {
+            mps::planner::pushing::oracle::PushingOraclePtr pushing_oracle = std::make_shared<oracle::LearnedPipeOracle>();
+            mps::planner::pushing::oracle::RobotOraclePtr robot_oracle = std::make_shared<oracle::RampComputer>(robot_configuration_space, _control_space);
+            _algorithm = std::make_shared<algorithm::OracleRearangementRRT>(_space_information,
+                                                                            pushing_oracle,
+                                                                            robot_oracle,
+                                                                            _planning_problem.robot->getName());
+            break;
+        }
+        case PlanningProblem::OracleType::None:
+        {
+            _algorithm = std::make_shared<algorithm::NaiveRearrangementRRT>(_space_information,
+                                                                            _planning_problem.num_control_samples);
+            break;
+        }
+    }
     _algorithm->setup();
     // TODO this is only for debug
      if (_planning_problem.debug) {
          if (!_debug_drawer) {
-             _debug_drawer = std::make_shared<algorithm::SemiDynamicRRT::DebugDrawer>(_planning_problem.world->getViewer());
+             _debug_drawer = std::make_shared<algorithm::RearrangementRRT::DebugDrawer>(_planning_problem.world->getViewer(),
+                                                                                        _state_space->getObjectIndex(_planning_problem.robot->getName()),
+                                                                                        _state_space->getObjectIndex(_planning_problem.target_object->getName()));
          }
          _algorithm->setDebugDrawer(_debug_drawer);
      }
@@ -141,11 +175,11 @@ bool OraclePushPlanner::solve(PlanningSolution& solution) {
                                                                       _planning_problem.goal_region_radius,
                                                                       0.0f);
     // planning query
-    algorithm::SemiDynamicRRT::PlanningQuery pq(goal_region,
-                                                start_state,
-                                                _planning_problem.planning_time_out,
-                                                _planning_problem.target_object->getName(),
-                                                _planning_problem.robot->getName());
+    algorithm::RearrangementRRT::PlanningQuery pq(goal_region,
+                                                  start_state,
+                                                  _planning_problem.planning_time_out,
+                                                  _planning_problem.target_object->getName(),
+                                                  _planning_problem.robot->getName());
     pq.stopping_condition = _planning_problem.stopping_condition;
     pq.weights = _distance_weights;
     solution.path = std::make_shared<mps::planner::ompl::planning::essentials::Path>(_space_information);
@@ -244,14 +278,15 @@ void OraclePushPlanner::prepareDistanceWeights() {
     }
 }
 
-::ompl::control::DirectedControlSamplerPtr OraclePushPlanner::allocateDirectedControlSampler(const ::ompl::control::SpaceInformation* si) {
-    if (_planning_problem.use_oracle) {
-        return std::make_shared<mps::planner::ompl::control::OracleControlSampler>(si);
-    } else {
-        return std::make_shared<mps::planner::ompl::control::NaiveControlSampler>(
-               si, _planning_problem.num_control_samples);
-    }
-}
+//::ompl::control::DirectedControlSamplerPtr OraclePushPlanner::allocateDirectedControlSampler(const ::ompl::control::SpaceInformation* si) {
+//    if (_planning_problem.use_oracle) {
+////        return std::make_shared<mps::planner::ompl::control::OracleControlSampler>(si);
+//            return nullptr;
+//    } else {
+//        return std::make_shared<mps::planner::ompl::control::NaiveControlSampler>(
+//               si, _planning_problem.num_control_samples);
+//    }
+//}
 
 void OraclePushPlanner::prepareCollisionPolicy() {
     // TODO make this settable from the outside

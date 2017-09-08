@@ -83,6 +83,10 @@ float RampVelocityControl::getMaxDuration() const {
     return 2.0f * _acceleration_duration + _plateau_duration + _rest_time;
 }
 
+float RampVelocityControl::getAccelerationTime() const {
+    return _acceleration_duration;
+}
+
 float RampVelocityControl::getRestTime() const {
     return _rest_time;
 }
@@ -116,6 +120,7 @@ void RampVelocityControl::computeRamp() {
     }
     _acceleration_duration = max_accel_time;
 }
+
 
 //////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////// RampVelocityControlSpace //////////////////////////////

@@ -3,6 +3,7 @@
 
 #include <Eigen/Core>
 #include <memory>
+#include <vector>
 
 namespace mps {
     namespace planner {
@@ -10,6 +11,7 @@ namespace mps {
             namespace oracle {
                 class PushingOracle {
                 public:
+                    virtual ~PushingOracle() = 0;
                     // TODO can we make all this functions const?
                     // TODO it would make more sense if these function take SimEnvObjectState* as input rather than Eigen::VectorXf
                     // TODO similarly, it would make sense to pass VelocityControl* as controls
@@ -70,7 +72,6 @@ namespace mps {
                     virtual void sampleFeasibleState(const Eigen::VectorXf& new_robot_state,
                                                      const Eigen::VectorXf& current_obj_state,
                                                      const Eigen::VectorXf& next_obj_state) = 0;
-                    virtual ~PushingOracle() = 0;
                 };
 
                 typedef std::shared_ptr<PushingOracle> PushingOraclePtr;
@@ -84,7 +85,7 @@ namespace mps {
                     // TODO same as for the pushing oracle, it would make sense to use SimEnvObjectState* here
                     virtual void steer(const Eigen::VectorXf& current_robot_state,
                                        const Eigen::VectorXf& desired_robot_state,
-                                       Eigen::VectorXf& control_params) const = 0;
+                                       std::vector<Eigen::VectorXf>& control_params) const = 0;
                 };
 
                 typedef std::shared_ptr<RobotOracle> RobotOraclePtr;

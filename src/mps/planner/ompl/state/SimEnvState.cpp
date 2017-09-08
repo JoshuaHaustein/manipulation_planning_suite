@@ -12,6 +12,7 @@
 #include <boost/format.hpp>
 #include <sstream>
 #include <string>
+#include <boost/math/constants/constants.hpp>
 
 namespace mps {
     namespace planner {
@@ -194,6 +195,52 @@ void SimEnvObjectConfigurationSpace::freeState(::ompl::base::State* state) const
     }
     delete[] configuration->components;
     delete configuration;
+}
+
+//void SimEnvObjectConfigurationSpace::computeDirection(StateType const* state_1,
+//                                                      StateType const* state_2,
+//                                                      Eigen::VectorXf& dir) const {
+//    Eigen::VectorXf a = state_1->getConfiguration();
+//    Eigen::VectorXf b = state_2->getConfiguration(),
+//    computeDirection()
+//    computeDirection(a, b, dir);
+//}
+
+void SimEnvObjectConfigurationSpace::computeDirection(const Eigen::VectorXf& config_1,
+                                                      const Eigen::VectorXf& config_2,
+                                                      Eigen::VectorXf& dir) const {
+    assert(config_1.size() == config_2.size());
+    dir.resize(config_1.size());
+    unsigned int c_idx = 0;
+    for (const auto& space_desc : _state_descriptions) {
+        switch(space_desc.type) {
+            case internal::SubspaceType::RealVector:
+            {
+                dir.segment(c_idx, space_desc.dim) = config_2.segment(c_idx, space_desc.dim)
+                                                     - config_1.segment(c_idx, space_desc.dim);
+                break;
+            }
+            case internal::SubspaceType::SO2:
+            {
+                dir[c_idx] = config_2[c_idx] - config_1[c_idx];
+                if (std::abs(dir[c_idx]) > boost::math::constants::pi<float>()) {
+                    dir[c_idx] += 2.0f * boost::math::constants::pi<float>();
+                }
+                break;
+            }
+            case internal::SubspaceType::SO3:
+            {
+                for (unsigned int i = 0; i < space_desc.dim; ++i) {
+                    dir[c_idx + i] = config_2[c_idx + i] - config_1[c_idx + i];
+                    if (std::abs(dir[c_idx + i]) > boost::math::constants::pi<float>()) {
+                        dir[c_idx + i] += 2.0f * boost::math::constants::pi<float>();
+                    }
+                }
+                break;
+            }
+        }
+        c_idx += space_desc.dim;
+    }
 }
 
 void SimEnvObjectConfigurationSpace::addPoseSubspace(sim_env::ObjectConstPtr object) {
@@ -674,6 +721,16 @@ SimEnvObjectStateSpace::SimEnvObjectStateSpace(sim_env::ObjectConstPtr object,
 SimEnvObjectStateSpace::~SimEnvObjectStateSpace() {
 }
 
+SimEnvObjectConfigurationSpacePtr SimEnvObjectStateSpace::getConfigurationSpace() {
+    return std::dynamic_pointer_cast<SimEnvObjectConfigurationSpace>(getSubspace(0));
+}
+SimEnvObjectVelocitySpacePtr SimEnvObjectStateSpace::getVelocitySpace() {
+    if (not _position_only) {
+        return std::dynamic_pointer_cast<SimEnvObjectVelocitySpace>(getSubspace(1));
+    }
+    return nullptr;
+}
+
 ::ompl::base::State* SimEnvObjectStateSpace::allocState() const {
     SimEnvObjectState* object_state = new SimEnvObjectState(_active_dofs.size(), _position_only);
     allocStateComponents(object_state);
@@ -819,6 +876,14 @@ int SimEnvWorldStateSpace::getObjectIndex(const std::string& obj_name) const {
 
 unsigned int SimEnvWorldStateSpace::getNumObjects() const {
     return (unsigned int) _object_names.size();
+}
+
+SimEnvObjectStateSpacePtr SimEnvWorldStateSpace::getObjectStateSpace(const std::string& name) {
+    int obj_idx = getObjectIndex(name);
+    if (obj_idx < 0) {
+        return nullptr;
+    }
+    return std::dynamic_pointer_cast<SimEnvObjectStateSpace>(getSubspace((unsigned int)obj_idx));
 }
 
 void SimEnvWorldStateSpace::setToState(sim_env::WorldPtr world, const StateType* state) const {

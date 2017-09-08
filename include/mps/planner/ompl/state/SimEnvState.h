@@ -25,6 +25,18 @@ namespace mps {
     namespace planner {
         namespace ompl {
             namespace state {
+                class SimEnvObjectConfigurationSpace;
+                typedef std::shared_ptr<SimEnvObjectConfigurationSpace> SimEnvObjectConfigurationSpacePtr;
+                typedef std::weak_ptr<SimEnvObjectConfigurationSpace> SimEnvObjectConfigurationSpaceWeakPtr;
+                typedef std::shared_ptr<const SimEnvObjectConfigurationSpace> SimEnvObjectConfigurationSpaceConstPtr;
+                typedef std::weak_ptr<const SimEnvObjectConfigurationSpace> SimEnvObjectConfigurationSpaceConstWeakPtr;
+
+                class SimEnvObjectVelocitySpace;
+                typedef std::shared_ptr<SimEnvObjectVelocitySpace> SimEnvObjectVelocitySpacePtr;
+                typedef std::weak_ptr<SimEnvObjectVelocitySpace> SimEnvObjectVelocitySpaceWeakPtr;
+                typedef std::shared_ptr<const SimEnvObjectVelocitySpace> SimEnvObjectVelocitySpaceConstPtr;
+                typedef std::weak_ptr<const SimEnvObjectVelocitySpace> SimEnvObjectVelocitySpaceConstWeakPtr;
+
                 class SimEnvObjectStateSpace;
                 typedef std::shared_ptr<SimEnvObjectStateSpace> SimEnvObjectStateSpacePtr;
                 typedef std::weak_ptr<SimEnvObjectStateSpace> SimEnvObjectStateSpaceWeakPtr;
@@ -89,6 +101,9 @@ namespace mps {
                     /** Overrides from CompoundStateSpace */
                     ::ompl::base::State* allocState() const override;
                     void freeState(::ompl::base::State* state) const override;
+//                    void computeDirection(StateType const* state_1, StateType const* state_2, Eigen::VectorXf& dir) const;
+                    void computeDirection(const Eigen::VectorXf& config_1, const Eigen::VectorXf& config_2,
+                                          Eigen::VectorXf& dir ) const;
 
                 private:
                     sim_env::ObjectConstWeakPtr _object;
@@ -240,6 +255,8 @@ namespace mps {
 
                     ~SimEnvObjectStateSpace();
 
+                    SimEnvObjectConfigurationSpacePtr getConfigurationSpace();
+                    SimEnvObjectVelocitySpacePtr getVelocitySpace();
                     /** Overrides from CompoundStateSpace */
                     ::ompl::base::State* allocState() const override;
                     void freeState(::ompl::base::State* state) const override;
@@ -311,6 +328,7 @@ namespace mps {
                     std::string getObjectName(unsigned int i) const;
                     int getObjectIndex(const std::string& obj_name) const;
                     unsigned int getNumObjects() const;
+                    SimEnvObjectStateSpacePtr getObjectStateSpace(const std::string& name);
 
                     /**
                      * Sets the state of the given world to the given state. The state is assumed to originate

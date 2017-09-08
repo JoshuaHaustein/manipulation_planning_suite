@@ -5,7 +5,7 @@
 #include <mps/planner/pushing/algorithm/RRT.h>
 #include <mps/planner/util/Logging.h>
 #include <mps/planner/ompl/control/Interfaces.h>
-#include <ompl/datastructures/NearestNeighborsSqrtApprox.h>
+#include <ompl/datastructures/NearestNeighborsGNAT.h>
 
 #include <queue>
 
@@ -17,7 +17,10 @@ namespace mps_control = mps::planner::ompl::control;
 using namespace mps::planner::pushing::algorithm;
 using namespace mps::planner::ompl::planning::essentials;
 
-SemiDynamicRRT::PlanningQuery::PlanningQuery(std::shared_ptr<ob::GoalSampleableRegion> goal_region,
+////////////////////////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////// PlanningQuery ///////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////
+RearrangementRRT::PlanningQuery::PlanningQuery(std::shared_ptr<ob::GoalSampleableRegion> goal_region,
                                              ob::State *start_state,
                                              float time_out,
                                              const std::string& target_name,
@@ -34,39 +37,52 @@ SemiDynamicRRT::PlanningQuery::PlanningQuery(std::shared_ptr<ob::GoalSampleableR
     target_bias = 0.25f;
 }
 
+RearrangementRRT::PlanningQuery::PlanningQuery(const PlanningQuery &other) = default;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////// PlanningBlackboard ////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////
+RearrangementRRT::PlanningBlackboard::PlanningBlackboard(PlanningQuery pq) :
+        pq(pq),
+        target_id(1),
+        robot_id(0)
+{
+}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////// DebugDrawer ///////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-SemiDynamicRRT::DebugDrawer::DebugDrawer(sim_env::WorldViewerPtr world_viewer) {
+RearrangementRRT::DebugDrawer::DebugDrawer(sim_env::WorldViewerPtr world_viewer,
+                                           unsigned int robot_id,
+                                           unsigned int target_id) {
     _world_viewer = world_viewer;
+    _robot_id = robot_id;
+    _target_id = target_id;
 }
 
-SemiDynamicRRT::DebugDrawer::~DebugDrawer() {
+RearrangementRRT::DebugDrawer::~DebugDrawer() {
     clear();
 }
 
-void SemiDynamicRRT::DebugDrawer::addNewMotion(MotionPtr motion) {
+void RearrangementRRT::DebugDrawer::addNewMotion(MotionPtr motion) {
     auto* parent_state = dynamic_cast<ompl::state::SimEnvWorldState*>(motion->getParent()->getState());
     auto* new_state = dynamic_cast<ompl::state::SimEnvWorldState*>(motion->getState());
-    // TODO is it guaranteed that object 0 is the robot?
-    auto* parent_object_state = parent_state->getObjectState(0);
-    auto* new_object_state = new_state->getObjectState(0);
+    auto* parent_object_state = parent_state->getObjectState(_robot_id);
+    auto* new_object_state = new_state->getObjectState(_robot_id);
     drawStateTransition(parent_object_state, new_object_state, Eigen::Vector4f(0.1, 0, 0.7, 1));
-    // TODO the target object may not be object 1
-    parent_object_state = parent_state->getObjectState(1);
-    new_object_state = new_state->getObjectState(1);
+    parent_object_state = parent_state->getObjectState(_target_id);
+    new_object_state = new_state->getObjectState(_target_id);
     drawStateTransition(parent_object_state, new_object_state, Eigen::Vector4f(0, 0.7, 0, 1));
 }
 
-void SemiDynamicRRT::DebugDrawer::clear() {
+void RearrangementRRT::DebugDrawer::clear() {
     for (auto& handle : _handles) {
         _world_viewer->removeDrawing(handle);
     }
     _handles.clear();
 }
 
-void SemiDynamicRRT::DebugDrawer::drawStateTransition(const ompl::state::SimEnvObjectState *parent_state,
+void RearrangementRRT::DebugDrawer::drawStateTransition(const ompl::state::SimEnvObjectState *parent_state,
                                                       const ompl::state::SimEnvObjectState *new_state,
                                                       const Eigen::Vector4f& color) {
     // TODO this is overfit to box2d push planning
@@ -81,45 +97,37 @@ void SemiDynamicRRT::DebugDrawer::drawStateTransition(const ompl::state::SimEnvO
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-/////////////////////////////////////// SemiDynamicRRT /////////////////////////////////////////////
+/////////////////////////////////////// RearrangementRRT /////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-SemiDynamicRRT::SemiDynamicRRT(::ompl::control::SpaceInformationPtr si) :
+RearrangementRRT::RearrangementRRT(::ompl::control::SpaceInformationPtr si) :
         _si(si),
-        _log_prefix("[mps::planner::pushing::algorithm::SemiDynamicRRT::"),
+        _log_prefix("[mps::planner::pushing::algorithm::RearrangementRRT::"),
         _is_setup(false)
 {
 }
 
-SemiDynamicRRT::~SemiDynamicRRT() = default;
+RearrangementRRT::~RearrangementRRT() = default;
 
-void SemiDynamicRRT::setup() {
+void RearrangementRRT::setup() {
     _state_space = std::dynamic_pointer_cast<mps_state::SimEnvWorldStateSpace>(_si->getStateSpace());
     if (!_state_space) {
         throw std::logic_error(_log_prefix + "setup] Could not cast state space to SimEnvWorldStateSpace");
     }
     _distance_measure = std::make_shared<mps::planner::pushing::PushPlannerDistanceMeasure>(_state_space);
     _state_space->setDistanceMeasure(_distance_measure);
-    // TODO set everything up
+    // set up our search tree
     if (!_tree) {
-        // TODO this is not an efficient data structure, but we need to have a structure that allows modifying the distance function
-        // TODO or a data structure for each setting of active objects (in rearrangement planning context)
-        _tree = std::make_shared<::ompl::NearestNeighborsSqrtApprox< MotionPtr > >();
+        _tree = std::make_shared<::ompl::NearestNeighborsGNAT <mps::planner::ompl::planning::essentials::MotionPtr> >();
         using namespace std::placeholders;
-        _tree->setDistanceFunction(std::bind(&SemiDynamicRRT::treeDistanceFunction, this, _1, _2));
+        _tree->setDistanceFunction(std::bind(&RearrangementRRT::treeDistanceFunction, this, _1, _2));
     }
     _is_setup = true;
-    _control_sampler = _si->allocDirectedControlSampler();
     _state_sampler = _si->allocStateSampler();
-    auto state_space = std::dynamic_pointer_cast<mps_state::SimEnvWorldStateSpace>(_si->getStateSpace());
-    if (!state_space) {
-        throw std::logic_error(_log_prefix + "SemiDynamicRRT] Could not cast state space to SimEnvWorldStateSpace");
-    }
-    _num_objects = state_space->getNumObjects();
-    assert(_num_objects > 1);
+    assert(_state_space->getNumObjects() > 1);
     _rng = mps::planner::util::random::getDefaultRandomGenerator();
 }
 
-bool SemiDynamicRRT::plan(const PlanningQuery& pq, PathPtr path) {
+bool RearrangementRRT::plan(const PlanningQuery& pq, PathPtr path) {
     static const std::string log_prefix(_log_prefix + "plan]");
     if (not _is_setup) {
         logging::logErr("Planner is not setup, aborting", log_prefix);
@@ -127,25 +135,14 @@ bool SemiDynamicRRT::plan(const PlanningQuery& pq, PathPtr path) {
     }
     logging::logDebug("Starting to plan", log_prefix);
     _distance_measure->setWeights(pq.weights);
-    unsigned int robot_id(0);
-    unsigned int target_id(1);
-    {
-        int tmp_robot_id = _state_space->getObjectIndex(pq.robot_name);
-        int tmp_target_id = _state_space->getObjectIndex(pq.target_name);
-        if (tmp_robot_id < 0 || tmp_target_id < 0) {
-            logging::logErr("Could not retrieve ids for robot or target object. Are they in the state space?", log_prefix);
-            return false;
-        }
-        target_id = (unsigned int)tmp_target_id;
-        robot_id = (unsigned int)tmp_robot_id;
-    }
-
+    PlanningBlackboard blackboard(pq);
+    setupBlackboard(blackboard);
     if (_debug_drawer) {
         _debug_drawer->clear();
     }
 
     MotionPtr current_motion = getNewMotion();
-    MotionPtr sample = getNewMotion();
+    MotionPtr sample_motion = getNewMotion();
     MotionPtr final_motion = nullptr;
     // set the state to be the start state
     _si->copyState(current_motion->getState(), pq.start_state);
@@ -162,105 +159,95 @@ bool SemiDynamicRRT::plan(const PlanningQuery& pq, PathPtr path) {
     logging::logDebug("Planning towards goal " + ss.str(), log_prefix);
     logging::logDebug("Entering main loop", log_prefix);
     _timer.startTimer(pq.time_out);
-    // TODO remove debug stream again
-    std::stringstream debug_stream;
     // Do the actual planning
     while(not _timer.timeOutExceeded() and not pq.stopping_condition() && !solved) {
-        // sample random state with goal biasing
-        unsigned int object_id = 0;
-        if( _rng->uniform01() < pq.goal_bias && pq.goal_region->canSample()){
-            logging::logDebug("Sampling a goal state", log_prefix);
-            pq.goal_region->sampleGoal(sample->getState());
-            object_id = target_id;
-        }else{
-            logging::logDebug("Sampling a state uniformly", log_prefix);
-            _state_sampler->sampleUniform(sample->getState());
-            // Sample which object should be active
-            object_id = sampleActiveObject(pq, target_id, robot_id);
-        }
-        // set only one object active in each iteration
-        _distance_measure->setAll(false);
-        _distance_measure->setActive(object_id, true);
-        // TODO remove this debug print
-        auto* world_state = dynamic_cast<mps_state::SimEnvWorldState*>(sample->getState());
-        debug_stream.str("");
-        debug_stream << "Sampled state: ";
-        world_state->print(debug_stream);
-        logging::logDebug(debug_stream.str(), log_prefix);
-        // TODO until here
+        // sample a new state
+        unsigned int active_obj_id = 0;
+        bool goal_sampled = sample(sample_motion, active_obj_id, blackboard);
+        printState("Sampled state is ", sample_motion->getState()); // TODO remove
         // Get nearest tree node
         logging::logDebug("Searching for nearest neighbor.", log_prefix);
-        current_motion = _tree->nearest(sample);
-        // TODO remove this debug print
-        world_state = dynamic_cast<mps_state::SimEnvWorldState*>(current_motion->getState());
-        debug_stream.str("");
-        debug_stream << "Nearest state: ";
-        world_state->print(debug_stream);
-        logging::logDebug(debug_stream.str(), log_prefix);
-        // TODO until here
-        // Compute action to take us towards the sampled state
-        MotionPtr new_motion = getNewMotion();
-        _si->copyState(new_motion->getState(), sample->getState());
-        // sampleTo(c, is, ns) - samples a control c that moves is towards ns.
-        // ns is the overwritten to be the actual outcome (i.e. ns = f(is, c))
-        // the return value is either 0 if sampling a valid control failed
-        logging::logDebug("Sampling a control", log_prefix);
-        unsigned int num_steps = _control_sampler->sampleTo(new_motion->getControl(),
-                                                            current_motion->getState(),
-                                                            new_motion->getState());
-        if (num_steps > 0) { // the sampled control is valid, i.e. the outcoming state is valid
-            // TODO remove this debug print
-            world_state = dynamic_cast<mps_state::SimEnvWorldState*>(new_motion->getState());
-            debug_stream.str("");
-            debug_stream << "New state";
-            world_state->print(debug_stream);
-            logging::logDebug(debug_stream.str(), log_prefix);
-            // TODO until here
-            logging::logDebug("Sampling control succeeded, adding new state", log_prefix);
-            new_motion->setParent(current_motion);
-            _tree->add(new_motion);
-            solved = pq.goal_region->isSatisfied(new_motion->getState());
-            final_motion = new_motion;
-            // TODO either remove again or add macro to only add this when build with debug flags
-            if (_debug_drawer) {
-                _debug_drawer->addNewMotion(new_motion);
-            }
-        } else {
-            logging::logDebug("Could not find a valid control", log_prefix);
-            cacheMotion(new_motion);
+        // TODO taking the full state into account doesn't work so well either..
+        _distance_measure->setAll(true); // we take the full state into account here
+        current_motion = _tree->nearest(sample_motion);
+        printState("Nearest state: ", current_motion->getState()); // TODO remove
+        if (not goal_sampled) {
+            // TODO instead of doing this randomly, we could choose it based on the distance
+            // TODO between current_motion and sample
+            // TODO also, if we want to force the algorithm to explore a slice, we would need to this here
+            active_obj_id = sampleActiveObject(blackboard);
         }
+        // Extend the tree
+        solved = extend(current_motion, sample_motion->getState(), active_obj_id, final_motion, blackboard);
     }
 
     logging::logDebug(boost::format("Main loop finished, runtime was %f") % _timer.stopTimer(),
                       log_prefix);
-
     // create the path if we found a solution
     if(solved){
         logging::logInfo("Found a solution", log_prefix);
         path->initBacktrackMotion(final_motion);
     }
-
     // clean up
-     _tree->clear();
+    _tree->clear();
 
     logging::logInfo("Planning finished", log_prefix);
     return solved;
 }
 
-unsigned int SemiDynamicRRT::sampleActiveObject(const PlanningQuery& pq,
-                                                unsigned int target_id,
-                                                unsigned int robot_id) const {
-    double random_value = _rng->uniform01();
-    if (random_value < pq.target_bias) {
-        return target_id;
-    } else if (random_value < pq.target_bias + pq.robot_bias) {
-        return robot_id;
-    } else {
-        return static_cast<unsigned int>(_rng->uniformInt(0, _num_objects - 1));
+bool RearrangementRRT::sample(mps::planner::ompl::planning::essentials::MotionPtr motion,
+                              unsigned int& target_obj_id,
+                              const PlanningBlackboard& pb)
+{
+    static const std::string log_prefix("mps::planner::pushing::algorithm::RearrangementRRT::sample]");
+    bool is_goal = false;
+    // sample random state with goal biasing
+    if( _rng->uniform01() < pb.pq.goal_bias && pb.pq.goal_region->canSample()){
+        logging::logDebug("Sampling a goal state", log_prefix);
+        pb.pq.goal_region->sampleGoal(motion->getState());
+        target_obj_id = pb.target_id;
+        is_goal = true;
+    }else{
+        logging::logDebug("Sampling a state uniformly", log_prefix);
+        _state_sampler->sampleUniform(motion->getState());
+        target_obj_id = 0;
+    }
+    return is_goal;
+}
+
+void RearrangementRRT::addToTree(mps::planner::ompl::planning::essentials::MotionPtr new_motion,
+                                 mps::planner::ompl::planning::essentials::MotionPtr parent)
+{
+    new_motion->setParent(parent);
+    _tree->add(new_motion);
+    // TODO either remove again or add macro to only add this when build with debug flags
+    if (_debug_drawer) {
+        _debug_drawer->addNewMotion(new_motion);
     }
 }
 
-MotionPtr SemiDynamicRRT::getNewMotion() {
+unsigned int RearrangementRRT::sampleActiveObject(const PlanningBlackboard& pb) const {
+    double random_value = _rng->uniform01();
+    if (random_value < pb.pq.target_bias) {
+        return pb.target_id;
+    } else if (random_value < pb.pq.target_bias + pb.pq.robot_bias) {
+        return pb.robot_id;
+    } else {
+        return static_cast<unsigned int>(_rng->uniformInt(0, _state_space->getNumObjects() - 1));
+    }
+}
+
+void RearrangementRRT::printState(const std::string& msg, ::ompl::base::State *state) const {
+    std::stringstream ss;
+    auto* world_state = dynamic_cast<mps_state::SimEnvWorldState*>(state);
+    ss.str("");
+    ss << msg;
+    world_state->print(ss);
+    logging::logDebug(ss.str(), "[mps::planner::pushing::oracle::RearrangementRRT::printState]");
+
+}
+
+MotionPtr RearrangementRRT::getNewMotion() {
     if (not _motions_cache.empty()) {
         MotionPtr ptr = _motions_cache.top();
         _motions_cache.pop();
@@ -269,16 +256,137 @@ MotionPtr SemiDynamicRRT::getNewMotion() {
     return std::make_shared<Motion>(_si);
 }
 
-void SemiDynamicRRT::cacheMotion(MotionPtr ptr) {
+void RearrangementRRT::cacheMotion(MotionPtr ptr) {
     _motions_cache.push(ptr);
 }
 
-double SemiDynamicRRT::treeDistanceFunction(const MotionPtr &a, const MotionPtr &b) const {
+double RearrangementRRT::treeDistanceFunction(const MotionPtr &a, const MotionPtr &b) const {
     auto* state_a = a->getState();
     auto* state_b = b->getState();
     return _state_space->distance(state_a, state_b); // this uses _distance_measure
 }
 
-void SemiDynamicRRT::setDebugDrawer(DebugDrawerPtr debug_drawer) {
+void RearrangementRRT::setDebugDrawer(DebugDrawerPtr debug_drawer) {
     _debug_drawer = debug_drawer;
 }
+
+void RearrangementRRT::setupBlackboard(PlanningBlackboard &pb) {
+    pb.robot_id = 0;
+    pb.target_id = 1;
+    {
+        int tmp_robot_id = _state_space->getObjectIndex(pb.pq.robot_name);
+        int tmp_target_id = _state_space->getObjectIndex(pb.pq.target_name);
+        if (tmp_robot_id < 0 || tmp_target_id < 0) {
+            throw std::logic_error("[mps::planner::pushing::oracle::RearrangementRRT::setupBlackboard]"
+                    "Could not retrieve ids for robot or target object. Are they in the state space?");
+        }
+        pb.target_id = (unsigned int)tmp_target_id;
+        pb.robot_id = (unsigned int)tmp_robot_id;
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////// NaiveRearrangementRRT /////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////
+NaiveRearrangementRRT::NaiveRearrangementRRT(::ompl::control::SpaceInformationPtr si,
+                                             unsigned int k) :
+        RearrangementRRT(si),
+        _control_sampler(si.get(), k)
+{
+}
+
+NaiveRearrangementRRT::~NaiveRearrangementRRT() = default;
+
+bool NaiveRearrangementRRT::extend(mps::planner::ompl::planning::essentials::MotionPtr start,
+                                   ::ompl::base::State* dest,
+                                   unsigned int active_obj_id,
+                                   mps::planner::ompl::planning::essentials::MotionPtr& last_motion,
+                                   const PlanningBlackboard& pb)
+{
+    static const std::string log_prefix("[mps::planner::pushing::algorithm::NaiveRearrangementRRT::extend]");
+    MotionPtr new_motion = getNewMotion();
+    _si->copyState(new_motion->getState(), dest);
+    // sampleTo(c, is, ns) - samples a control c that moves is towards ns.
+    // ns is overwritten to be the actual outcome (i.e. ns = f(is, c))
+    // the return value is either 0 if sampling a valid control failed
+    logging::logDebug("Sampling a control", log_prefix);
+    _distance_measure->setAll(false);
+    _distance_measure->setActive(active_obj_id, true);
+    unsigned int num_steps = _control_sampler.sampleTo(new_motion->getControl(),
+                                                       start->getState(),
+                                                       new_motion->getState());
+    bool reached_a_goal = pb.pq.goal_region->isSatisfied(new_motion->getState());
+    if (num_steps > 0) { // the sampled control is valid, i.e. the outcoming state is valid
+        printState("Extending towards state ", new_motion->getState());
+        addToTree(new_motion, start);
+        last_motion = new_motion;
+    } else {
+        logging::logDebug("Could not find a valid control", log_prefix);
+        cacheMotion(new_motion);
+    }
+    return reached_a_goal;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+/////////////////////////////////// OracleRearrangementRRT /////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////
+OracleRearangementRRT::OracleRearangementRRT(::ompl::control::SpaceInformationPtr si,
+                                             mps::planner::pushing::oracle::PushingOraclePtr pushing_oracle,
+                                             mps::planner::pushing::oracle::RobotOraclePtr robot_oracle,
+                                             const std::string& robot_name,
+                                             const oracle::OracleControlSampler::Parameters& params) :
+        RearrangementRRT(si),
+        _oracle_sampler(si, pushing_oracle, robot_oracle, robot_name, params)
+{
+}
+
+OracleRearangementRRT::~OracleRearangementRRT() = default;
+
+void OracleRearangementRRT::setOracleSamplerParameters(
+        const mps::planner::pushing::oracle::OracleControlSampler::Parameters &params) {
+    _oracle_sampler.setParameters(params);
+}
+
+bool OracleRearangementRRT::extend(MotionPtr start,
+                                   ::ompl::base::State *dest,
+                                   unsigned int active_obj_id,
+                                   MotionPtr &last_motion,
+                                   const RearrangementRRT::PlanningBlackboard &pb) {
+    static const std::string log_prefix("[mps::planner::pushing::algorithm::OracleRearrangementRRT]");
+    std::vector<const ::ompl::control::Control*> controls;
+    _oracle_sampler.sampleTo(controls,
+                             start->getState(),
+                             dest,
+                             active_obj_id);
+    if (controls.empty()) {
+        logging::logErr("OracleControlSampler provided no controls at all", log_prefix);
+    }
+
+    MotionPtr prev_motion = start;
+    last_motion = start;
+    for (auto const* control : controls) {
+        MotionPtr new_motion = getNewMotion();
+        _si->copyControl(new_motion->getControl(), control);
+        bool success = _state_propagator->propagate(prev_motion->getState(),
+                                                    new_motion->getControl(),
+                                                    new_motion->getState());
+        if (not success) { // we failed, no tree extension
+            logging::logDebug("A control provided by the oracle failed. ", log_prefix);
+            cacheMotion(new_motion);
+            return false;
+        }
+        printState("Oracle control took us to state ", new_motion->getState());
+        // we extended the tree a bit, add this new state to the tree
+        addToTree(new_motion, prev_motion);
+        last_motion = new_motion;
+        if (pb.pq.goal_region->isSatisfied(new_motion->getState())) {
+            // we reached a goal!
+            return true;
+        }
+        // otherwise we just continue extending as long as we have controls
+        prev_motion = new_motion;
+    }
+    return false;
+}
+
+

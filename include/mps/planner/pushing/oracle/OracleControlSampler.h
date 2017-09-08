@@ -12,11 +12,11 @@
 
 namespace mps {
     namespace planner {
-        namespace ompl {
-            namespace control {
-                class OracleControlSampler { //: public ::ompl::control::DirectedControlSampler {
-                    // TODO implement oracle control sampler here; use oracle to sample a control
-                    // TODO operate on RealValueParameterizedControl
+        namespace pushing {
+            namespace oracle {
+                // The oracle control sampler utilizes an oracle to sample a sequence of controls for a
+                // pushing rearrangement problem.
+                class OracleControlSampler {
                 public:
                     struct Parameters {
                         float min_pushability;
@@ -47,53 +47,32 @@ namespace mps {
                      */
                     void sampleTo(std::vector<::ompl::control::Control const*>& controls,
                                   const ::ompl::base::State* source,
-                                  ::ompl::base::State* dest,
+                                  const ::ompl::base::State* dest,
                                   unsigned int local_target_obj);
+                    void setParameters(const Parameters& params);
 
-                    // TODO make this protected?
-                    void steerRobot(std::vector<::ompl::control::Control const*>& controls,
+                protected:
+                    bool steerRobot(std::vector<::ompl::control::Control const*>& controls,
                                     const mps::planner::ompl::state::SimEnvWorldState* source,
-                                    mps::planner::ompl::state::SimEnvWorldState* dest);
-
-                    // TODO make this protected?
-                    void steerPush(std::vector<::ompl::control::Control const*>& controls,
+                                    const mps::planner::ompl::state::SimEnvWorldState* dest);
+                    bool steerRobot(std::vector<::ompl::control::Control const*>& controls,
+                                    const mps::planner::ompl::state::SimEnvWorldState* source,
+                                    const mps::planner::ompl::state::SimEnvObjectState* dest);
+                    bool steerPush(std::vector<::ompl::control::Control const*>& controls,
                                    const mps::planner::ompl::state::SimEnvWorldState* source,
-                                   mps::planner::ompl::state::SimEnvWorldState* dest,
+                                   const mps::planner::ompl::state::SimEnvWorldState* dest,
                                    unsigned int obj_id);
-
-                    void randomAction(std::vector<::ompl::control::Control const*>& controls,
+                    void randomControl(std::vector<::ompl::control::Control const*>& controls,
                                    const mps::planner::ompl::state::SimEnvWorldState* source,
-                                   mps::planner::ompl::state::SimEnvWorldState* dest,
+                                   const mps::planner::ompl::state::SimEnvWorldState* dest,
                                    unsigned int obj_id);
-                    /**
-                     * TODO not implemented
-                     * TODO we should probably implement this rather than the custom method
-                     * TODO this would require the active object information to be part of the state
-                     * @param control
-                     * @param source
-                     * @param dest
-                     * @return
-                     */
-//                    unsigned int sampleTo(::ompl::control::Control* control,
-//                                          const ::ompl::base::State* source,
-//                                          ::ompl::base::State* dest) override;
-                    /**
-                     * TODO not implemented
-                     * @param control
-                     * @param prev
-                     * @param source
-                     * @param dest
-                     * @return
-                     */
-//                    unsigned int sampleTo(::ompl::control::Control* control,
-//                                          const ::ompl::control::Control* prev,
-//                                          const ::ompl::base::State* source,
-//                                          ::ompl::base::State* dest) override;
-
                 private:
                     ::ompl::control::SpaceInformationPtr _si;
+                    ::ompl::control::ControlSamplerPtr _control_sampler;
                     mps::planner::pushing::oracle::RobotOraclePtr _robot_oracle;
                     mps::planner::pushing::oracle::PushingOraclePtr _pushing_oracle;
+                    mps::planner::ompl::state::SimEnvObjectState* _robot_state;
+                    mps::planner::ompl::state::SimEnvObjectStateSpacePtr _robot_state_space;
                     std::size_t _control_idx;
                     std::vector<mps::planner::ompl::control::RealValueParameterizedControl*> _controls;
                     unsigned int _robot_id;

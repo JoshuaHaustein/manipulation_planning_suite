@@ -62,16 +62,17 @@ set(PLANNER_H
         include/mps/planner/ompl/control/NaiveControlSampler.h
         include/mps/planner/ompl/control/RampVelocityControl.h
         include/mps/planner/ompl/control/SimEnvStatePropagator.h
-        include/mps/planner/ompl/control/OracleControlSampler.h
         include/mps/planner/ompl/state/Interfaces.h
         include/mps/planner/ompl/state/SimEnvState.h
         include/mps/planner/ompl/state/goal/ObjectRelocationGoal.h
         include/mps/planner/ompl/planning/Essentials.h
         include/mps/planner/pushing/PushPlannerDistanceMeasure.h
         include/mps/planner/pushing/OraclePushPlanner.h
+        include/mps/planner/pushing/oracle/OracleControlSampler.h
         include/mps/planner/pushing/oracle/Oracle.h
         include/mps/planner/pushing/oracle/LearnedOracle.h
         include/mps/planner/pushing/oracle/HumanOracle.h
+        include/mps/planner/pushing/oracle/RampComputer.h
         include/mps/planner/pushing/algorithm/RRT.h
         include/mps/planner/util/Logging.h
         include/mps/planner/util/Playback.h
@@ -85,7 +86,6 @@ set(PLANNER_H
 set(PLANNER_SRC
         src/mps/planner/ompl/control/RampVelocityControl.cpp
         src/mps/planner/ompl/control/Interfaces.cpp
-        src/mps/planner/ompl/control/OracleControlSampler.cpp
         src/mps/planner/ompl/control/NaiveControlSampler.cpp
         src/mps/planner/ompl/control/SimEnvStatePropagator.cpp
         src/mps/planner/ompl/state/SimEnvState.cpp
@@ -100,9 +100,11 @@ set(PLANNER_SRC
         src/mps/planner/util/Math.cpp
         src/mps/planner/pushing/PushPlannerDistanceMeasure.cpp
         src/mps/planner/pushing/OraclePushPlanner.cpp
+        src/mps/planner/pushing/oracle/OracleControlSampler.cpp
         src/mps/planner/pushing/oracle/Oracle.cpp
         src/mps/planner/pushing/oracle/LearnedOracle.cpp
         src/mps/planner/pushing/oracle/HumanOracle.cpp
+        src/mps/planner/pushing/oracle/RampComputer.cpp
         src/mps/planner/pushing/algorithm/RRT.cpp
 )
 

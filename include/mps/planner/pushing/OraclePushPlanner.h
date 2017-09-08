@@ -23,6 +23,9 @@ namespace mps {
              */
             struct PlanningProblem {
                 friend class OraclePushPlanner;
+                enum OracleType {
+                    None, Human, Learned
+                };
                 // world related parameters
                 sim_env::WorldPtr world;
                 sim_env::RobotPtr robot;
@@ -46,7 +49,7 @@ namespace mps {
                 Eigen::Vector3f goal_position;
                 float goal_region_radius;
                 // settings for control sampler
-                bool use_oracle;
+                OracleType oracle_type;
                 unsigned int num_control_samples;
                 // flag whether to enable debug info
                 bool debug;
@@ -102,13 +105,13 @@ namespace mps {
                 mps::planner::ompl::state::SimEnvValidityCheckerPtr _validity_checker;
                 mps::planner::ompl::control::SimEnvStatePropagatorPtr _state_propagator;
                 PlanningProblem _planning_problem;
-                mps::planner::pushing::algorithm::SemiDynamicRRTPtr _algorithm;
-                mps::planner::pushing::algorithm::SemiDynamicRRT::DebugDrawerPtr _debug_drawer;
+                mps::planner::pushing::algorithm::RearrangementRRTPtr _algorithm;
+                mps::planner::pushing::algorithm::RearrangementRRT::DebugDrawerPtr _debug_drawer;
                 mps::planner::ompl::state::SimEnvValidityChecker::CollisionPolicy _collision_policy;
                 std::vector<float> _distance_weights;
                 void prepareDistanceWeights();
                 void prepareCollisionPolicy();
-                ::ompl::control::DirectedControlSamplerPtr allocateDirectedControlSampler(const ::ompl::control::SpaceInformation* si);
+//                ::ompl::control::DirectedControlSamplerPtr allocateDirectedControlSampler(const ::ompl::control::SpaceInformation* si);
             };
         }
     }

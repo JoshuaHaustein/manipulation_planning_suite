@@ -47,9 +47,9 @@ namespace mps {
                      * the last entry is the peak duration.
                      * @param parameters
                      */
-                    void setParameters(const Eigen::VectorXf& parameters);
-                    virtual Eigen::VectorXf getParameters() const;
-                    virtual void getParameters(Eigen::VectorXf& params) const;
+                    void setParameters(const Eigen::VectorXf& parameters) override;
+                    Eigen::VectorXf getParameters() const override;
+                    void getParameters(Eigen::VectorXf& params) const override;
 
                     /**
                      * Returns the maximal velocities set for this action.
@@ -59,14 +59,16 @@ namespace mps {
                     void getMaxVelocities(Eigen::VectorXf& vel) const;
 
                     /** VelocityProfile interface **/
-                    virtual Eigen::VectorXf getVelocity(float dt) const;
-                    virtual void getVelocity(float dt, Eigen::VectorXf& vel) const;
-                    virtual float getMaxDuration() const;
+                    Eigen::VectorXf getVelocity(float dt) const override;
+                    void getVelocity(float dt, Eigen::VectorXf& vel) const override;
+                    float getMaxDuration() const override;
+
+                    float getAccelerationTime() const;
 
                     /** FiniteRestingVelocityControl interface **/
-                    virtual float getRestTime() const;
-                    virtual void addRestTime(float dt);
-                    virtual void setRestTime(float t);
+                    float getRestTime() const override;
+                    void addRestTime(float dt) override;
+                    void setRestTime(float t) override;
 
                 private:
                     RampVelocityControlSpaceConstWeakPtr _control_space;
