@@ -14,6 +14,17 @@ namespace mps {
                     // TODO it would make more sense if these function take SimEnvObjectState* as input rather than Eigen::VectorXf
                     // TODO similarly, it would make sense to pass VelocityControl* as controls
                     /**
+                     * Notifies the oracle that any sequence of predictPushability, predictFeasibility, predictAction
+                     * requests with the given arguments will follow. This allows the oracle to compute data that is
+                     * required for all of these queries.
+                     * @param current_robot_state - current state of the robot
+                     * @param current_obj_state - current state of the object
+                     * @param next_obj_state - next desired object state
+                     */
+                    virtual void prepareOracle(const Eigen::VectorXf& current_robot_state,
+                                               const Eigen::VectorXf& current_obj_state,
+                                               const Eigen::VectorXf& next_obj_state) = 0;
+                    /**
                      * Predicts how well the oracle is capable to provide
                      * an action to manipulate an object in current_obj_state such that it moves
                      * towards next_obj_state.
