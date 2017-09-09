@@ -5,7 +5,8 @@
 #include <mps/planner/pushing/algorithm/RRT.h>
 #include <mps/planner/util/Logging.h>
 #include <mps/planner/ompl/control/Interfaces.h>
-#include <ompl/datastructures/NearestNeighborsGNAT.h>
+//#include <ompl/datastructures/NearestNeighborsGNAT.h>
+#include <ompl/datastructures/NearestNeighborsSqrtApprox.h>
 
 #include <queue>
 
@@ -27,9 +28,9 @@ RearrangementRRT::PlanningQuery::PlanningQuery(std::shared_ptr<ob::GoalSampleabl
                                              const std::string& robot_name) :
     goal_region(goal_region),
     start_state(start_state),
-    time_out(time_out),
     target_name(target_name),
-    robot_name(robot_name)
+    robot_name(robot_name),
+    time_out(time_out)
 {
     stopping_condition = []() {return false;};
     goal_bias = 0.2f;
@@ -117,7 +118,8 @@ void RearrangementRRT::setup() {
     _state_space->setDistanceMeasure(_distance_measure);
     // set up our search tree
     if (!_tree) {
-        _tree = std::make_shared<::ompl::NearestNeighborsGNAT <mps::planner::ompl::planning::essentials::MotionPtr> >();
+//        _tree = std::make_shared<::ompl::NearestNeighborsGNAT <mps::planner::ompl::planning::essentials::MotionPtr> >();
+        _tree = std::make_shared<::ompl::NearestNeighborsSqrtApprox <mps::planner::ompl::planning::essentials::MotionPtr> >();
         using namespace std::placeholders;
         _tree->setDistanceFunction(std::bind(&RearrangementRRT::treeDistanceFunction, this, _1, _2));
     }
@@ -165,20 +167,12 @@ bool RearrangementRRT::plan(const PlanningQuery& pq, PathPtr path) {
         unsigned int active_obj_id = 0;
         bool goal_sampled = sample(sample_motion, active_obj_id, blackboard);
         printState("Sampled state is ", sample_motion->getState()); // TODO remove
-        // Get nearest tree node
-        logging::logDebug("Searching for nearest neighbor.", log_prefix);
-        // TODO taking the full state into account doesn't work so well either..
-        _distance_measure->setAll(true); // we take the full state into account here
-        current_motion = _tree->nearest(sample_motion);
-        printState("Nearest state: ", current_motion->getState()); // TODO remove
-        if (not goal_sampled) {
-            // TODO instead of doing this randomly, we could choose it based on the distance
-            // TODO between current_motion and sample
-            // TODO also, if we want to force the algorithm to explore a slice, we would need to this here
-            active_obj_id = sampleActiveObject(blackboard);
-        }
+        // Get a tree node to expand
+        selectTreeNode(sample_motion, current_motion, active_obj_id, goal_sampled, blackboard);
+        printState("Selected tree state: ", current_motion->getState()); // TODO remove
         // Extend the tree
         solved = extend(current_motion, sample_motion->getState(), active_obj_id, final_motion, blackboard);
+        printState("Tree extended to ", final_motion->getState()); // TODO remove
     }
 
     logging::logDebug(boost::format("Main loop finished, runtime was %f") % _timer.stopTimer(),
@@ -213,6 +207,38 @@ bool RearrangementRRT::sample(mps::planner::ompl::planning::essentials::MotionPt
         target_obj_id = 0;
     }
     return is_goal;
+}
+
+void RearrangementRRT::selectTreeNode(const ompl::planning::essentials::MotionPtr& sample_motion,
+                                      ompl::planning::essentials::MotionPtr& selected_node,
+                                      unsigned int& active_obj_id,
+                                      bool sample_is_goal,
+                                      const PlanningBlackboard& pb)
+{
+    static const std::string log_prefix("[mps::planner::pushing::algorithm::RearrangementRRT::selectTreeNode]");
+    logging::logDebug("Searching for nearest neighbor.", log_prefix);
+
+    ///////////////////////////////////////////////////////////////////////////
+    /////////////// VARIANT 1: Whole state space in distance //////////////////
+    ////////////// CAN USE ANY NEAREST NEIGHBOR STRUCTURE /////////////////////
+//    _distance_measure->setAll(true); // we take the full state into account here
+//    selected_node = _tree->nearest(sample_motion);
+//    if (not sample_is_goal) {
+//        // TODO instead of doing this randomly, we could choose it based on the distance
+//        // TODO between current_motion and sample
+//        // TODO also, if we want to force the algorithm to explore a slice, we would need to this here
+//        active_obj_id = sampleActiveObject(pb);
+//    }
+
+    ///////////////////////////////////////////////////////////////////////////
+    /////////////// VARIANT 2: We pick an active object first /////////////////
+    ////////////// NEEDS LINEAR OR SQRT NEAREST NEIGHBOR //////////////////////
+    _distance_measure->setAll(false); // we take the full state into account here
+    if (not sample_is_goal) {
+        active_obj_id = sampleActiveObject(pb);
+    }
+    _distance_measure->setActive(active_obj_id, true);
+    selected_node = _tree->nearest(sample_motion);
 }
 
 void RearrangementRRT::addToTree(mps::planner::ompl::planning::essentials::MotionPtr new_motion,
@@ -312,6 +338,7 @@ bool NaiveRearrangementRRT::extend(mps::planner::ompl::planning::essentials::Mot
     logging::logDebug("Sampling a control", log_prefix);
     _distance_measure->setAll(false);
     _distance_measure->setActive(active_obj_id, true);
+    last_motion = start;
     unsigned int num_steps = _control_sampler.sampleTo(new_motion->getControl(),
                                                        start->getState(),
                                                        new_motion->getState());
@@ -338,6 +365,8 @@ OracleRearangementRRT::OracleRearangementRRT(::ompl::control::SpaceInformationPt
         RearrangementRRT(si),
         _oracle_sampler(si, pushing_oracle, robot_oracle, robot_name, params)
 {
+    _state_propagator = std::dynamic_pointer_cast<mps_control::SimEnvStatePropagator>(si->getStatePropagator());
+    assert(_state_propagator);
 }
 
 OracleRearangementRRT::~OracleRearangementRRT() = default;

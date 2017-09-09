@@ -69,7 +69,7 @@ namespace mps {
                      * @param current_obj_state - current object state
                      * @param next_obj_state - desired future object state
                      */
-                    virtual void sampleFeasibleState(const Eigen::VectorXf& new_robot_state,
+                    virtual void sampleFeasibleState(Eigen::VectorXf& new_robot_state,
                                                      const Eigen::VectorXf& current_obj_state,
                                                      const Eigen::VectorXf& next_obj_state) = 0;
                 };

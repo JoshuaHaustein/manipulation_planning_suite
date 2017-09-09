@@ -13,8 +13,8 @@ using namespace mps::planner::pushing::oracle;
 RampComputer::RampComputer(
         ompl::state::SimEnvObjectConfigurationSpacePtr robot_space,
         ompl::control::RampVelocityControlSpacePtr control_space) :
-        _robot_space(robot_space),
-        _control_space(control_space)
+        _control_space(control_space),
+        _robot_space(robot_space)
 {
     _ramp_control = dynamic_cast<ompl::control::RampVelocityControl*>(_control_space->allocControl());
 }
@@ -27,12 +27,15 @@ void mps::planner::pushing::oracle::RampComputer::steer(const Eigen::VectorXf &c
                                                         const Eigen::VectorXf &desired_robot_state,
                                                         std::vector<Eigen::VectorXf> &control_params) const {
     static const std::string log_prefix("[mps::planner::pusing::oracle::RampComputer::steer");
+    std::stringstream debug_ss;
     Eigen::VectorXf dir;
     _robot_space->computeDirection(current_robot_state, desired_robot_state, dir);
 
     float distance = dir.norm();
     dir.normalize();
-    mps_logging::logDebug(boost::format("Direction for shortcut is ") << dir, log_prefix);
+
+    debug_ss << "Direction for shortcut is " << dir.transpose();
+    mps_logging::logDebug(debug_ss.str(), log_prefix);
 
     // Compute maximal v for the plateau phase
     Eigen::VectorXf vel_limits;
@@ -41,13 +44,15 @@ void mps::planner::pushing::oracle::RampComputer::steer(const Eigen::VectorXf &c
     _control_space->getVelocityLimits(vel_limits);
     float vabs = std::numeric_limits<float>::max();
     for (unsigned int i = 0; i < vel_limits.size(); ++i) {
-        vabs = std::min(vabs, vel_limits[i] / dir[i]);
+        vabs = std::min(vabs, vel_limits[i] / std::abs(dir[i]));
     }
     Eigen::VectorXf vel = vabs * dir;
-    mps_logging::logDebug(boost::format("Computed maximal velocity ") << vel, log_prefix);
+    debug_ss.str("");
+    debug_ss << "Computed maximal velocity " << vel.transpose();
+    mps_logging::logDebug(debug_ss.str(), log_prefix);
     _ramp_control->setMaxVelocities(vel, 0.0);
     float accel_time = _ramp_control->getAccelerationTime();
-    mps_logging::logDebug(boost::format("Computed acceleration time ") << accel_time, log_prefix);
+    mps_logging::logDebug(boost::format("Computed acceleration time %f") % accel_time, log_prefix);
     // Compute the distance that the manipulator travels only during the acceleration phase
     float dist_accel = (accel_time * vel).norm();
 

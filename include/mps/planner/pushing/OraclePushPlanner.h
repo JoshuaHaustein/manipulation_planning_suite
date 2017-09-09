@@ -24,7 +24,7 @@ namespace mps {
             struct PlanningProblem {
                 friend class OraclePushPlanner;
                 enum OracleType {
-                    None, Human, Learned
+                    None = 0, Human = 1, Learned = 2
                 };
                 // world related parameters
                 sim_env::WorldPtr world;

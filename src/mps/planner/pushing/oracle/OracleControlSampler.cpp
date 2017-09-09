@@ -10,9 +10,9 @@ namespace mps_control = mps::planner::ompl::control;
 namespace mps_logging = mps::planner::util::logging;
 
 OracleControlSampler::Parameters::Parameters() {
-    // TODO what are reasonable values here?
+    // TODO what are reasonable values here? Should these values be inside of the oracles instead?
     min_feasibility = 0.05;
-    min_pushability = 0.05;
+    min_pushability = 0.4;
 }
 
 OracleControlSampler::OracleControlSampler(::ompl::control::SpaceInformationPtr si,
@@ -22,8 +22,8 @@ OracleControlSampler::OracleControlSampler(::ompl::control::SpaceInformationPtr 
                                            const Parameters& params) :
 //    ::ompl::control::DirectedControlSampler(si),
     _si(si),
-    _pushing_oracle(oracle),
     _robot_oracle(robot_orcale),
+    _pushing_oracle(oracle),
     _control_idx(0),
     _params(params)
 {
@@ -41,6 +41,9 @@ OracleControlSampler::OracleControlSampler(::ompl::control::SpaceInformationPtr 
     _robot_id = (unsigned int)(robot_id);
     _robot_state_space = std::dynamic_pointer_cast<mps_state::SimEnvObjectStateSpace>(state_space->getSubspace(_robot_id));
     _robot_state = dynamic_cast<mps_state::SimEnvObjectState*>(_robot_state_space->allocState());
+    Eigen::VectorXf vel = _robot_state->getConfiguration();
+    vel.setZero();
+    _robot_state->setVelocity(vel);
     assert(_robot_state);
     _control_sampler = _si->allocControlSampler();
 }
@@ -116,7 +119,6 @@ bool OracleControlSampler::steerPush(std::vector<::ompl::control::Control const 
     static const std::string log_prefix("[mps::planner::pushing::oracle::OracleControlSampler::steerPush]");
     const auto* current_robot_state = source->getObjectState(_robot_id);
     const auto* current_obj_state = source->getObjectState(object_id);
-    const auto* dest_robot_state = dest->getObjectState(_robot_id);
     const auto* dest_obj_state = dest->getObjectState(object_id);
     // first let the pushing oracle prepare itself for the following requests
     Eigen::VectorXf current_obj_config;
@@ -143,12 +145,10 @@ bool OracleControlSampler::steerPush(std::vector<::ompl::control::Control const 
     if (feasibility < _params.min_feasibility) {
         mps_logging::logDebug(boost::format("Feasibility is only %f, steering robot") % feasibility,
                               log_prefix);
-        Eigen::VectorXf new_robot_dest;
+        Eigen::VectorXf new_robot_dest(_robot_state->getConfiguration());
         _pushing_oracle->sampleFeasibleState(new_robot_dest, current_obj_config, dest_obj_config);
         // the oracle gave us a new robot state we should move to instead
         _robot_state->setConfiguration(new_robot_dest);
-        new_robot_dest.setZero();
-        _robot_state->setVelocity(new_robot_dest);
         return steerRobot(controls, source, _robot_state);
     }
     // The oracle is confident it can help
@@ -158,7 +158,7 @@ bool OracleControlSampler::steerPush(std::vector<::ompl::control::Control const 
     auto* control = getControl();
     control->setParameters(control_param);
     controls.push_back((::ompl::control::Control const*)control);
-    mps_logging::logDebug(boost::format("The oracle suggested to take action %1") % control_param, log_prefix);
+    mps_logging::logDebug(boost::format("The oracle suggested to take action %1%") % control_param.transpose(), log_prefix);
     return true;
 }
 

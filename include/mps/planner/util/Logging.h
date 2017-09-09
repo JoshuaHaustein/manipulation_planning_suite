@@ -7,6 +7,8 @@
 
 #include <sim_env/SimEnv.h>
 
+//#define LOG_STREAM(X) (mps::planng::util::logging::getLogger()->getStream() << X)
+
 namespace mps {
     namespace planner {
         namespace util {

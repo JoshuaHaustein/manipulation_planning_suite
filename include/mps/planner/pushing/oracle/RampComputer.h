@@ -28,6 +28,10 @@ namespace mps {
                         ompl::state::SimEnvObjectConfigurationSpacePtr _robot_space;
                         ompl::control::RampVelocityControl* _ramp_control;
                     };
+                    typedef std::shared_ptr<RampComputer> RampComputerPtr;
+                    typedef std::shared_ptr<const RampComputer> RampComputerConstPtr;
+                    typedef std::weak_ptr<RampComputer> RampComputerWeakPtr;
+                    typedef std::weak_ptr<const RampComputer> RampComputerWeakConstPtr;
                 }
             }
     };

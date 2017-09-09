@@ -64,7 +64,6 @@ bool SimEnvStatePropagator::propagate(const ::ompl::base::State* state, ::ompl::
     Eigen::VectorXf vel(_controller->getTargetDimension());
 //    logger->logDebug("Starting physics loop", log_prefix);
     while (time < velocity_control->getMaxDuration() and propagation_success) {
-        // TODO we could do intermediate state checks here so we can abort prematurely in case of invalid collisions
         velocity_control->getVelocity(time, vel);
         _controller->setTargetVelocity(vel);
         _world->stepPhysics();

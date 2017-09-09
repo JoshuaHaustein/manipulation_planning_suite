@@ -35,7 +35,7 @@ void mps::planner::pushing::oracle::LearnedPipeOracle::predictAction(const Eigen
 
 }
 
-void mps::planner::pushing::oracle::LearnedPipeOracle::sampleFeasibleState(const Eigen::VectorXf &new_robot_state,
+void mps::planner::pushing::oracle::LearnedPipeOracle::sampleFeasibleState(Eigen::VectorXf &new_robot_state,
                                                                            const Eigen::VectorXf &current_obj_state,
                                                                            const Eigen::VectorXf &next_obj_state) {
 

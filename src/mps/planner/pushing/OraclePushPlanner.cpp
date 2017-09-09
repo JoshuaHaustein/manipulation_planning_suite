@@ -76,6 +76,7 @@ OraclePushPlanner::OraclePushPlanner() {
 OraclePushPlanner::~OraclePushPlanner() = default;
 
 bool OraclePushPlanner::setup(PlanningProblem& problem) {
+    static const std::string log_prefix("[mps::planner::pushing::OraclePushPlanner::setup]");
     // first delete any previous instances
     _space_information.reset();
     _state_space.reset();
@@ -119,13 +120,15 @@ bool OraclePushPlanner::setup(PlanningProblem& problem) {
     switch (_planning_problem.oracle_type) {
         case PlanningProblem::OracleType::Human:
         {
-            oracle::PushingOraclePtr pushing_oracle = std::make_shared<oracle::HumanOracle>();
-            oracle::RobotOraclePtr robot_oracle = std::make_shared<oracle::RampComputer>(robot_configuration_space,
-                                                                                         _control_space);
+            oracle::RampComputerPtr ramp_computer =  std::make_shared<oracle::RampComputer>(robot_configuration_space,
+                                                                                            _control_space);
+            oracle::PushingOraclePtr pushing_oracle = std::make_shared<oracle::HumanOracle>(ramp_computer);
+            oracle::RobotOraclePtr robot_oracle = ramp_computer;
             _algorithm = std::make_shared<algorithm::OracleRearangementRRT>(_space_information,
                                                                             pushing_oracle,
                                                                             robot_oracle,
                                                                             _planning_problem.robot->getName());
+            util::logging::logDebug("Using human made oracle!", log_prefix);
             break;
         }
         case PlanningProblem::OracleType::Learned:
@@ -136,12 +139,14 @@ bool OraclePushPlanner::setup(PlanningProblem& problem) {
                                                                             pushing_oracle,
                                                                             robot_oracle,
                                                                             _planning_problem.robot->getName());
+            util::logging::logDebug("Using learned oracle!", log_prefix);
             break;
         }
         case PlanningProblem::OracleType::None:
         {
             _algorithm = std::make_shared<algorithm::NaiveRearrangementRRT>(_space_information,
                                                                             _planning_problem.num_control_samples);
+            util::logging::logDebug("Using no oracle!", log_prefix);
             break;
         }
     }

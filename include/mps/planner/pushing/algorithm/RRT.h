@@ -126,6 +126,11 @@ namespace mps {
                     virtual bool sample(mps::planner::ompl::planning::essentials::MotionPtr motion,
                                         unsigned int& target_obj_id,
                                         const PlanningBlackboard& pb);
+                    virtual void selectTreeNode(const ompl::planning::essentials::MotionPtr& sample,
+                                                ompl::planning::essentials::MotionPtr& selected_node,
+                                                unsigned int& active_obj_id,
+                                                bool sample_is_goal,
+                                                const PlanningBlackboard& pb);
                     virtual double treeDistanceFunction(const mps::planner::ompl::planning::essentials::MotionPtr& a,
                                                         const mps::planner::ompl::planning::essentials::MotionPtr& b) const;
 
