@@ -222,27 +222,14 @@ void SimEnvObjectConfigurationSpace::computeDirection(const Eigen::VectorXf& con
             }
             case internal::SubspaceType::SO2:
             {
-                dir[c_idx] = config_2[c_idx] - config_1[c_idx];
-                if (std::abs(dir[c_idx]) > boost::math::constants::pi<float>()) {
-                    if (dir[c_idx] > 0.0f) { // config2 > config1
-                        dir[c_idx] -= 2.0f * boost::math::constants::pi<float>();
-                    } else {
-                        dir[c_idx] += 2.0f * boost::math::constants::pi<float>();
-                    }
-                }
+                dir[c_idx] = mps::planner::util::math::shortest_direction_so2(config_1[c_idx], config_2[c_idx]);
                 break;
             }
             case internal::SubspaceType::SO3:
             {
                 for (unsigned int i = 0; i < space_desc.dim; ++i) {
-                    dir[c_idx + i] = config_2[c_idx + i] - config_1[c_idx + i];
-                    if (std::abs(dir[c_idx + i]) > boost::math::constants::pi<float>()) {
-                        if (dir[c_idx] > 0.0f) { // config2 > config1
-                            dir[c_idx] -= 2.0f * boost::math::constants::pi<float>();
-                        } else {
-                            dir[c_idx] += 2.0f * boost::math::constants::pi<float>();
-                        }
-                    }
+                    dir[c_idx + i] = mps::planner::util::math::shortest_direction_so2(
+                            config_1[c_idx + i], config_2[c_idx + i]);
                 }
                 break;
             }

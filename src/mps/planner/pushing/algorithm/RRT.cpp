@@ -170,6 +170,7 @@ bool RearrangementRRT::plan(const PlanningQuery& pq, PathPtr path) {
         // Get a tree node to expand
         selectTreeNode(sample_motion, current_motion, active_obj_id, goal_sampled, blackboard);
         printState("Selected tree state: ", current_motion->getState()); // TODO remove
+        logging::logDebug(boost::format("Active object is %i") % active_obj_id, log_prefix);
         // Extend the tree
         solved = extend(current_motion, sample_motion->getState(), active_obj_id, final_motion, blackboard);
         printState("Tree extended to ", final_motion->getState()); // TODO remove
@@ -233,7 +234,7 @@ void RearrangementRRT::selectTreeNode(const ompl::planning::essentials::MotionPt
     ///////////////////////////////////////////////////////////////////////////
     /////////////// VARIANT 2: We pick an active object first /////////////////
     ////////////// NEEDS LINEAR OR SQRT NEAREST NEIGHBOR //////////////////////
-    _distance_measure->setAll(false); // we take the full state into account here
+    _distance_measure->setAll(false); // we take only the active object into account here
     if (not sample_is_goal) {
         active_obj_id = sampleActiveObject(pb);
     }

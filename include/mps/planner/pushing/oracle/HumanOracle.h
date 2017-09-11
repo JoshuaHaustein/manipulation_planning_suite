@@ -60,7 +60,7 @@ namespace mps {
                     Parameters _params;
                     RampComputerPtr _ramp_computer;
                     ::ompl::RNGPtr _rng;
-                    // Takes the first three components of state and ref and computes
+                    // Takes the first three components of state and ref and computes state - ref
                     // The third component is assumed to be an angle in range [-pi, pi], hence the shortest
                     Eigen::Vector3f relativeSE2(const Eigen::VectorXf& state, const Eigen::VectorXf& ref);
                 };

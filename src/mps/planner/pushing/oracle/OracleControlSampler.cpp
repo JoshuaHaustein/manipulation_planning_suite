@@ -147,6 +147,7 @@ bool OracleControlSampler::steerPush(std::vector<::ompl::control::Control const 
                               log_prefix);
         Eigen::VectorXf new_robot_dest(_robot_state->getConfiguration());
         _pushing_oracle->sampleFeasibleState(new_robot_dest, current_obj_config, dest_obj_config);
+        mps_logging::logDebug(boost::format("Sampled robot state %1% based on feasibility") % new_robot_dest.transpose(), log_prefix);
         // the oracle gave us a new robot state we should move to instead
         _robot_state->setConfiguration(new_robot_dest);
         return steerRobot(controls, source, _robot_state);
@@ -167,6 +168,7 @@ void OracleControlSampler::randomControl(std::vector<::ompl::control::Control co
                                          const mps::planner::ompl::state::SimEnvWorldState *dest,
                                          unsigned int obj_id)
 {
+    mps_logging::logDebug("Sampling random control", "[mps::planner::pushing::oracle::OracleControlSampler::randomControl]");
     auto* control = getControl();
     _control_sampler->sample(control);
     controls.push_back((::ompl::control::Control const*)control);

@@ -1,5 +1,6 @@
 #include <mps/planner/pushing/oracle/HumanOracle.h>
 #include <boost/math/constants/constants.hpp>
+#include <mps/planner/util/Math.h>
 
 using namespace mps::planner::pushing::oracle;
 namespace b_math = boost::math;
@@ -9,8 +10,8 @@ HumanOracle::Parameters::Parameters() {
     pushability_covariance(0, 0) = 0.1;
     pushability_covariance(1, 1) = 0.1;
     pushability_covariance(2, 2) = 0.78;
-    optimal_push_distance = 0.1;
-    push_distance_tolerance = 0.03;
+    optimal_push_distance = 0.2;
+    push_distance_tolerance = 0.1;
     push_angle_tolerance = 0.3;
 }
 
@@ -55,7 +56,7 @@ float HumanOracle::predictFeasibility(const Eigen::VectorXf &current_robot_state
     Eigen::Vector3f obj_diff(relativeSE2(next_obj_state, current_obj_state));
     Eigen::Vector3f rel_robot(relativeSE2(current_robot_state, current_obj_state));
     Eigen::Vector2f push_dir(obj_diff.head(2));
-    Eigen::Vector2f approach_dir(rel_robot.head(2));
+    Eigen::Vector2f approach_dir(-rel_robot.head(2));
     float robot_dist = approach_dir.norm();
     float object_dist_change = push_dir.norm();
     if (robot_dist == 0.0f)
@@ -115,9 +116,7 @@ void HumanOracle::sampleFeasibleState(Eigen::VectorXf &new_robot_state,
 Eigen::Vector3f HumanOracle::relativeSE2(const Eigen::VectorXf& state, const Eigen::VectorXf& ref) {
     assert(state.size() >= 3);
     assert(ref.size() >= 3);
-    Eigen::Vector3f dir(ref[0] - state[0], ref[1] - state[1], ref[2] - state[2]);
-    if (dir[2] > b_math::constants::pi<float>()) {
-        dir[2] -= 2.0f * b_math::constants::pi<float>();
-    }
+    Eigen::Vector3f dir(state[0] - ref[0], state[1] - ref[1], state[2] - ref[2]);
+    dir[2] = mps::planner::util::math::shortest_direction_so2(ref[2], state[2]);
     return dir;
 }
