@@ -10,6 +10,7 @@
 #include <Eigen/Core>
 #include <ompl/base/State.h>
 #include <ompl/control/Control.h>
+#include <fstream>
 
 namespace mps {
     namespace planner {
@@ -44,13 +45,18 @@ namespace mps {
                     OracleDataDumper();
                     ~OracleDataDumper();
                     void setFile(const std::string& file_name);
+                    bool openFile();
+                    void writeHeader(const std::string& some_text);
                     void saveData(::ompl::base::State* start,
                                 ::ompl::base::State* result,
                                 ::ompl::control::Control* control);
                     void saveData(const DataTriplet& data);
                     void saveData(const std::vector<DataTriplet>& data);
+                    void closeFile();
                 private:
+                    bool _file_valid;
                     std::string _file_name;
+                    std::ofstream _file_stream;
                 };
             }
         }

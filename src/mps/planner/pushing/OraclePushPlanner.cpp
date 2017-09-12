@@ -96,7 +96,8 @@ bool OraclePushPlanner::setup(PlanningProblem& problem) {
             std::make_shared<::ompl::control::SpaceInformation>(_state_space, _control_space);
 //    using namespace std::placeholders;
 //    ::ompl::control::DirectedControlSamplerAllocator allocator_fn =
-//            std::bind(&OraclePushPlanner::allocateDirectedControlSampler, this, _1);
+//            []{return std::make_shared<mps_control::NaiveControlSampler>(_space_information,
+//                                                                         _planning_problem.num_control_samples)};
 //    _space_information->setDirectedControlSamplerAllocator(allocator_fn);
     _space_information->setPropagationStepSize(1.0); // NOT USED
     _space_information->setMinMaxControlDuration(1, 1); // NOT USED
@@ -206,6 +207,36 @@ void OraclePushPlanner::clearVisualizations() {
     if (_debug_drawer) {
         _debug_drawer->clear();
     }
+}
+
+void OraclePushPlanner::generateData(const std::string& file_name,
+                                     unsigned int num_samples,
+                                     const std::string& header) {
+    ::ompl::base::StateSamplerPtr state_sampler = _space_information->allocStateSampler();
+    ::ompl::control::ControlSamplerPtr control_sampler = _space_information->allocControlSampler();
+    ::ompl::base::State* state = _space_information->allocState();
+    ::ompl::base::State* new_state = _space_information->allocState();
+    ::ompl::control::Control* control = _space_information->allocControl();
+    mps::planner::util::serialize::OracleDataDumper data_dumper;
+    data_dumper.setFile(file_name);
+    data_dumper.openFile();
+    data_dumper.writeHeader(header);
+    for (unsigned int i = 0; i < num_samples; ++i) {
+        state_sampler->sampleUniform(state);
+        control_sampler->sample(control);
+        auto* world_state = state->as<mps_state::SimEnvWorldState>();
+        _state_space->setToState(_planning_problem.world, world_state);
+        _planning_problem.world->getLogger()->logDebug("Sampled state");
+        _state_propagator->propagate(state, control, new_state);
+        _planning_problem.world->getLogger()->logDebug("Propagated state");
+        world_state = new_state->as<mps_state::SimEnvWorldState>();
+        _state_space->setToState(_planning_problem.world, world_state);
+        data_dumper.saveData(state, new_state, control);
+    }
+    data_dumper.closeFile();
+    _space_information->freeState(state);
+    _space_information->freeState(new_state);
+    _space_information->freeControl(control);
 }
 
 void OraclePushPlanner::dummyTest() {

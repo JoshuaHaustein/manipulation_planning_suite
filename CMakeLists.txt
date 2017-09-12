@@ -80,6 +80,7 @@ set(PLANNER_H
         include/mps/planner/util/Random.h
         include/mps/planner/util/Time.h
         include/mps/planner/util/Math.h
+        include/mps/planner/util/yaml/OracleParsing.h
         )
 
 ## Define all source files
@@ -98,6 +99,7 @@ set(PLANNER_SRC
         src/mps/planner/util/Time.cpp
         src/mps/planner/util/Playback.cpp
         src/mps/planner/util/Math.cpp
+        src/mps/planner/util/yaml/OracleParsing.cpp
         src/mps/planner/pushing/PushPlannerDistanceMeasure.cpp
         src/mps/planner/pushing/OraclePushPlanner.cpp
         src/mps/planner/pushing/oracle/OracleControlSampler.cpp

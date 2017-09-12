@@ -96,6 +96,9 @@ namespace mps {
                 // TODO should we move this playback function somewhere else?
                 void playback(const PlanningSolution& solution);
                 void clearVisualizations();
+                void generateData(const std::string& file_name,
+                                  unsigned int num_samples,
+                                  const std::string& header);
                 void dummyTest();
             private:
                 bool _is_initialized;

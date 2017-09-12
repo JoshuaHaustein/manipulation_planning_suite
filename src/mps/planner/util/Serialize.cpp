@@ -11,7 +11,7 @@ RealValueSerializable::~RealValueSerializable() {}
 
 Eigen::IOFormat RealValueSerializable::eigen_format(Eigen::StreamPrecision, 0, ", ");
 
-OracleDataDumper::OracleDataDumper() = default;
+OracleDataDumper::OracleDataDumper() : _file_valid(false) {}
 
 OracleDataDumper::~OracleDataDumper() = default;
 
@@ -19,11 +19,30 @@ void OracleDataDumper::setFile(const std::string &file_name) {
     _file_name = file_name;
     std::ifstream f(file_name.c_str());
     if (not f.good()) {
+        std::ofstream of(file_name.c_str());
+        of.close();
+        f.open(file_name.c_str());
+    }
+    if (not f.good()) {
         std::stringstream ss;
-        ss << "[mps::planner::util::serialize::OracleDataDumper::setFile] Could not access file ";
+        ss << "[mps::planner::util::serialize::OracleDataDumper::setFile] Could not access file ..";
         ss << file_name;
         throw std::runtime_error(ss.str());
     }
+    _file_valid = true;
+}
+
+bool OracleDataDumper::openFile() {
+    if(not _file_valid or _file_stream.is_open()) {
+        return false;
+    }
+    _file_stream.open(_file_name.c_str(), std::ios_base::app);
+    return true;
+}
+
+void OracleDataDumper::writeHeader(const std::string& some_text) {
+    if (not _file_stream.good()) return;
+    _file_stream << some_text << "\n";
 }
 
 void OracleDataDumper::saveData(::ompl::base::State *start, ::ompl::base::State *result,
@@ -40,8 +59,7 @@ void OracleDataDumper::saveData(const DataTriplet& data) {
 
 void OracleDataDumper::saveData(const std::vector<DataTriplet>& data) {
     static const std::string log_prefix("[mps::planner::util::serialize::OracleDataDumper::saveFile]");
-    std::ofstream f(_file_name.c_str(), std::ios_base::app);
-    if (not f.good()) {
+    if (not _file_stream.good()) {
         std::stringstream ss;
         ss << log_prefix;
         ss << " Could not access file ";
@@ -53,7 +71,7 @@ void OracleDataDumper::saveData(const std::vector<DataTriplet>& data) {
         auto* start_state = dynamic_cast<const RealValueSerializable*>(std::get<0>(data_item));
         if (!start_state) {
             std::string msg("Could not serialize start state. State type does not implement RealValueSerializable.");
-            f.close();
+            _file_stream.close();
             throw std::logic_error(log_prefix + msg);
         }
 
@@ -61,7 +79,7 @@ void OracleDataDumper::saveData(const std::vector<DataTriplet>& data) {
         auto* result = dynamic_cast<const RealValueSerializable*>(std::get<1>(data_item));
         if (!result) {
             std::string msg("Could not serialize result state. State type does not implement RealValueSerializable.");
-            f.close();
+            _file_stream.close();
             throw std::logic_error(log_prefix + msg);
         }
 
@@ -69,17 +87,22 @@ void OracleDataDumper::saveData(const std::vector<DataTriplet>& data) {
         auto* control = dynamic_cast<const RealValueSerializable*>(std::get<2>(data_item));
         if (!control) {
             std::string msg("Could not serialize control. Control type does not implement RealValueSerializable.");
-            f.close();
+            _file_stream.close();
             throw std::logic_error(log_prefix + msg);
         }
         // now write data
-        start_state->serializeInNumbers(f);
-        f << ", ";
-        result->serializeInNumbers(f);
-        f << ", ";
-        control->serializeInNumbers(f);
-        f << "\n";
+        start_state->serializeInNumbers(_file_stream);
+        _file_stream << ", ";
+        result->serializeInNumbers(_file_stream);
+        _file_stream << ", ";
+        control->serializeInNumbers(_file_stream);
+        _file_stream << "\n";
     }
-    f.close();
     // done
+}
+
+void OracleDataDumper::closeFile() {
+    if (_file_stream.is_open()) {
+        _file_stream.close();
+    }
 }
