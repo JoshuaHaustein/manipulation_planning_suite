@@ -221,17 +221,24 @@ void OraclePushPlanner::generateData(const std::string& file_name,
     data_dumper.setFile(file_name);
     data_dumper.openFile();
     data_dumper.writeHeader(header);
-    for (unsigned int i = 0; i < num_samples; ++i) {
+    unsigned int i = 0;
+    while (i < num_samples) {
+//    for (unsigned int i = 0; i < num_samples; ++i) {
         state_sampler->sampleUniform(state);
         control_sampler->sample(control);
         auto* world_state = state->as<mps_state::SimEnvWorldState>();
         _state_space->setToState(_planning_problem.world, world_state);
         _planning_problem.world->getLogger()->logDebug("Sampled state");
-        _state_propagator->propagate(state, control, new_state);
+        bool success = _state_propagator->propagate(state, control, new_state);
         _planning_problem.world->getLogger()->logDebug("Propagated state");
+        if (not success) {
+            _planning_problem.world->getLogger()->logDebug("State propagation failed, skipping");
+            continue;
+        }
         world_state = new_state->as<mps_state::SimEnvWorldState>();
         _state_space->setToState(_planning_problem.world, world_state);
         data_dumper.saveData(state, new_state, control);
+        ++i;
     }
     data_dumper.closeFile();
     _space_information->freeState(state);
