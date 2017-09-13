@@ -21,11 +21,55 @@
 #include <stack>
 #include <mps/planner/ompl/control/NaiveControlSampler.h>
 #include <mps/planner/pushing/oracle/OracleControlSampler.h>
+#include <iomanip>
 
 namespace mps {
     namespace planner {
         namespace pushing {
             namespace algorithm {
+                struct PlanningStatistics {
+                    unsigned int num_iterations;
+                    unsigned int num_state_propagations;
+                    unsigned int num_samples;
+                    unsigned int num_nearest_neighbor_queries;
+                    float runtime;
+                    bool success;
+
+                    void print(std::ostream& os) const{
+                        os << "Planning statistics: \n";
+                        os << "     num_iterations: " << num_iterations;
+                        os << "     num_state_propagations: " << num_state_propagations;
+                        os << "     num_samples: " << num_samples;
+                        os << "     num_nearest_neighbor_queries: " << num_nearest_neighbor_queries;
+                        os << "     run_time: " << std::fixed << runtime << std::setprecision(3);
+                        os << "     success: " << success;
+                        os << " \n";
+                    }
+
+                    void printCVS(std::ostream& os) const{
+                        os << num_iterations << ", "
+                           << num_state_propagations << ", "
+                           << num_samples << ", "
+                           << num_nearest_neighbor_queries << ", "
+                           << runtime << ", "
+                           << success << "\n";
+                    }
+
+                    std::string to_string() const{
+                        std::stringstream ss;
+                        print(ss);
+                        return ss.str();
+                    }
+
+                    PlanningStatistics() {
+                        num_nearest_neighbor_queries = 0;
+                        num_iterations = 0;
+                        num_state_propagations = 0;
+                        num_samples = 0;
+                        runtime = 0.0;
+                        success = false;
+                    }
+                };
                 // TODO we could inherit from ::ompl::base::Planner or could define our own planner interface, if needed
                 /**
                  * This class implements a semi-dynamic RRT algorithm for non-prehensile rearrangement.
@@ -45,6 +89,7 @@ namespace mps {
                  */
                 class RearrangementRRT {
                 public:
+
                     struct PlanningQuery {
                         std::shared_ptr<::ompl::base::GoalSampleableRegion> goal_region; // goal region
                         ::ompl::base::State* start_state; // start state of the problem (SimEnvWorldStateSpace)
@@ -86,6 +131,7 @@ namespace mps {
                 protected:
                     struct PlanningBlackboard {
                         PlanningQuery pq;
+                        PlanningStatistics stats;
                         unsigned int target_id;
                         unsigned int robot_id;
                         explicit PlanningBlackboard(PlanningQuery pq);
@@ -101,8 +147,10 @@ namespace mps {
                     RearrangementRRT(::ompl::control::SpaceInformationPtr si);
                     virtual ~RearrangementRRT() = 0;
                     virtual void setup();
+                    bool plan(const PlanningQuery& pq, mps::planner::ompl::planning::essentials::PathPtr path);
                     virtual bool plan(const PlanningQuery& pq,
-                                      mps::planner::ompl::planning::essentials::PathPtr path);
+                                      mps::planner::ompl::planning::essentials::PathPtr path,
+                                      PlanningStatistics& stats);
                     /**
                      *
                      * @param start
@@ -116,7 +164,7 @@ namespace mps {
                                         ::ompl::base::State* dest,
                                         unsigned int active_obj_id,
                                         mps::planner::ompl::planning::essentials::MotionPtr& last_motion,
-                                        const PlanningBlackboard& pb) = 0;
+                                        PlanningBlackboard& pb) = 0;
                     /**
                      * Samples a new state to extend the search tree to.
                      * @param motion - a motion which contains the new state
@@ -125,12 +173,12 @@ namespace mps {
                      */
                     virtual bool sample(mps::planner::ompl::planning::essentials::MotionPtr motion,
                                         unsigned int& target_obj_id,
-                                        const PlanningBlackboard& pb);
+                                        PlanningBlackboard& pb);
                     virtual void selectTreeNode(const ompl::planning::essentials::MotionPtr& sample,
                                                 ompl::planning::essentials::MotionPtr& selected_node,
                                                 unsigned int& active_obj_id,
                                                 bool sample_is_goal,
-                                                const PlanningBlackboard& pb);
+                                                PlanningBlackboard& pb);
                     virtual double treeDistanceFunction(const mps::planner::ompl::planning::essentials::MotionPtr& a,
                                                         const mps::planner::ompl::planning::essentials::MotionPtr& b) const;
 
@@ -175,7 +223,7 @@ namespace mps {
                                 ::ompl::base::State* dest,
                                 unsigned int active_obj_id,
                                 mps::planner::ompl::planning::essentials::MotionPtr& last_motion,
-                                const PlanningBlackboard& pb) override;
+                                PlanningBlackboard& pb) override;
 
                 private:
                     mps::planner::ompl::control::NaiveControlSampler _control_sampler;
@@ -200,7 +248,7 @@ namespace mps {
                                 ::ompl::base::State* dest,
                                 unsigned int active_obj_id,
                                 mps::planner::ompl::planning::essentials::MotionPtr& last_motion,
-                                const PlanningBlackboard& pb) override;
+                                PlanningBlackboard& pb) override;
                 private:
                     mps::planner::ompl::control::SimEnvStatePropagatorPtr _state_propagator;
                     mps::planner::pushing::oracle::OracleControlSampler _oracle_sampler;

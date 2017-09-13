@@ -19,7 +19,7 @@ void Timer::startTimer(float time_out) {
 }
 
 bool Timer::timeOutExceeded() const {
-    auto time_running = (std::clock() - _start_time) / CLOCKS_PER_SEC;
+    auto time_running = (float)(std::clock() - _start_time) / CLOCKS_PER_SEC;
     return time_running > _time_out;
 }
 
@@ -28,5 +28,5 @@ float Timer::stopTimer() {
        return 0.0f;
     }
     _running = false;
-    return (std::clock() - _start_time) / CLOCKS_PER_SEC;
+    return (float)(std::clock() - _start_time) / CLOCKS_PER_SEC;
 }

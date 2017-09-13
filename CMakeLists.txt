@@ -14,7 +14,8 @@ find_package(catkin REQUIRED
 # find_package(Boost REQUIRED COMPONENTS system)
 find_package(Eigen 3.3 REQUIRED)
 find_package(OMPL REQUIRED)
-find_package(CUDA REQUIRED)
+#find_package(CUDA REQUIRED)
+find_package(Protobuf REQUIRED)
 
 ## Uncomment this if the package has a setup.py. This macro ensures
 ## modules and global scripts declared therein get installed
@@ -34,7 +35,7 @@ catkin_package(
   INCLUDE_DIRS include
   LIBRARIES ${PROJECT_NAME}
   CATKIN_DEPENDS sim_env
-  DEPENDS Eigen OMPL
+  DEPENDS Eigen OMPL Protobuf
 )
 
 ###########
@@ -51,9 +52,10 @@ set(CMAKE_CXX_FLAGS_RELEASE "-O3")
 ## Your package locations should be listed before other locations
  include_directories(include
          ${Eigen_INCLUDE_DIRS}
-         ${CUDA_INCLUDE_DIRS}
+#         ${CUDA_INCLUDE_DIRS}
          ${ompl_INCLUDE_DIRS}
          ${catkin_INCLUDE_DIRS}
+         ${PROTOBUF_INCLUDE_DIRS}
          )
 
 ## Define all headers (clion needs this)
@@ -70,7 +72,7 @@ set(PLANNER_H
         include/mps/planner/pushing/OraclePushPlanner.h
         include/mps/planner/pushing/oracle/OracleControlSampler.h
         include/mps/planner/pushing/oracle/Oracle.h
-        include/mps/planner/pushing/oracle/LearnedOracle.h
+#        include/mps/planner/pushing/oracle/LearnedOracle.h
         include/mps/planner/pushing/oracle/HumanOracle.h
         include/mps/planner/pushing/oracle/RampComputer.h
         include/mps/planner/pushing/algorithm/RRT.h
@@ -104,11 +106,14 @@ set(PLANNER_SRC
         src/mps/planner/pushing/OraclePushPlanner.cpp
         src/mps/planner/pushing/oracle/OracleControlSampler.cpp
         src/mps/planner/pushing/oracle/Oracle.cpp
-        src/mps/planner/pushing/oracle/LearnedOracle.cpp
+#        src/mps/planner/pushing/oracle/LearnedOracle.cpp
+#        src/mps/planner/pushing/oracle/oracle.pb.cc
         src/mps/planner/pushing/oracle/HumanOracle.cpp
         src/mps/planner/pushing/oracle/RampComputer.cpp
         src/mps/planner/pushing/algorithm/RRT.cpp
 )
+
+#protobuf_generate_cpp(PROTO_SRCS PROTO_HDRS foo.proto)
 
 ## Declare a C++ library
  add_library(${PROJECT_NAME}

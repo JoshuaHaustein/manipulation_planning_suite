@@ -69,12 +69,14 @@ namespace mps {
                 PlanningProblem();
             };
 
+
             /**
              * Solution to a push planning problem.
              */
             struct PlanningSolution {
                 mps::planner::ompl::planning::essentials::PathPtr path;
                 bool solved;
+                mps::planner::pushing::algorithm::PlanningStatistics stats;
                 PlanningSolution();
             };
 

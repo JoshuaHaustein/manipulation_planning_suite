@@ -322,7 +322,7 @@ namespace mps {
                                           const PlanningSceneBounds& bounds,
                                           bool position_only=true,
                                           const WeightMap& weight=WeightMap());
-                    ~SimEnvWorldStateSpace();
+                    ~SimEnvWorldStateSpace() override;
 
                     sim_env::ObjectConstPtr getObject(unsigned int i) const;
                     std::string getObjectName(unsigned int i) const;

@@ -41,26 +41,9 @@ namespace mps {
                     unsigned int num_control_samples;
                 };
 
-                std::string oracleTypeToString(mps::planner::pushing::PlanningProblem::OracleType oracle_type) {
-                    switch(oracle_type) {
-                        case mps::planner::pushing::PlanningProblem::OracleType::Human:
-                            return "Human";
-                        case mps::planner::pushing::PlanningProblem::OracleType::Learned:
-                            return "Learned";
-                        case mps::planner::pushing::PlanningProblem::OracleType::None:
-                            return "None";
-                    }
-                }
+                std::string oracleTypeToString(mps::planner::pushing::PlanningProblem::OracleType oracle_type);
 
-                mps::planner::pushing::PlanningProblem::OracleType stringToOracleType(const std::string& str) {
-                    if (str.compare("Human") == 0) {
-                        return mps::planner::pushing::PlanningProblem::OracleType::Human;
-                    } else if (str.compare("None") == 0) {
-                        return mps::planner::pushing::PlanningProblem::OracleType::None;
-                    } else {
-                        return mps::planner::pushing::PlanningProblem::OracleType::Learned;
-                    }
-                }
+                mps::planner::pushing::PlanningProblem::OracleType stringToOracleType(const std::string& str);
             }
         }
     }

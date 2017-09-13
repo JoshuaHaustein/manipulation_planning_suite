@@ -12,7 +12,6 @@ namespace mps {
         namespace pushing {
             namespace oracle {
                 class LearnedPipeOracle : public PushingOracle {
-                   // TODO implement me
                 public:
                     LearnedPipeOracle();
                     ~LearnedPipeOracle() override;
@@ -36,14 +35,14 @@ namespace mps {
                                              const Eigen::VectorXf &next_obj_state) override;
                 private:
                     /* Paths to pipes for communication with oracle */
-                    const char *action_request_path;
-                    const char *action_response_path;
-                    const char *pushability_request_path;
-                    const char *pushability_response_path;
-                    const char *feasibility_request_path;
-                    const char *feasibility_response_path;
-                    const char *feasibility_sample_request_path;
-                    const char *feasibility_sample_response_path;
+                    const char *_action_request_path;
+                    const char *_action_response_path;
+                    const char *_pushability_request_path;
+                    const char *_pushability_response_path;
+                    const char *_feasibility_request_path;
+                    const char *_feasibility_response_path;
+                    const char *_feasibility_sample_request_path;
+                    const char *_feasibility_sample_response_path;
                 };
             }
         }

@@ -2,11 +2,10 @@
 // Created by joshua on 8/21/17.
 //
 
+#include <ompl/base/samplers/UniformValidStateSampler.h>
 #include <mps/planner/pushing/OraclePushPlanner.h>
 #include <mps/planner/util/Serialize.h>
 #include <mps/planner/ompl/state/goal/ObjectRelocationGoal.h>
-#include <thread>
-#include <chrono>
 #include <mps/planner/pushing/oracle/OracleControlSampler.h>
 #include <mps/planner/ompl/control/NaiveControlSampler.h>
 #include <mps/planner/util/Logging.h>
@@ -14,7 +13,8 @@
 #include <mps/planner/pushing/oracle/HumanOracle.h>
 #include <mps/planner/pushing/oracle/LearnedOracle.h>
 #include <mps/planner/pushing/oracle/RampComputer.h>
-
+#include <thread>
+#include <chrono>
 
 using namespace mps::planner::pushing;
 namespace mps_state = mps::planner::ompl::state;
@@ -134,7 +134,9 @@ bool OraclePushPlanner::setup(PlanningProblem& problem) {
         }
         case PlanningProblem::OracleType::Learned:
         {
-            mps::planner::pushing::oracle::PushingOraclePtr pushing_oracle = std::make_shared<oracle::LearnedPipeOracle>();
+//            mps::planner::pushing::oracle::PushingOraclePtr pushing_oracle = std::make_shared<oracle::LearnedPipeOracle>();
+            // TODO fix me
+            mps::planner::pushing::oracle::PushingOraclePtr pushing_oracle = nullptr;
             mps::planner::pushing::oracle::RobotOraclePtr robot_oracle = std::make_shared<oracle::RampComputer>(robot_configuration_space, _control_space);
             _algorithm = std::make_shared<algorithm::OracleRearangementRRT>(_space_information,
                                                                             pushing_oracle,
@@ -189,7 +191,7 @@ bool OraclePushPlanner::solve(PlanningSolution& solution) {
     pq.stopping_condition = _planning_problem.stopping_condition;
     pq.weights = _distance_weights;
     solution.path = std::make_shared<mps::planner::ompl::planning::essentials::Path>(_space_information);
-    solution.solved = _algorithm->plan(pq, solution.path);
+    solution.solved = _algorithm->plan(pq, solution.path, solution.stats);
     _state_space->freeState(start_state);
     return solution.solved;
 }
@@ -212,7 +214,9 @@ void OraclePushPlanner::clearVisualizations() {
 void OraclePushPlanner::generateData(const std::string& file_name,
                                      unsigned int num_samples,
                                      const std::string& header) {
-    ::ompl::base::StateSamplerPtr state_sampler = _space_information->allocStateSampler();
+    std::shared_ptr<::ompl::base::UniformValidStateSampler> state_sampler =
+            std::make_shared<::ompl::base::UniformValidStateSampler>(_space_information.get());
+    state_sampler->setNrAttempts(100);
     ::ompl::control::ControlSamplerPtr control_sampler = _space_information->allocControlSampler();
     ::ompl::base::State* state = _space_information->allocState();
     ::ompl::base::State* new_state = _space_information->allocState();
@@ -223,11 +227,12 @@ void OraclePushPlanner::generateData(const std::string& file_name,
     data_dumper.writeHeader(header);
     unsigned int i = 0;
     while (i < num_samples) {
-//    for (unsigned int i = 0; i < num_samples; ++i) {
-        state_sampler->sampleUniform(state);
+        bool has_state = state_sampler->sample(state);
+        if (not has_state) {
+            _planning_problem.world->getLogger()->logWarn("Failed to sample a valid state, we might end up in a infinite loop here!");
+            continue;
+        }
         control_sampler->sample(control);
-        auto* world_state = state->as<mps_state::SimEnvWorldState>();
-        _state_space->setToState(_planning_problem.world, world_state);
         _planning_problem.world->getLogger()->logDebug("Sampled state");
         bool success = _state_propagator->propagate(state, control, new_state);
         _planning_problem.world->getLogger()->logDebug("Propagated state");
@@ -235,8 +240,10 @@ void OraclePushPlanner::generateData(const std::string& file_name,
             _planning_problem.world->getLogger()->logDebug("State propagation failed, skipping");
             continue;
         }
-        world_state = new_state->as<mps_state::SimEnvWorldState>();
-        _state_space->setToState(_planning_problem.world, world_state);
+        double state_distance = _space_information->distance(state, new_state);
+        if (state_distance <= 0.0000001) {
+            _planning_problem.world->getLogger()->logWarn("Resulting state is equal to start state");
+        }
         data_dumper.saveData(state, new_state, control);
         ++i;
     }

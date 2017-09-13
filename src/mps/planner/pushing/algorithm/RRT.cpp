@@ -129,7 +129,14 @@ void RearrangementRRT::setup() {
     _rng = mps::planner::util::random::getDefaultRandomGenerator();
 }
 
-bool RearrangementRRT::plan(const PlanningQuery& pq, PathPtr path) {
+bool RearrangementRRT::plan(const PlanningQuery& pq, mps::planner::ompl::planning::essentials::PathPtr path) {
+    PlanningStatistics stats;
+    return plan(pq, path, stats);
+}
+
+bool RearrangementRRT::plan(const PlanningQuery& pq,
+                            PathPtr path,
+                            PlanningStatistics& stats) {
     static const std::string log_prefix(_log_prefix + "plan]");
     if (not _is_setup) {
         logging::logErr("Planner is not setup, aborting", log_prefix);
@@ -163,6 +170,7 @@ bool RearrangementRRT::plan(const PlanningQuery& pq, PathPtr path) {
     _timer.startTimer(pq.time_out);
     // Do the actual planning
     while(not _timer.timeOutExceeded() and not pq.stopping_condition() && !solved) {
+        blackboard.stats.num_iterations++;
         // sample a new state
         unsigned int active_obj_id = 0;
         bool goal_sampled = sample(sample_motion, active_obj_id, blackboard);
@@ -176,7 +184,11 @@ bool RearrangementRRT::plan(const PlanningQuery& pq, PathPtr path) {
         printState("Tree extended to ", final_motion->getState()); // TODO remove
     }
 
-    logging::logDebug(boost::format("Main loop finished, runtime was %f") % _timer.stopTimer(),
+    blackboard.stats.runtime = _timer.stopTimer();
+    blackboard.stats.success = solved;
+    ss.str("");
+    blackboard.stats.print(ss);
+    logging::logDebug("Main loop finished, stats:\n" + ss.str(),
                       log_prefix);
     // create the path if we found a solution
     if(solved){
@@ -187,12 +199,13 @@ bool RearrangementRRT::plan(const PlanningQuery& pq, PathPtr path) {
     _tree->clear();
 
     logging::logInfo("Planning finished", log_prefix);
+    stats = blackboard.stats;
     return solved;
 }
 
 bool RearrangementRRT::sample(mps::planner::ompl::planning::essentials::MotionPtr motion,
                               unsigned int& target_obj_id,
-                              const PlanningBlackboard& pb)
+                              PlanningBlackboard& pb)
 {
     static const std::string log_prefix("mps::planner::pushing::algorithm::RearrangementRRT::sample]");
     bool is_goal = false;
@@ -207,6 +220,7 @@ bool RearrangementRRT::sample(mps::planner::ompl::planning::essentials::MotionPt
         _state_sampler->sampleUniform(motion->getState());
         target_obj_id = 0;
     }
+    pb.stats.num_samples++;
     return is_goal;
 }
 
@@ -214,7 +228,7 @@ void RearrangementRRT::selectTreeNode(const ompl::planning::essentials::MotionPt
                                       ompl::planning::essentials::MotionPtr& selected_node,
                                       unsigned int& active_obj_id,
                                       bool sample_is_goal,
-                                      const PlanningBlackboard& pb)
+                                      PlanningBlackboard& pb)
 {
     static const std::string log_prefix("[mps::planner::pushing::algorithm::RearrangementRRT::selectTreeNode]");
     logging::logDebug("Searching for nearest neighbor.", log_prefix);
@@ -240,6 +254,7 @@ void RearrangementRRT::selectTreeNode(const ompl::planning::essentials::MotionPt
     }
     _distance_measure->setActive(active_obj_id, true);
     selected_node = _tree->nearest(sample_motion);
+    pb.stats.num_nearest_neighbor_queries++;
 }
 
 void RearrangementRRT::addToTree(mps::planner::ompl::planning::essentials::MotionPtr new_motion,
@@ -328,7 +343,7 @@ bool NaiveRearrangementRRT::extend(mps::planner::ompl::planning::essentials::Mot
                                    ::ompl::base::State* dest,
                                    unsigned int active_obj_id,
                                    mps::planner::ompl::planning::essentials::MotionPtr& last_motion,
-                                   const PlanningBlackboard& pb)
+                                   PlanningBlackboard& pb)
 {
     static const std::string log_prefix("[mps::planner::pushing::algorithm::NaiveRearrangementRRT::extend]");
     MotionPtr new_motion = getNewMotion();
@@ -352,6 +367,7 @@ bool NaiveRearrangementRRT::extend(mps::planner::ompl::planning::essentials::Mot
         logging::logDebug("Could not find a valid control", log_prefix);
         cacheMotion(new_motion);
     }
+    pb.stats.num_state_propagations += _control_sampler.getK();
     return reached_a_goal;
 }
 
@@ -381,7 +397,7 @@ bool OracleRearangementRRT::extend(MotionPtr start,
                                    ::ompl::base::State *dest,
                                    unsigned int active_obj_id,
                                    MotionPtr &last_motion,
-                                   const RearrangementRRT::PlanningBlackboard &pb) {
+                                   RearrangementRRT::PlanningBlackboard &pb) {
     static const std::string log_prefix("[mps::planner::pushing::algorithm::OracleRearrangementRRT]");
     std::vector<const ::ompl::control::Control*> controls;
     _oracle_sampler.sampleTo(controls,
@@ -400,6 +416,7 @@ bool OracleRearangementRRT::extend(MotionPtr start,
         bool success = _state_propagator->propagate(prev_motion->getState(),
                                                     new_motion->getControl(),
                                                     new_motion->getState());
+        pb.stats.num_state_propagations++;
         if (not success) { // we failed, no tree extension
             logging::logDebug("A control provided by the oracle failed. ", log_prefix);
             cacheMotion(new_motion);
