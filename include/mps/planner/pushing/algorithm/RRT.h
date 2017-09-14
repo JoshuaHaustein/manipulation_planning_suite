@@ -99,6 +99,7 @@ namespace mps {
                         float goal_bias;
                         float target_bias; // fraction of times the planner should focus at least on moving the target
                         float robot_bias; // fraction of times the planner should focus at least on moving the robot
+                        unsigned int num_slice_neighbors; // number of nearest slice neighbors (only for SliceBasedOracleRRT)
                         std::vector<float> weights; // optional weights for the distance function
                         std::function<bool()> stopping_condition; // optionally a customized stopping condition
                         PlanningQuery(std::shared_ptr<::ompl::base::GoalSampleableRegion> goal_region,
@@ -146,8 +147,8 @@ namespace mps {
                      */
                     RearrangementRRT(::ompl::control::SpaceInformationPtr si);
                     virtual ~RearrangementRRT() = 0;
-                    virtual void setup();
-                    bool plan(const PlanningQuery& pq, mps::planner::ompl::planning::essentials::PathPtr path);
+                    bool plan(const PlanningQuery& pq,
+                              mps::planner::ompl::planning::essentials::PathPtr path);
                     virtual bool plan(const PlanningQuery& pq,
                                       mps::planner::ompl::planning::essentials::PathPtr path,
                                       PlanningStatistics& stats);
@@ -184,8 +185,9 @@ namespace mps {
 
                     void setDebugDrawer(DebugDrawerPtr debug_drawer);
                 protected:
-                    void addToTree(mps::planner::ompl::planning::essentials::MotionPtr new_motion,
-                                      mps::planner::ompl::planning::essentials::MotionPtr parent);
+                    virtual void setup(const PlanningQuery& pq, PlanningBlackboard& blackboard);
+                    virtual void addToTree(mps::planner::ompl::planning::essentials::MotionPtr new_motion,
+                                           mps::planner::ompl::planning::essentials::MotionPtr parent);
                     unsigned int sampleActiveObject(const PlanningBlackboard& pb) const;
                     void printState(const std::string& msg, ::ompl::base::State* state) const;
                     mps::planner::ompl::planning::essentials::MotionPtr getNewMotion();
@@ -204,7 +206,6 @@ namespace mps {
                     mps::planner::util::time::Timer _timer;
 
                     std::string _log_prefix;
-                    bool _is_setup;
                     std::shared_ptr<::ompl::NearestNeighbors< mps::planner::ompl::planning::essentials::MotionPtr > > _tree;
                     std::stack<mps::planner::ompl::planning::essentials::MotionPtr> _motions_cache;
                 };
@@ -233,15 +234,15 @@ namespace mps {
                 typedef std::weak_ptr<NaiveRearrangementRRT> NaiveRearrangementRRTWeakPtr;
                 typedef std::weak_ptr<const NaiveRearrangementRRT> NaiveRearrangementRRTWeakConstPtr;
 
-                class OracleRearangementRRT : public RearrangementRRT {
+                class OracleRearrangementRRT : public RearrangementRRT {
                 public:
-                    OracleRearangementRRT(::ompl::control::SpaceInformationPtr si,
+                    OracleRearrangementRRT(::ompl::control::SpaceInformationPtr si,
                                           mps::planner::pushing::oracle::PushingOraclePtr pushing_oracle,
                                           mps::planner::pushing::oracle::RobotOraclePtr robot_oracle,
                                           const std::string& robot_name,
                                           const oracle::OracleControlSampler::Parameters& params=
                                             oracle::OracleControlSampler::Parameters());
-                    ~OracleRearangementRRT() override;
+                    ~OracleRearrangementRRT() override;
                     void setOracleSamplerParameters(const oracle::OracleControlSampler::Parameters& params);
 
                     bool extend(mps::planner::ompl::planning::essentials::MotionPtr start,
@@ -249,9 +250,83 @@ namespace mps {
                                 unsigned int active_obj_id,
                                 mps::planner::ompl::planning::essentials::MotionPtr& last_motion,
                                 PlanningBlackboard& pb) override;
-                private:
+                protected:
                     mps::planner::ompl::control::SimEnvStatePropagatorPtr _state_propagator;
                     mps::planner::pushing::oracle::OracleControlSampler _oracle_sampler;
+                };
+
+                class SliceBasedOracleRRT : public OracleRearrangementRRT {
+                public:
+                    SliceBasedOracleRRT(::ompl::control::SpaceInformationPtr si,
+                                        mps::planner::pushing::oracle::PushingOraclePtr pushing_oracle,
+                                        mps::planner::pushing::oracle::RobotOraclePtr robot_oracle,
+                                        const std::string& robot_name,
+                                        const oracle::OracleControlSampler::Parameters& params=
+                                        oracle::OracleControlSampler::Parameters());
+                    ~SliceBasedOracleRRT() override;
+                    void setup(const PlanningQuery& pq, PlanningBlackboard& blackboard) override;
+                    bool sample(mps::planner::ompl::planning::essentials::MotionPtr motion,
+                                unsigned int& target_obj_id,
+                                PlanningBlackboard& pb) override;
+                    void selectTreeNode(const ompl::planning::essentials::MotionPtr& sample,
+                                        ompl::planning::essentials::MotionPtr& selected_node,
+                                        unsigned int& active_obj_id,
+                                        bool sample_is_goal,
+                                        PlanningBlackboard& pb) override;
+
+                    void addToTree(mps::planner::ompl::planning::essentials::MotionPtr new_motion,
+                                   mps::planner::ompl::planning::essentials::MotionPtr parent) override;
+
+                protected:
+                    struct Slice {
+                        typedef std::function<double(const mps::planner::ompl::planning::essentials::MotionPtr&,
+                                                     const mps::planner::ompl::planning::essentials::MotionPtr&)> SliceDistanceFn;
+                        Slice(mps::planner::ompl::planning::essentials::MotionPtr repr,
+                              SliceDistanceFn distance_fn);
+                        ~Slice();
+                        void addSample(ompl::planning::essentials::MotionPtr motion);
+                        std::shared_ptr<::ompl::NearestNeighbors<mps::planner::ompl::planning::essentials::MotionPtr> > slice_samples_nn;
+                        std::vector<ompl::planning::essentials::MotionPtr> slice_samples_list;
+                        mps::planner::ompl::planning::essentials::MotionPtr repr; // representative
+                    };
+                    typedef std::shared_ptr<Slice> SlicePtr;
+
+
+                    struct WithinSliceDistance {
+                        PushPlannerDistanceMeasure distance_measure;
+                        double distance(const ompl::planning::essentials::MotionPtr& motion_a,
+                                        const ompl::planning::essentials::MotionPtr& motion_b) const;
+                        void setRobotId(unsigned int id);
+                        explicit WithinSliceDistance(ompl::state::SimEnvWorldStateSpacePtr state_space,
+                                            const std::vector<float>& weights=std::vector<float>());
+                    };
+
+                    struct SliceDistance {
+                        PushPlannerDistanceMeasure distance_measure;
+                        void setRobotId(unsigned int id);
+                        double distance(const SlicePtr& slice_a, const SlicePtr& slice_b) const;
+                        explicit SliceDistance(ompl::state::SimEnvWorldStateSpacePtr state_space,
+                                               const std::vector<float>& weights=std::vector<float>());
+                    };
+
+                    SlicePtr getSlice(ompl::planning::essentials::MotionPtr motion) const;
+                    void getKSlices(ompl::planning::essentials::MotionPtr motion,
+                                    unsigned int k,
+                                    std::vector<SlicePtr>& slices) const;
+                    float evaluateFeasibility(ompl::planning::essentials::MotionPtr from_motion,
+                                              ompl::planning::essentials::MotionPtr to_motion,
+                                              unsigned int robot_id,
+                                              unsigned int target_id) const;
+
+                    std::vector<SlicePtr> _slices_list;
+                    std::shared_ptr<::ompl::NearestNeighbors<SlicePtr> > _slices_nn;
+                    ::ompl::base::StateSamplerPtr _robot_state_sampler;
+                    ::ompl::base::StateSpacePtr _robot_state_space;
+                    WithinSliceDistance _within_slice_distance_fn;
+                    SliceDistance _slice_distance_fn;
+                    mps::planner::pushing::oracle::PushingOraclePtr _pushing_oracle;
+                private:
+                    SlicePtr _query_slice;
                 };
             }
         }

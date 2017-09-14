@@ -24,7 +24,10 @@ namespace mps {
             struct PlanningProblem {
                 friend class OraclePushPlanner;
                 enum OracleType {
-                    None = 0, Human = 1, Learned = 2
+                    Human = 0, Learned = 1
+                };
+                enum AlgorithmType {
+                    Naive = 0, OracleRRT = 1, SliceOracleRRT = 2
                 };
                 // world related parameters
                 sim_env::WorldPtr world;
@@ -50,6 +53,7 @@ namespace mps {
                 float goal_region_radius;
                 // settings for control sampler
                 OracleType oracle_type;
+                AlgorithmType algorithm_type;
                 unsigned int num_control_samples;
                 // flag whether to enable debug info
                 bool debug;
@@ -116,6 +120,7 @@ namespace mps {
                 std::vector<float> _distance_weights;
                 void prepareDistanceWeights();
                 void prepareCollisionPolicy();
+                mps::planner::pushing::algorithm::RearrangementRRTPtr createAlgorithm(const PlanningProblem& pp) const;
 //                ::ompl::control::DirectedControlSamplerPtr allocateDirectedControlSampler(const ::ompl::control::SpaceInformation* si);
             };
         }

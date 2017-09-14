@@ -38,11 +38,14 @@ namespace mps {
                     Eigen::Vector3f goal_position;
                     float goal_region_radius;
                     mps::planner::pushing::PlanningProblem::OracleType oracle_type;
+                    mps::planner::pushing::PlanningProblem::AlgorithmType algorithm_type;
                     unsigned int num_control_samples;
                 };
 
                 std::string oracleTypeToString(mps::planner::pushing::PlanningProblem::OracleType oracle_type);
+                std::string algorithmTypeToString(mps::planner::pushing::PlanningProblem::AlgorithmType oracle_type);
 
+                mps::planner::pushing::PlanningProblem::AlgorithmType stringToAlgorithmType(const std::string& str);
                 mps::planner::pushing::PlanningProblem::OracleType stringToOracleType(const std::string& str);
             }
         }
@@ -88,6 +91,7 @@ namespace YAML {
             node["goal_position"] = problem_desc.goal_position;
             node["goal_region_radius"] = problem_desc.goal_region_radius;
             node["oracle_type"] = mps::planner::util::yaml::oracleTypeToString(problem_desc.oracle_type);
+            node["algorithm_type"] = mps::planner::util::yaml::algorithmTypeToString(problem_desc.algorithm_type);
             node["num_control_samples"] = problem_desc.num_control_samples;
             return node;
         }
@@ -109,6 +113,7 @@ namespace YAML {
             problem_desc.goal_position = node["goal_position"].as<Eigen::VectorXf>();
             problem_desc.goal_region_radius = node["goal_region_radius"].as<float>();
             problem_desc.oracle_type = mps::planner::util::yaml::stringToOracleType(node["oracle_type"].as<std::string>());
+            problem_desc.algorithm_type = mps::planner::util::yaml::stringToAlgorithmType(node["algorithm_type"].as<std::string>());
             problem_desc.num_control_samples = node["num_control_samples"].as<unsigned int>();
             return true;
         }

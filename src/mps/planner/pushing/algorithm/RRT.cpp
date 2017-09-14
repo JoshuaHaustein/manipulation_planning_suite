@@ -5,7 +5,7 @@
 #include <mps/planner/pushing/algorithm/RRT.h>
 #include <mps/planner/util/Logging.h>
 #include <mps/planner/ompl/control/Interfaces.h>
-//#include <ompl/datastructures/NearestNeighborsGNAT.h>
+#include <ompl/datastructures/NearestNeighborsGNAT.h>
 #include <ompl/datastructures/NearestNeighborsSqrtApprox.h>
 
 #include <queue>
@@ -36,6 +36,7 @@ RearrangementRRT::PlanningQuery::PlanningQuery(std::shared_ptr<ob::GoalSampleabl
     goal_bias = 0.2f;
     robot_bias = 0.0f;
     target_bias = 0.25f;
+    num_slice_neighbors = 8;
 }
 
 RearrangementRRT::PlanningQuery::PlanningQuery(const PlanningQuery &other) = default;
@@ -102,14 +103,8 @@ void RearrangementRRT::DebugDrawer::drawStateTransition(const ompl::state::SimEn
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 RearrangementRRT::RearrangementRRT(::ompl::control::SpaceInformationPtr si) :
         _si(si),
-        _log_prefix("[mps::planner::pushing::algorithm::RearrangementRRT::"),
-        _is_setup(false)
+        _log_prefix("[mps::planner::pushing::algorithm::RearrangementRRT::")
 {
-}
-
-RearrangementRRT::~RearrangementRRT() = default;
-
-void RearrangementRRT::setup() {
     _state_space = std::dynamic_pointer_cast<mps_state::SimEnvWorldStateSpace>(_si->getStateSpace());
     if (!_state_space) {
         throw std::logic_error(_log_prefix + "setup] Could not cast state space to SimEnvWorldStateSpace");
@@ -123,10 +118,20 @@ void RearrangementRRT::setup() {
         using namespace std::placeholders;
         _tree->setDistanceFunction(std::bind(&RearrangementRRT::treeDistanceFunction, this, _1, _2));
     }
-    _is_setup = true;
     _state_sampler = _si->allocStateSampler();
     assert(_state_space->getNumObjects() > 1);
     _rng = mps::planner::util::random::getDefaultRandomGenerator();
+}
+
+RearrangementRRT::~RearrangementRRT() = default;
+
+void RearrangementRRT::setup(const PlanningQuery& pq, PlanningBlackboard& blackboard) {
+    setupBlackboard(blackboard);
+    _distance_measure->setWeights(pq.weights);
+    if (_debug_drawer) {
+        _debug_drawer->clear();
+    }
+    _tree->clear();
 }
 
 bool RearrangementRRT::plan(const PlanningQuery& pq, mps::planner::ompl::planning::essentials::PathPtr path) {
@@ -138,17 +143,9 @@ bool RearrangementRRT::plan(const PlanningQuery& pq,
                             PathPtr path,
                             PlanningStatistics& stats) {
     static const std::string log_prefix(_log_prefix + "plan]");
-    if (not _is_setup) {
-        logging::logErr("Planner is not setup, aborting", log_prefix);
-        return false;
-    }
-    logging::logDebug("Starting to plan", log_prefix);
-    _distance_measure->setWeights(pq.weights);
     PlanningBlackboard blackboard(pq);
-    setupBlackboard(blackboard);
-    if (_debug_drawer) {
-        _debug_drawer->clear();
-    }
+    setup(pq, blackboard);
+    logging::logDebug("Starting to plan", log_prefix);
 
     MotionPtr current_motion = getNewMotion();
     MotionPtr sample_motion = getNewMotion();
@@ -158,8 +155,7 @@ bool RearrangementRRT::plan(const PlanningQuery& pq,
     // set the control to be null
     _si->nullControl(current_motion->getControl());
     // Initialize the tree
-    _tree->clear();
-    _tree->add(current_motion);
+    addToTree(current_motion, nullptr);
     final_motion = current_motion;
 
     bool solved = pq.goal_region->isSatisfied(current_motion->getState());
@@ -374,7 +370,7 @@ bool NaiveRearrangementRRT::extend(mps::planner::ompl::planning::essentials::Mot
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 /////////////////////////////////// OracleRearrangementRRT /////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-OracleRearangementRRT::OracleRearangementRRT(::ompl::control::SpaceInformationPtr si,
+OracleRearrangementRRT::OracleRearrangementRRT(::ompl::control::SpaceInformationPtr si,
                                              mps::planner::pushing::oracle::PushingOraclePtr pushing_oracle,
                                              mps::planner::pushing::oracle::RobotOraclePtr robot_oracle,
                                              const std::string& robot_name,
@@ -386,14 +382,14 @@ OracleRearangementRRT::OracleRearangementRRT(::ompl::control::SpaceInformationPt
     assert(_state_propagator);
 }
 
-OracleRearangementRRT::~OracleRearangementRRT() = default;
+OracleRearrangementRRT::~OracleRearrangementRRT() = default;
 
-void OracleRearangementRRT::setOracleSamplerParameters(
+void OracleRearrangementRRT::setOracleSamplerParameters(
         const mps::planner::pushing::oracle::OracleControlSampler::Parameters &params) {
     _oracle_sampler.setParameters(params);
 }
 
-bool OracleRearangementRRT::extend(MotionPtr start,
+bool OracleRearrangementRRT::extend(MotionPtr start,
                                    ::ompl::base::State *dest,
                                    unsigned int active_obj_id,
                                    MotionPtr &last_motion,
@@ -436,4 +432,228 @@ bool OracleRearangementRRT::extend(MotionPtr start,
     return false;
 }
 
+////////////////////////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////// SliceBasedOracleRRT ///////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////
 
+//////////////////////////////////////// Slice /////////////////////////////////////////////////////
+SliceBasedOracleRRT::Slice::Slice(mps::planner::ompl::planning::essentials::MotionPtr repr,
+                                  SliceDistanceFn distance_fn)
+{
+    slice_samples_nn = std::make_shared<::ompl::NearestNeighborsSqrtApprox <mps::planner::ompl::planning::essentials::MotionPtr> >();
+    slice_samples_nn->setDistanceFunction(distance_fn);
+    repr = repr;
+    slice_samples_nn->add(repr);
+    slice_samples_list.push_back(repr);
+}
+
+SliceBasedOracleRRT::Slice::~Slice() = default;
+
+void SliceBasedOracleRRT::Slice::addSample(ompl::planning::essentials::MotionPtr motion) {
+    slice_samples_list.push_back(motion);
+    slice_samples_nn->add(motion);
+}
+
+///////////////////////////////////// WithinSliceDistance ////////////////////////////////////////////
+SliceBasedOracleRRT::WithinSliceDistance::WithinSliceDistance(ompl::state::SimEnvWorldStateSpacePtr state_space,
+                                                              const std::vector<float> &weights) :
+    distance_measure(state_space, weights)
+{
+}
+
+void SliceBasedOracleRRT::WithinSliceDistance::setRobotId(unsigned int id) {
+    distance_measure.setAll(false);
+    distance_measure.setActive(id, true);
+}
+
+double SliceBasedOracleRRT::WithinSliceDistance::distance(const ompl::planning::essentials::MotionPtr &motion_a,
+                                                          const ompl::planning::essentials::MotionPtr &motion_b) const
+{
+    return distance_measure.distance(motion_a->getState(), motion_b->getState());
+}
+
+///////////////////////////////////// SliceDistance ////////////////////////////////////////////
+SliceBasedOracleRRT::SliceDistance::SliceDistance(ompl::state::SimEnvWorldStateSpacePtr state_space,
+                                                  const std::vector<float> &weights) :
+    distance_measure(state_space, weights)
+{
+}
+
+void SliceBasedOracleRRT::SliceDistance::setRobotId(unsigned int id) {
+    distance_measure.setAll(true);
+    distance_measure.setActive(id, false);
+}
+
+double SliceBasedOracleRRT::SliceDistance::distance(const SlicePtr &slice_a, const SlicePtr &slice_b) const
+{
+    return distance_measure.distance(slice_a->repr->getState(), slice_b->repr->getState());
+}
+
+//////////////////////////////////////// SliceBasedOracleRRT ////////////////////////////////////////////////
+SliceBasedOracleRRT::SliceBasedOracleRRT(::ompl::control::SpaceInformationPtr si,
+                                         mps::planner::pushing::oracle::PushingOraclePtr pushing_oracle,
+                                         mps::planner::pushing::oracle::RobotOraclePtr robot_oracle,
+                                         const std::string &robot_name,
+                                         const oracle::OracleControlSampler::Parameters &params) :
+    OracleRearrangementRRT(si, pushing_oracle, robot_oracle, robot_name, params),
+    _within_slice_distance_fn(_state_space),
+    _slice_distance_fn(_state_space),
+    _pushing_oracle(pushing_oracle)
+{
+    _slices_nn = std::make_shared<::ompl::NearestNeighborsGNAT <SlicePtr> >();
+
+    _slices_nn->setDistanceFunction(std::bind(&SliceBasedOracleRRT::SliceDistance::distance,
+                                              _slice_distance_fn,
+                                              std::placeholders::_1,
+                                              std::placeholders::_2));
+    _query_slice = std::make_shared<Slice>(MotionPtr(), std::function<double(MotionPtr, MotionPtr)>());
+
+}
+
+SliceBasedOracleRRT::~SliceBasedOracleRRT() = default;
+
+void SliceBasedOracleRRT::setup(const PlanningQuery& pq, PlanningBlackboard& pb) {
+    RearrangementRRT::setup(pq, pb);
+    _robot_state_space = std::dynamic_pointer_cast<mps_state::SimEnvObjectStateSpace>(_state_space->getSubspace(pb.robot_id));
+    _robot_state_sampler = _robot_state_space->allocStateSampler();
+    _slice_distance_fn.setRobotId(pb.robot_id);
+    _within_slice_distance_fn.setRobotId(pb.robot_id);
+}
+
+bool SliceBasedOracleRRT::sample(mps::planner::ompl::planning::essentials::MotionPtr motion,
+                                 unsigned int& target_obj_id,
+                                 PlanningBlackboard& pb)
+{
+    bool sampled_goal = false;
+    ////////////////////////////////// Variant 1 //////////////////////////////////
+    // TODO if this variant is better, we don't need to overwrite, because it is actually the default sample method
+    auto nu = (float)_rng->uniform01();
+    if (nu < pb.pq.goal_bias and pb.pq.goal_region->canSample()) {
+        pb.pq.goal_region->sampleGoal(motion->getState());
+        target_obj_id = pb.target_id;
+        sampled_goal = true;
+    } else {
+        target_obj_id = sampleActiveObject(pb);
+        _state_sampler->sampleUniform(motion->getState()); // TODO might need valid state sampler
+    }
+
+    ////////////////////////////////// Variant 2 //////////////////////////////////
+//    if (nu < pb.pq.robot_bias) { // we want to move the robot
+//        // Variant 2 - sample a slice from _slices and sample a robot configuration and merge them
+//        // TODO
+//        unsigned int slice_idx = (unsigned int)(_rng->uniformInt(0, std::max(_slices_list.size() - 1, 0)));
+//        auto slice = _slices_list.at(slice_idx):
+//        // first set the slice
+//        _si->copyState(motion->getState(), slice->repr->getState());
+//        // now sample a random robot state within that slice
+//        auto world_state = dynamic_cast<mps_state::SimEnvWorldState*>(motion->getState());
+//        auto robot_state = world_state->getObjectState(pb.robot_id);
+//        _robot_state_sampler->sampleUniform(robot_state); // TODO might need valid state sampler
+//        target_obj_id = pb.robot_id;
+//    } else if (nu < pb.pq.target_bias + pb.pq.robot_bias and pb.pq.goal_region->canSample()) {
+//        // we want to move the target object to the goal
+//        pb.pq.goal_region->sampleGoal(motion->getState());
+//        target_obj_id = pb.target_id;
+//        sampled_goal = true;
+//    } else { // we want to explore more slices
+//        _state_sampler->sampleUniform(motion->getState());
+//        // TODO should we bias this on the target object as well?
+//        target_obj_id = (unsigned int)(_rng->uniformInt(0, _state_space->getNumObjects() - 1));
+//    }
+    return sampled_goal;
+}
+
+void SliceBasedOracleRRT::selectTreeNode(const ompl::planning::essentials::MotionPtr& sample,
+                                         ompl::planning::essentials::MotionPtr& selected_node,
+                                         unsigned int& active_obj_id,
+                                         bool sample_is_goal,
+                                         PlanningBlackboard& pb)
+{
+    if (active_obj_id == pb.robot_id) {
+        // pick the slice that is closest to the sample
+        SlicePtr slice = getSlice(sample);
+        // the selected node is the nearest node to the sample within the selected slice (in terms of robot distance)
+        selected_node = slice->slice_samples_nn->nearest(sample);
+    } else {
+        // pick k nearest neighbor slices of sample
+        std::vector<SlicePtr> k_neighbors;
+        // TODO can we pick k in a good way? Would it make sense to query within some radius?
+        getKSlices(sample, pb.pq.num_slice_neighbors, k_neighbors);
+        float best_feasibility = std::numeric_limits<float>::lowest();
+        for (std::size_t slice_idx = 0; slice_idx < k_neighbors.size(); ++slice_idx) {
+            SlicePtr slice_i = k_neighbors.at(slice_idx);
+            // search within this slice for a better sample
+            std::size_t num_states = slice_i->slice_samples_list.size();
+            std::size_t random_offset = (std::size_t) (_rng->uniformInt(0, std::max((int) (num_states) - 1, 0)));
+            std::size_t num_checks = 1 + (std::size_t) (std::floor(std::sqrt((double) (num_states))));
+            // we do not want to run through all, so we step through it in sqrt(n) steps with random initial offset
+            // this is inspired by the approximate nearest neighbor search in ompl::NearestNeighborsSqrtApprox
+            for (unsigned int state_check = 0; state_check < num_checks; ++state_check) {
+                std::size_t state_idx = (random_offset + state_check * num_checks) % num_states;
+                MotionPtr state = slice_i->slice_samples_list.at(state_idx);
+                float feasibility = evaluateFeasibility(state, sample, pb.robot_id, active_obj_id);
+                if (feasibility > best_feasibility) {
+                    selected_node = state;
+                    best_feasibility = feasibility;
+                }
+            }
+        }
+
+    }
+}
+
+void SliceBasedOracleRRT::addToTree(MotionPtr new_motion, MotionPtr parent) {
+    RearrangementRRT::addToTree(new_motion, parent);
+    if (parent == nullptr) { // first call // TODO is there a more elegant way of doing this?
+        auto new_slice = std::make_shared<Slice>(new_motion,
+                                                 std::bind(&SliceBasedOracleRRT::WithinSliceDistance::distance, _within_slice_distance_fn,
+                                                           std::placeholders::_1, std::placeholders::_2));
+        _slices_nn->add(new_slice);
+        _slices_list.push_back(new_slice);
+        return;
+    }
+    SlicePtr parent_slice = getSlice(parent);
+    SlicePtr child_slice = getSlice(new_motion);
+    if (parent_slice != child_slice) { // we discovered a new slice!
+        auto new_slice = std::make_shared<Slice>(new_motion,
+            std::bind(&SliceBasedOracleRRT::WithinSliceDistance::distance, _within_slice_distance_fn,
+                      std::placeholders::_1, std::placeholders::_2));
+        _slices_nn->add(new_slice);
+        _slices_list.push_back(new_slice);
+    } else { // the new motion/state is in the same slice
+        parent_slice->addSample(new_motion);
+    }
+}
+
+void SliceBasedOracleRRT::getKSlices(MotionPtr motion,
+                                     unsigned int k,
+                                     std::vector<SlicePtr>& slices) const {
+    _query_slice->repr = motion;
+    _slices_nn->nearestK(_query_slice, k, slices);
+}
+
+SliceBasedOracleRRT::SlicePtr SliceBasedOracleRRT::getSlice(MotionPtr motion) const {
+    _query_slice->repr = motion;
+    return _slices_nn->nearest(_query_slice);
+}
+
+float SliceBasedOracleRRT::evaluateFeasibility(ompl::planning::essentials::MotionPtr from_motion,
+                                               ompl::planning::essentials::MotionPtr to_motion,
+                                               unsigned int robot_id,
+                                               unsigned int target_id) const
+{
+    // extract from state
+    auto from_world_state = dynamic_cast<mps_state::SimEnvWorldState*>(from_motion->getState());
+    auto from_robot_state = from_world_state->getObjectState(robot_id);
+    auto from_object_state = from_world_state->getObjectState(target_id);
+    // extract to state
+    auto to_world_state = dynamic_cast<mps_state::SimEnvWorldState*>(to_motion->getState());
+    auto to_object_state = to_world_state->getObjectState(target_id);
+    // extract Eigen vectors
+    Eigen::VectorXf eigen_current_robot = from_robot_state->getConfiguration();
+    Eigen::VectorXf eigen_current_object = from_object_state->getConfiguration();
+    Eigen::VectorXf eigen_next_object = to_object_state->getConfiguration();
+    // prepare oracle and let it predict feasibility
+    _pushing_oracle->prepareOracle(eigen_current_robot, eigen_current_object, eigen_next_object);
+    return _pushing_oracle->predictFeasibility(eigen_current_robot, eigen_current_object, eigen_next_object);
+}
