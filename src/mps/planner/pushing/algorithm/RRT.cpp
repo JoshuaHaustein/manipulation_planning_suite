@@ -37,6 +37,7 @@ RearrangementRRT::PlanningQuery::PlanningQuery(std::shared_ptr<ob::GoalSampleabl
     robot_bias = 0.0f;
     target_bias = 0.25f;
     num_slice_neighbors = 8;
+    slice_volume = 0.0;
 }
 
 RearrangementRRT::PlanningQuery::PlanningQuery(const PlanningQuery &other) = default;
@@ -67,6 +68,7 @@ RearrangementRRT::DebugDrawer::~DebugDrawer() {
 }
 
 void RearrangementRRT::DebugDrawer::addNewMotion(MotionPtr motion) {
+    if (!motion->getParent()) return;
     auto* parent_state = dynamic_cast<ompl::state::SimEnvWorldState*>(motion->getParent()->getState());
     auto* new_state = dynamic_cast<ompl::state::SimEnvWorldState*>(motion->getState());
     auto* parent_object_state = parent_state->getObjectState(_robot_id);
@@ -155,7 +157,7 @@ bool RearrangementRRT::plan(const PlanningQuery& pq,
     // set the control to be null
     _si->nullControl(current_motion->getControl());
     // Initialize the tree
-    addToTree(current_motion, nullptr);
+    addToTree(current_motion, nullptr, blackboard);
     final_motion = current_motion;
 
     bool solved = pq.goal_region->isSatisfied(current_motion->getState());
@@ -254,7 +256,8 @@ void RearrangementRRT::selectTreeNode(const ompl::planning::essentials::MotionPt
 }
 
 void RearrangementRRT::addToTree(mps::planner::ompl::planning::essentials::MotionPtr new_motion,
-                                 mps::planner::ompl::planning::essentials::MotionPtr parent)
+                                 mps::planner::ompl::planning::essentials::MotionPtr parent,
+                                 PlanningBlackboard& pb)
 {
     new_motion->setParent(parent);
     _tree->add(new_motion);
@@ -357,7 +360,7 @@ bool NaiveRearrangementRRT::extend(mps::planner::ompl::planning::essentials::Mot
     bool reached_a_goal = pb.pq.goal_region->isSatisfied(new_motion->getState());
     if (num_steps > 0) { // the sampled control is valid, i.e. the outcoming state is valid
         printState("Extending towards state ", new_motion->getState());
-        addToTree(new_motion, start);
+        addToTree(new_motion, start, pb);
         last_motion = new_motion;
     } else {
         logging::logDebug("Could not find a valid control", log_prefix);
@@ -420,7 +423,7 @@ bool OracleRearrangementRRT::extend(MotionPtr start,
         }
         printState("Oracle control took us to state ", new_motion->getState());
         // we extended the tree a bit, add this new state to the tree
-        addToTree(new_motion, prev_motion);
+        addToTree(new_motion, prev_motion, pb);
         last_motion = new_motion;
         if (pb.pq.goal_region->isSatisfied(new_motion->getState())) {
             // we reached a goal!
@@ -437,12 +440,12 @@ bool OracleRearrangementRRT::extend(MotionPtr start,
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 //////////////////////////////////////// Slice /////////////////////////////////////////////////////
-SliceBasedOracleRRT::Slice::Slice(mps::planner::ompl::planning::essentials::MotionPtr repr,
+SliceBasedOracleRRT::Slice::Slice(mps::planner::ompl::planning::essentials::MotionPtr repr_in,
                                   SliceDistanceFn distance_fn)
 {
     slice_samples_nn = std::make_shared<::ompl::NearestNeighborsSqrtApprox <mps::planner::ompl::planning::essentials::MotionPtr> >();
     slice_samples_nn->setDistanceFunction(distance_fn);
-    repr = repr;
+    repr = repr_in;
     slice_samples_nn->add(repr);
     slice_samples_list.push_back(repr);
 }
@@ -518,6 +521,9 @@ void SliceBasedOracleRRT::setup(const PlanningQuery& pq, PlanningBlackboard& pb)
     _robot_state_sampler = _robot_state_space->allocStateSampler();
     _slice_distance_fn.setRobotId(pb.robot_id);
     _within_slice_distance_fn.setRobotId(pb.robot_id);
+    _slices_nn->clear();
+    _slices_list.clear();
+    _query_slice->repr = nullptr;
 }
 
 bool SliceBasedOracleRRT::sample(mps::planner::ompl::planning::essentials::MotionPtr motion,
@@ -585,7 +591,7 @@ void SliceBasedOracleRRT::selectTreeNode(const ompl::planning::essentials::Motio
             // search within this slice for a better sample
             std::size_t num_states = slice_i->slice_samples_list.size();
             std::size_t random_offset = (std::size_t) (_rng->uniformInt(0, std::max((int) (num_states) - 1, 0)));
-            std::size_t num_checks = 1 + (std::size_t) (std::floor(std::sqrt((double) (num_states))));
+            std::size_t num_checks = (std::size_t) (std::floor(std::sqrt((double) (num_states))));
             // we do not want to run through all, so we step through it in sqrt(n) steps with random initial offset
             // this is inspired by the approximate nearest neighbor search in ompl::NearestNeighborsSqrtApprox
             for (unsigned int state_check = 0; state_check < num_checks; ++state_check) {
@@ -602,26 +608,18 @@ void SliceBasedOracleRRT::selectTreeNode(const ompl::planning::essentials::Motio
     }
 }
 
-void SliceBasedOracleRRT::addToTree(MotionPtr new_motion, MotionPtr parent) {
-    RearrangementRRT::addToTree(new_motion, parent);
-    if (parent == nullptr) { // first call // TODO is there a more elegant way of doing this?
-        auto new_slice = std::make_shared<Slice>(new_motion,
-                                                 std::bind(&SliceBasedOracleRRT::WithinSliceDistance::distance, _within_slice_distance_fn,
-                                                           std::placeholders::_1, std::placeholders::_2));
-        _slices_nn->add(new_slice);
-        _slices_list.push_back(new_slice);
-        return;
-    }
-    SlicePtr parent_slice = getSlice(parent);
-    SlicePtr child_slice = getSlice(new_motion);
-    if (parent_slice != child_slice) { // we discovered a new slice!
+void SliceBasedOracleRRT::addToTree(MotionPtr new_motion, MotionPtr parent, PlanningBlackboard& pb) {
+    RearrangementRRT::addToTree(new_motion, parent, pb);
+    SlicePtr closest_slice = getSlice(new_motion);
+    float slice_distance = distanceToSlice(new_motion, closest_slice);
+    if (slice_distance > pb.pq.slice_volume) { // we discovered a new slice!
         auto new_slice = std::make_shared<Slice>(new_motion,
             std::bind(&SliceBasedOracleRRT::WithinSliceDistance::distance, _within_slice_distance_fn,
                       std::placeholders::_1, std::placeholders::_2));
         _slices_nn->add(new_slice);
         _slices_list.push_back(new_slice);
     } else { // the new motion/state is in the same slice
-        parent_slice->addSample(new_motion);
+        closest_slice->addSample(new_motion);
     }
 }
 
@@ -633,8 +631,19 @@ void SliceBasedOracleRRT::getKSlices(MotionPtr motion,
 }
 
 SliceBasedOracleRRT::SlicePtr SliceBasedOracleRRT::getSlice(MotionPtr motion) const {
+    if (_slices_nn->size() == 0) {
+        return nullptr;
+    }
     _query_slice->repr = motion;
     return _slices_nn->nearest(_query_slice);
+}
+
+float SliceBasedOracleRRT::distanceToSlice(ompl::planning::essentials::MotionPtr motion, SlicePtr slice) const {
+    if (!slice) {
+        return std::numeric_limits<float>::max();
+    }
+    _query_slice->repr = motion;
+    return (float)_slice_distance_fn.distance(_query_slice, slice);
 }
 
 float SliceBasedOracleRRT::evaluateFeasibility(ompl::planning::essentials::MotionPtr from_motion,

@@ -100,6 +100,7 @@ namespace mps {
                         float target_bias; // fraction of times the planner should focus at least on moving the target
                         float robot_bias; // fraction of times the planner should focus at least on moving the robot
                         unsigned int num_slice_neighbors; // number of nearest slice neighbors (only for SliceBasedOracleRRT)
+                        float slice_volume;
                         std::vector<float> weights; // optional weights for the distance function
                         std::function<bool()> stopping_condition; // optionally a customized stopping condition
                         PlanningQuery(std::shared_ptr<::ompl::base::GoalSampleableRegion> goal_region,
@@ -187,7 +188,8 @@ namespace mps {
                 protected:
                     virtual void setup(const PlanningQuery& pq, PlanningBlackboard& blackboard);
                     virtual void addToTree(mps::planner::ompl::planning::essentials::MotionPtr new_motion,
-                                           mps::planner::ompl::planning::essentials::MotionPtr parent);
+                                           mps::planner::ompl::planning::essentials::MotionPtr parent,
+                                           PlanningBlackboard& pb);
                     unsigned int sampleActiveObject(const PlanningBlackboard& pb) const;
                     void printState(const std::string& msg, ::ompl::base::State* state) const;
                     mps::planner::ompl::planning::essentials::MotionPtr getNewMotion();
@@ -275,7 +277,8 @@ namespace mps {
                                         PlanningBlackboard& pb) override;
 
                     void addToTree(mps::planner::ompl::planning::essentials::MotionPtr new_motion,
-                                   mps::planner::ompl::planning::essentials::MotionPtr parent) override;
+                                   mps::planner::ompl::planning::essentials::MotionPtr parent,
+                                   PlanningBlackboard& pb) override;
 
                 protected:
                     struct Slice {
@@ -310,6 +313,7 @@ namespace mps {
                     };
 
                     SlicePtr getSlice(ompl::planning::essentials::MotionPtr motion) const;
+                    float distanceToSlice(ompl::planning::essentials::MotionPtr motion, SlicePtr slice) const;
                     void getKSlices(ompl::planning::essentials::MotionPtr motion,
                                     unsigned int k,
                                     std::vector<SlicePtr>& slices) const;
