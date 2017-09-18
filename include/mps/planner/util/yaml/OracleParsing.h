@@ -37,6 +37,9 @@ namespace mps {
                     float t_max;
                     Eigen::Vector3f goal_position;
                     float goal_region_radius;
+                    float goal_bias;
+                    float target_bias;
+                    float robot_bias;
                     mps::planner::pushing::PlanningProblem::OracleType oracle_type;
                     mps::planner::pushing::PlanningProblem::AlgorithmType algorithm_type;
                     unsigned int num_control_samples;
@@ -88,6 +91,9 @@ namespace YAML {
             // todo weight map
             node["control_limits"] = problem_desc.control_limits;
             node["t_max"] = problem_desc.t_max;
+            node["robot_bias"] = problem_desc.robot_bias;
+            node["target_bias"] = problem_desc.target_bias;
+            node["goal_bias"] = problem_desc.goal_bias;
             node["goal_position"] = problem_desc.goal_position;
             node["goal_region_radius"] = problem_desc.goal_region_radius;
             node["oracle_type"] = mps::planner::util::yaml::oracleTypeToString(problem_desc.oracle_type);
@@ -115,6 +121,9 @@ namespace YAML {
             problem_desc.oracle_type = mps::planner::util::yaml::stringToOracleType(node["oracle_type"].as<std::string>());
             problem_desc.algorithm_type = mps::planner::util::yaml::stringToAlgorithmType(node["algorithm_type"].as<std::string>());
             problem_desc.num_control_samples = node["num_control_samples"].as<unsigned int>();
+            problem_desc.robot_bias = node["robot_bias"].as<float>();
+            problem_desc.target_bias = node["target_bias"].as<float>();
+            problem_desc.goal_bias = node["goal_bias"].as<float>();
             return true;
         }
     };

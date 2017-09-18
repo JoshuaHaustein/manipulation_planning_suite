@@ -39,6 +39,10 @@ PlanningProblem::PlanningProblem(sim_env::WorldPtr world, sim_env::RobotPtr robo
     b_semi_dynamic = true;
     t_max = 8.0f;
     goal_region_radius = 0.05f;
+    goal_bias = 0.1f;
+    robot_bias = 0.1f;
+    target_bias = 0.1f;
+    num_slice_neighbors = 8;
     // create default workspace limits
     workspace_bounds.x_limits[0] = std::numeric_limits<float>::lowest();
     workspace_bounds.x_limits[1] = std::numeric_limits<float>::max();
@@ -149,6 +153,10 @@ bool OraclePushPlanner::solve(PlanningSolution& solution) {
                                                   _planning_problem.robot->getName());
     pq.stopping_condition = _planning_problem.stopping_condition;
     pq.weights = _distance_weights;
+    pq.num_slice_neighbors = _planning_problem.num_slice_neighbors;
+    pq.goal_bias = _planning_problem.goal_bias;
+    pq.robot_bias = _planning_problem.robot_bias;
+    pq.target_bias = _planning_problem.target_bias;
     solution.path = std::make_shared<mps::planner::ompl::planning::essentials::Path>(_space_information);
     solution.solved = _algorithm->plan(pq, solution.path, solution.stats);
     _state_space->freeState(start_state);
@@ -291,6 +299,7 @@ void OraclePushPlanner::prepareCollisionPolicy() {
     // TODO make this settable from the outside
     std::string robot_name = _planning_problem.robot->getName();
     _collision_policy.setStaticCollisions(robot_name, false);
+    _collision_policy.setStaticCollisions(false);
 }
 
 mps::planner::pushing::algorithm::RearrangementRRTPtr OraclePushPlanner::createAlgorithm(const PlanningProblem& pp) const {

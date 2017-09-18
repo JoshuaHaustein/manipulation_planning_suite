@@ -55,6 +55,10 @@ namespace mps {
                 OracleType oracle_type;
                 AlgorithmType algorithm_type;
                 unsigned int num_control_samples;
+                float goal_bias;
+                float robot_bias;
+                float target_bias;
+                unsigned int num_slice_neighbors;
                 // flag whether to enable debug info
                 bool debug;
                 // TODO more parameters, like distance weights, workspace bounds, goal region

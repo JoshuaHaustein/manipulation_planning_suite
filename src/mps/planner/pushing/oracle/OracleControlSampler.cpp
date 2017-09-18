@@ -129,12 +129,18 @@ bool OracleControlSampler::steerPush(std::vector<::ompl::control::Control const 
     current_robot_state->getConfiguration(current_robot_config);
     _pushing_oracle->prepareOracle(current_robot_config, current_obj_config, dest_obj_config);
     // now ask the pushing oracle for pushability
+//    float pushability = _pushing_oracle->predictPushability(current_obj_config, dest_obj_config);
+//    if (pushability < _params.min_pushability) {// bigger is better (1 / mahalanobis distance?)
+//        mps_logging::logDebug(boost::format("Pushability is only %f, sampling random action") % pushability,
+//                              log_prefix);
+//        return false;
+//    }
+    // TODO needs to be evaluated
+    mps_logging::logDebug(boost::format("Projecting object state %1% to pushability distribution") % dest_obj_config.transpose(), log_prefix);
+    _pushing_oracle->projectToPushability(current_obj_config, dest_obj_config, dest_obj_config);
+    mps_logging::logDebug(boost::format("Projected state to %1%") % dest_obj_config.transpose(), log_prefix);
     float pushability = _pushing_oracle->predictPushability(current_obj_config, dest_obj_config);
-    if (pushability < _params.min_pushability) {// bigger is better (1 / mahalanobis distance?)
-        mps_logging::logDebug(boost::format("Pushability is only %f, sampling random action") % pushability,
-                              log_prefix);
-        return false;
-    }
+    mps_logging::logDebug(boost::format("New pushability is %f") % pushability, log_prefix);
     // the oracle can help us at least a little bit
     mps_logging::logDebug("Sufficient pushability. Asking the pushing oracle for feasibility",
                           log_prefix);

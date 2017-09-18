@@ -15,6 +15,15 @@ void mps::planner::util::math::normalize_orientation(double& value) {
     value = v;
 }
 
+void mps::planner::util::math::normalize_orientation(float& value) {
+    float v = fmod(value, 2.0f * boost::math::constants::pi<float>());
+    if (v < -boost::math::constants::pi<float>())
+        v += 2.0f * boost::math::constants::pi<float>();
+    else if (v >= boost::math::constants::pi<float>())
+        v -= 2.0f * boost::math::constants::pi<float>();
+    value = v;
+}
+
 /**
  * Returns the shortest direction from val_1 to val_2 assuming that both values
  * are angles in radian in [-pi, pi)

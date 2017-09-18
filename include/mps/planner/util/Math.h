@@ -10,6 +10,7 @@ namespace mps {
         namespace util {
             namespace math {
                 void normalize_orientation(double& value);
+                void normalize_orientation(float& value);
                 float shortest_direction_so2(float val_1, float val_2);
             }
         }

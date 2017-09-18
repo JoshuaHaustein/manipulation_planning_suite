@@ -22,6 +22,10 @@ namespace mps {
                     float predictPushability(const Eigen::VectorXf &current_obj_state,
                                              const Eigen::VectorXf &next_obj_state) override;
 
+                    void projectToPushability(const Eigen::VectorXf& current_obj_state,
+                                              const Eigen::VectorXf& next_obj_state,
+                                              Eigen::VectorXf& output, float num_std=1.0f) override;
+
                     float predictFeasibility(const Eigen::VectorXf &current_robot_state,
                                              const Eigen::VectorXf &current_obj_state,
                                              const Eigen::VectorXf &next_obj_state) override;

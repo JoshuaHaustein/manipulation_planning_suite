@@ -36,6 +36,20 @@ namespace mps {
                      */
                     virtual float predictPushability(const Eigen::VectorXf& current_obj_state,
                                                      const Eigen::VectorXf& next_obj_state) = 0;
+
+                    /**
+                     * Projects the given next_obj_state on to a state output such that the direction
+                     * from current_obj_state to output is the same as from current_obj_state to next_obj_state
+                     * and the output state is within num_std * standard deviations of pushability away from current_obj_state.
+                     * @param current_obj_state - current object state
+                     * @param next_obj_state - next object state
+                     * @param output - projected state
+                     * @param num_std - multiplier denoting how many stds away from current_obj_state output state can be
+                     */
+                    virtual void projectToPushability(const Eigen::VectorXf& current_obj_state,
+                                                    const Eigen::VectorXf& next_obj_state,
+                                                    Eigen::VectorXf& output, float num_std=1.0f) = 0;
+
                     /**
                      * Predicts the feasibility of the oracle given the current robot state, object state
                      * and the desired future object state. Another interpretation of the feasibility

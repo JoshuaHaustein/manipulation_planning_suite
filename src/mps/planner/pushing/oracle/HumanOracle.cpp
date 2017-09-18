@@ -1,9 +1,11 @@
 #include <mps/planner/pushing/oracle/HumanOracle.h>
 #include <boost/math/constants/constants.hpp>
 #include <mps/planner/util/Math.h>
+#include <mps/planner/util/Logging.h>
 
 using namespace mps::planner::pushing::oracle;
 namespace b_math = boost::math;
+namespace mps_logging = mps::planner::util::logging;
 
 HumanOracle::Parameters::Parameters() {
     pushability_covariance.setIdentity();
@@ -47,6 +49,32 @@ float HumanOracle::predictPushability(const Eigen::VectorXf &current_obj_state,
     float maha_dist = std::sqrt(rel_se2.transpose().dot(_params._inv_pushability_covariance * rel_se2));
     if (maha_dist == 0.0) return std::numeric_limits<float>::max();
     return 1.0f / maha_dist;
+}
+
+void HumanOracle::projectToPushability(const Eigen::VectorXf& current_obj_state,
+                                       const Eigen::VectorXf& next_obj_state,
+                                       Eigen::VectorXf& output, float num_std)
+{
+    static const std::string log_prefix("[mps::planner::oracle::HumanOracle::projectToPushability]");
+    assert(current_obj_state.size() == 3);
+    assert(next_obj_state.size() == 3);
+    mps_logging::logDebug(boost::format("Projecting state %1% given current object state %2%") % next_obj_state.transpose() % current_obj_state.transpose(), log_prefix);
+    output.conservativeResize(3);
+    Eigen::Vector3f rel_se2(relativeSE2(next_obj_state, current_obj_state));
+    // TODO Do we need to treat R^2 and SO(2) separately here?
+    float maha_dist = std::sqrt(rel_se2.transpose().dot(_params._inv_pushability_covariance * rel_se2));
+    if (maha_dist == 0.0f) {
+        output = current_obj_state;
+    }
+    if (maha_dist > num_std) { // only do sth if the next object state is further away than num_std standard deviations
+        for (unsigned int i = 0; i < 3; ++i) {
+            output[i] = current_obj_state[i] + num_std * 1.0f / maha_dist * rel_se2[i];
+        }
+        mps::planner::util::math::normalize_orientation(output[2]);
+    } else {
+        output = next_obj_state;
+    }
+    mps_logging::logDebug(boost::format("Output state is %1%") % output.transpose(), log_prefix);
 }
 
 float HumanOracle::predictFeasibility(const Eigen::VectorXf &current_robot_state,

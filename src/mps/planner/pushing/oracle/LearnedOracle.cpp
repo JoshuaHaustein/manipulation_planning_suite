@@ -72,6 +72,14 @@ float mps::planner::pushing::oracle::LearnedPipeOracle::predictPushability(const
     return (float)(1.0 / (response.mahalanobis() + 1e-9));
 }
 
+void mps::planner::pushing::oracle::LearnedPipeOracle::projectToPushability(const Eigen::VectorXf& current_obj_state,
+                                                                            const Eigen::VectorXf& next_obj_state,
+                                                                            Eigen::VectorXf& output,
+                                                                            float num_std)
+{
+    // TODO
+}
+
 float mps::planner::pushing::oracle::LearnedPipeOracle::predictFeasibility(const Eigen::VectorXf &current_robot_state,
                                                                            const Eigen::VectorXf &current_obj_state,
                                                                            const Eigen::VectorXf &next_obj_state) {

@@ -664,5 +664,8 @@ float SliceBasedOracleRRT::evaluateFeasibility(ompl::planning::essentials::Motio
     Eigen::VectorXf eigen_next_object = to_object_state->getConfiguration();
     // prepare oracle and let it predict feasibility
     _pushing_oracle->prepareOracle(eigen_current_robot, eigen_current_object, eigen_next_object);
-    return _pushing_oracle->predictFeasibility(eigen_current_robot, eigen_current_object, eigen_next_object);
+    ////////////////////////////////////////// Pushability projection //////////////////////////////////////
+    Eigen::VectorXf projected_object_state;
+    _pushing_oracle->projectToPushability(eigen_current_object, eigen_next_object, projected_object_state);
+    return _pushing_oracle->predictFeasibility(eigen_current_robot, eigen_current_object, projected_object_state);
 }
