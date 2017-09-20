@@ -68,6 +68,8 @@ PlanningProblem::PlanningProblem(sim_env::WorldPtr world, sim_env::RobotPtr robo
     debug = false;
     num_control_samples = 10;
     stopping_condition = [](){return false;};
+    collision_policy.setStaticCollisions(true);
+    collision_policy.setStaticCollisions(robot->getName(), false);
 }
 
 PlanningSolution::PlanningSolution() : path(nullptr), solved(false) {
@@ -105,12 +107,11 @@ bool OraclePushPlanner::setup(PlanningProblem& problem) {
             std::make_shared<mps::planner::ompl::state::SimEnvValidityChecker>(_space_information,
                                                                                _planning_problem.world);
     _space_information->setStateValidityChecker(_validity_checker);
-    prepareCollisionPolicy();
     _state_propagator =
             std::make_shared<mps::planner::ompl::control::SimEnvStatePropagator>(_space_information,
                                                                                  _planning_problem.world,
                                                                                  _planning_problem.robot_controller,
-                                                                                 _collision_policy,
+                                                                                 _planning_problem.collision_policy,
                                                                                  _planning_problem.b_semi_dynamic,
                                                                                  _planning_problem.t_max);
     prepareDistanceWeights();
@@ -165,6 +166,7 @@ bool OraclePushPlanner::solve(PlanningSolution& solution) {
 
 void OraclePushPlanner::playback(const PlanningSolution& solution) {
     if (solution.solved) {
+        clearVisualizations();
         mps::planner::util::playback::playPath(_planning_problem.world,
                                                _planning_problem.robot_controller,
                                                _state_space,
@@ -295,13 +297,6 @@ void OraclePushPlanner::prepareDistanceWeights() {
     }
 }
 
-void OraclePushPlanner::prepareCollisionPolicy() {
-    // TODO make this settable from the outside
-    std::string robot_name = _planning_problem.robot->getName();
-    _collision_policy.setStaticCollisions(robot_name, false);
-    _collision_policy.setStaticCollisions(false);
-}
-
 mps::planner::pushing::algorithm::RearrangementRRTPtr OraclePushPlanner::createAlgorithm(const PlanningProblem& pp) const {
     static const std::string log_prefix("[mps::planner::pushing::OraclePushPlanner::createAlgorithm]");
     mps::planner::pushing::algorithm::RearrangementRRTPtr algo;
@@ -329,7 +324,7 @@ mps::planner::pushing::algorithm::RearrangementRRTPtr OraclePushPlanner::createA
             {
                 // mps::planner::pushing::oracle::PushingOraclePtr pushing_oracle = std::make_shared<oracle::LearnedPipeOracle>();
                 // TODO fix me
-                mps::planner::pushing::oracle::PushingOraclePtr pushing_oracle = nullptr;
+                pushing_oracle = nullptr;
                 util::logging::logDebug("Using learned oracle!", log_prefix);
                 break;
             }

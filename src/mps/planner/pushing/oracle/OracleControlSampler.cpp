@@ -12,7 +12,7 @@ namespace mps_logging = mps::planner::util::logging;
 OracleControlSampler::Parameters::Parameters() {
     // TODO what are reasonable values here? Should these values be inside of the oracles instead?
     min_feasibility = 0.05;
-    min_pushability = 0.4;
+    min_pushability = 1.0;
 }
 
 OracleControlSampler::OracleControlSampler(::ompl::control::SpaceInformationPtr si,
@@ -127,9 +127,8 @@ bool OracleControlSampler::steerPush(std::vector<::ompl::control::Control const 
     dest_obj_state->getConfiguration(dest_obj_config);
     Eigen::VectorXf current_robot_config;
     current_robot_state->getConfiguration(current_robot_config);
-    _pushing_oracle->prepareOracle(current_robot_config, current_obj_config, dest_obj_config);
     // now ask the pushing oracle for pushability
-//    float pushability = _pushing_oracle->predictPushability(current_obj_config, dest_obj_config);
+//    float pushability = _pushing_oracle->predictPushability(current_obj_config, dest_obj_config, object_id);
 //    if (pushability < _params.min_pushability) {// bigger is better (1 / mahalanobis distance?)
 //        mps_logging::logDebug(boost::format("Pushability is only %f, sampling random action") % pushability,
 //                              log_prefix);
@@ -137,22 +136,21 @@ bool OracleControlSampler::steerPush(std::vector<::ompl::control::Control const 
 //    }
     // TODO needs to be evaluated
     mps_logging::logDebug(boost::format("Projecting object state %1% to pushability distribution") % dest_obj_config.transpose(), log_prefix);
-    _pushing_oracle->projectToPushability(current_obj_config, dest_obj_config, dest_obj_config);
+    _pushing_oracle->projectToPushability(current_obj_config, dest_obj_config, _params.min_pushability, object_id, dest_obj_config);
     mps_logging::logDebug(boost::format("Projected state to %1%") % dest_obj_config.transpose(), log_prefix);
-    float pushability = _pushing_oracle->predictPushability(current_obj_config, dest_obj_config);
+    // TODO do not need to actually compute pushability
+    float pushability = _pushing_oracle->predictPushability(current_obj_config, dest_obj_config, object_id);
     mps_logging::logDebug(boost::format("New pushability is %f") % pushability, log_prefix);
     // the oracle can help us at least a little bit
-    mps_logging::logDebug("Sufficient pushability. Asking the pushing oracle for feasibility",
-                          log_prefix);
-    // ask for feasability
+    // ask for feasibility
     float feasibility = _pushing_oracle->predictFeasibility(current_robot_config, current_obj_config,
-                                                           dest_obj_config);
+                                                            dest_obj_config, object_id);
     // if we have too low feasibility, steer robot to a better state
     if (feasibility < _params.min_feasibility) {
         mps_logging::logDebug(boost::format("Feasibility is only %f, steering robot") % feasibility,
                               log_prefix);
         Eigen::VectorXf new_robot_dest(_robot_state->getConfiguration());
-        _pushing_oracle->sampleFeasibleState(new_robot_dest, current_obj_config, dest_obj_config);
+        _pushing_oracle->sampleFeasibleState(current_obj_config, dest_obj_config, object_id, new_robot_dest);
         mps_logging::logDebug(boost::format("Sampled robot state %1% based on feasibility") % new_robot_dest.transpose(), log_prefix);
         // the oracle gave us a new robot state we should move to instead
         _robot_state->setConfiguration(new_robot_dest);
@@ -161,7 +159,8 @@ bool OracleControlSampler::steerPush(std::vector<::ompl::control::Control const 
     // The oracle is confident it can help
     mps_logging::logDebug("The oracle is confident it can help.", log_prefix);
     Eigen::VectorXf control_param;
-    _pushing_oracle->predictAction(current_robot_config, current_obj_config, dest_obj_config, control_param);
+    _pushing_oracle->predictAction(current_robot_config, current_obj_config, dest_obj_config,
+                                   object_id, control_param);
     auto* control = getControl();
     control->setParameters(control_param);
     controls.push_back((::ompl::control::Control const*)control);

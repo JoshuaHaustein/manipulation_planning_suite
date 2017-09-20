@@ -1067,6 +1067,22 @@ std::size_t SimEnvValidityChecker::CollisionPolicy::PairHash::operator()(
     return key.first == key.second ? hash_fn(key.first) : hash_fn(key.first) ^ hash_fn(key.second);
 }
 
+void SimEnvValidityChecker::CollisionPolicy::getForbiddenCollisionPairs(
+        std::vector<std::pair<std::string, std::string> > &pairs) {
+    for (auto& iter : _forbidden_collisions) {
+        if (iter.second) {
+            pairs.push_back(iter.first);
+        }
+    }
+}
+
+void SimEnvValidityChecker::CollisionPolicy::getForbiddenStaticCollisions(std::vector<std::string>& black_list) {
+    for (auto& iter : _static_collisions) {
+        if (iter.second) {
+            black_list.push_back(iter.first);
+        }
+    }
+}
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////// SimEnvValidityChecker /////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////

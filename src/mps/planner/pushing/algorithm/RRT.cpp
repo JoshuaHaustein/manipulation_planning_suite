@@ -73,10 +73,17 @@ void RearrangementRRT::DebugDrawer::addNewMotion(MotionPtr motion) {
     auto* new_state = dynamic_cast<ompl::state::SimEnvWorldState*>(motion->getState());
     auto* parent_object_state = parent_state->getObjectState(_robot_id);
     auto* new_object_state = new_state->getObjectState(_robot_id);
-    drawStateTransition(parent_object_state, new_object_state, Eigen::Vector4f(0.1, 0, 0.7, 1));
+    drawStateTransition(parent_object_state, new_object_state, Eigen::Vector4f(0.4, 0, 0.9, 1));
     parent_object_state = parent_state->getObjectState(_target_id);
     new_object_state = new_state->getObjectState(_target_id);
     drawStateTransition(parent_object_state, new_object_state, Eigen::Vector4f(0, 0.7, 0, 1));
+    for (unsigned int i = 0; i < new_state->getNumObjects(); ++i) {
+        if ((i != _target_id) and (i != _robot_id)) {
+            parent_object_state = parent_state->getObjectState(i);
+            new_object_state = new_state->getObjectState(i);
+            drawStateTransition(parent_object_state, new_object_state, Eigen::Vector4f(0.9, 0.9, 0.9, 0.4));
+        }
+    }
 }
 
 void RearrangementRRT::DebugDrawer::clear() {
@@ -663,9 +670,9 @@ float SliceBasedOracleRRT::evaluateFeasibility(ompl::planning::essentials::Motio
     Eigen::VectorXf eigen_current_object = from_object_state->getConfiguration();
     Eigen::VectorXf eigen_next_object = to_object_state->getConfiguration();
     // prepare oracle and let it predict feasibility
-    _pushing_oracle->prepareOracle(eigen_current_robot, eigen_current_object, eigen_next_object);
     ////////////////////////////////////////// Pushability projection //////////////////////////////////////
     Eigen::VectorXf projected_object_state;
-    _pushing_oracle->projectToPushability(eigen_current_object, eigen_next_object, projected_object_state);
-    return _pushing_oracle->predictFeasibility(eigen_current_robot, eigen_current_object, projected_object_state);
+    // TODO minimal pushability needs to be externally settable
+    _pushing_oracle->projectToPushability(eigen_current_object, eigen_next_object, 1.0f, target_id, projected_object_state);
+    return _pushing_oracle->predictFeasibility(eigen_current_robot, eigen_current_object, projected_object_state, target_id);
 }

@@ -438,6 +438,9 @@ namespace mps {
                         struct PairHash {
                             std::size_t operator()(const std::pair<std::string, std::string>& key) const;
                         };
+
+                        void getForbiddenCollisionPairs(std::vector< std::pair< std::string, std::string> >& pairs);
+                        void getForbiddenStaticCollisions(std::vector<std::string>& black_list);
                     private:
                         bool _b_static_col_allowed;
                         std::unordered_map< std::pair<std::string, std::string>, bool, PairHash> _forbidden_collisions;

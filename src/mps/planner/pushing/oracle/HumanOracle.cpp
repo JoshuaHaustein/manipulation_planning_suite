@@ -32,15 +32,9 @@ HumanOracle::HumanOracle(RampComputerPtr ramp_computer,
 
 HumanOracle::~HumanOracle() = default;
 
-void HumanOracle::prepareOracle(const Eigen::VectorXf &current_robot_state,
-                                const Eigen::VectorXf &current_obj_state,
-                                const Eigen::VectorXf &next_obj_state)
-{
-    // nothing to do
-}
-
 float HumanOracle::predictPushability(const Eigen::VectorXf &current_obj_state,
-                                      const Eigen::VectorXf &next_obj_state) {
+                                      const Eigen::VectorXf &next_obj_state,
+                                      const unsigned int& obj_id) {
     assert(current_obj_state.size() == 3);
     assert(current_obj_state.size() == next_obj_state.size());
     // todo we assume object state is in SE(2)
@@ -53,7 +47,9 @@ float HumanOracle::predictPushability(const Eigen::VectorXf &current_obj_state,
 
 void HumanOracle::projectToPushability(const Eigen::VectorXf& current_obj_state,
                                        const Eigen::VectorXf& next_obj_state,
-                                       Eigen::VectorXf& output, float num_std)
+                                       const float& num_std,
+                                       const unsigned int& obj_id,
+                                       Eigen::VectorXf& output)
 {
     static const std::string log_prefix("[mps::planner::oracle::HumanOracle::projectToPushability]");
     assert(current_obj_state.size() == 3);
@@ -79,7 +75,9 @@ void HumanOracle::projectToPushability(const Eigen::VectorXf& current_obj_state,
 
 float HumanOracle::predictFeasibility(const Eigen::VectorXf &current_robot_state,
                                       const Eigen::VectorXf &current_obj_state,
-                                      const Eigen::VectorXf &next_obj_state) {
+                                      const Eigen::VectorXf &next_obj_state,
+                                      const unsigned int& obj_id)
+{
     assert(current_obj_state.size() == 3 && next_obj_state.size() == 3);
     Eigen::Vector3f obj_diff(relativeSE2(next_obj_state, current_obj_state));
     Eigen::Vector3f rel_robot(relativeSE2(current_robot_state, current_obj_state));
@@ -111,6 +109,7 @@ float HumanOracle::predictFeasibility(const Eigen::VectorXf &current_robot_state
 void HumanOracle::predictAction(const Eigen::VectorXf &current_robot_state,
                                 const Eigen::VectorXf &current_obj_state,
                                 const Eigen::VectorXf &next_obj_state,
+                                const unsigned int& obj_id,
                                 Eigen::VectorXf &control)
 {
     Eigen::Vector3f rel_obj(relativeSE2(next_obj_state, current_obj_state));
@@ -124,9 +123,11 @@ void HumanOracle::predictAction(const Eigen::VectorXf &current_robot_state,
     control = controls.at(0);
 }
 
-void HumanOracle::sampleFeasibleState(Eigen::VectorXf &new_robot_state,
-                                      const Eigen::VectorXf &current_obj_state,
-                                      const Eigen::VectorXf &next_obj_state) {
+void HumanOracle::sampleFeasibleState(const Eigen::VectorXf &current_obj_state,
+                                      const Eigen::VectorXf &next_obj_state,
+                                      const unsigned int& obj_id,
+                                      Eigen::VectorXf &new_robot_state)
+{
     double pushing_dist = _rng->gaussian(_params.optimal_push_distance, _params.push_distance_tolerance);
     double angle = _rng->gaussian(0.0, _params.push_angle_tolerance);
     Eigen::Vector3f rel_obj(relativeSE2(next_obj_state, current_obj_state));

@@ -37,6 +37,7 @@ namespace mps {
                 // restrictions on the world
                 std::map<std::string, Eigen::VectorXi> active_dofs;
                 mps::planner::ompl::state::PlanningSceneBounds workspace_bounds;
+                mps::planner::ompl::state::SimEnvValidityChecker::CollisionPolicy collision_policy;
                 // time out for planner
                 float planning_time_out;
                 std::function<bool()> stopping_condition;
@@ -120,10 +121,8 @@ namespace mps {
                 PlanningProblem _planning_problem;
                 mps::planner::pushing::algorithm::RearrangementRRTPtr _algorithm;
                 mps::planner::pushing::algorithm::RearrangementRRT::DebugDrawerPtr _debug_drawer;
-                mps::planner::ompl::state::SimEnvValidityChecker::CollisionPolicy _collision_policy;
                 std::vector<float> _distance_weights;
                 void prepareDistanceWeights();
-                void prepareCollisionPolicy();
                 mps::planner::pushing::algorithm::RearrangementRRTPtr createAlgorithm(const PlanningProblem& pp) const;
 //                ::ompl::control::DirectedControlSamplerPtr allocateDirectedControlSampler(const ::ompl::control::SpaceInformation* si);
             };
