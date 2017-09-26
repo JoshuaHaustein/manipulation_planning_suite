@@ -197,14 +197,13 @@ void SimEnvObjectConfigurationSpace::freeState(::ompl::base::State* state) const
     delete configuration;
 }
 
-//void SimEnvObjectConfigurationSpace::computeDirection(StateType const* state_1,
-//                                                      StateType const* state_2,
-//                                                      Eigen::VectorXf& dir) const {
-//    Eigen::VectorXf a = state_1->getConfiguration();
-//    Eigen::VectorXf b = state_2->getConfiguration(),
-//    computeDirection()
-//    computeDirection(a, b, dir);
-//}
+void SimEnvObjectConfigurationSpace::computeDirection(StateType const* state_1,
+                                                      StateType const* state_2,
+                                                      Eigen::VectorXf& dir) const {
+    Eigen::VectorXf a = state_1->getConfiguration();
+    Eigen::VectorXf b = state_2->getConfiguration();
+    computeDirection(a, b, dir);
+}
 
 void SimEnvObjectConfigurationSpace::computeDirection(const Eigen::VectorXf& config_1,
                                                       const Eigen::VectorXf& config_2,
@@ -522,6 +521,16 @@ void SimEnvObjectVelocitySpace::freeState(::ompl::base::State* state) const {
     delete velocity;
 }
 
+void SimEnvObjectVelocitySpace::computeDirection(const StateType* state_a,
+                                                 const StateType* state_b,
+                                                 Eigen::VectorXf& dir) const {
+    Eigen::VectorXf vel_a;
+    state_a->getVelocity(vel_a);
+    Eigen::VectorXf vel_b;
+    state_b->getVelocity(vel_b);
+    dir = vel_b - vel_a;
+}
+
 void SimEnvObjectVelocitySpace::addPoseVelocitySubspace(sim_env::ObjectConstPtr object) {
     if (object->isStatic()) { // no pose velocity subspace to add
         return;
@@ -633,6 +642,10 @@ void SimEnvObjectStateSpace::StateType::getConfiguration(Eigen::VectorXf& config
     config_component->getConfiguration(config);
 }
 
+SimEnvObjectConfiguration* SimEnvObjectStateSpace::StateType::getConfigurationState() const {
+    return components[0]->as<SimEnvObjectConfiguration>();
+}
+
 void SimEnvObjectStateSpace::StateType::setConfiguration(const Eigen::VectorXf& config) {
     auto* config_component = components[0]->as<SimEnvObjectConfiguration>();
     config_component->setConfiguration(config);
@@ -656,6 +669,13 @@ void SimEnvObjectStateSpace::StateType::getVelocity(Eigen::VectorXf& vel) const 
     }
     auto* vel_component = components[1]->as<SimEnvObjectVelocity>();
     vel_component->getVelocity(vel);
+}
+
+SimEnvObjectVelocity* SimEnvObjectStateSpace::StateType::getVelocityState() const {
+    if (hasVelocity()) {
+        return components[1]->as<SimEnvObjectVelocity>();
+    }
+    return nullptr;
 }
 
 void SimEnvObjectStateSpace::StateType::setVelocity(const Eigen::VectorXf& vel) {
@@ -724,6 +744,46 @@ SimEnvObjectVelocitySpacePtr SimEnvObjectStateSpace::getVelocitySpace() {
         return std::dynamic_pointer_cast<SimEnvObjectVelocitySpace>(getSubspace(1));
     }
     return nullptr;
+}
+
+SimEnvObjectConfigurationSpaceConstPtr SimEnvObjectStateSpace::getConfigurationSpaceConst() const {
+    return std::dynamic_pointer_cast<const SimEnvObjectConfigurationSpace>(getSubspace(0));
+}
+
+SimEnvObjectVelocitySpaceConstPtr SimEnvObjectStateSpace::getVelocitySpaceConst() const{
+    if (not _position_only) {
+        return std::dynamic_pointer_cast<const SimEnvObjectVelocitySpace>(getSubspace(1));
+    }
+    return nullptr;
+}
+
+void SimEnvObjectStateSpace::computeDirection(const StateType* state_a,
+                                              const StateType* state_b,
+                                              Eigen::VectorXf& dir) const
+{
+    dir.resize(getDimension());
+    auto configuration_space = getConfigurationSpaceConst();
+    Eigen::VectorXf sub_dir;
+    configuration_space->computeDirection(state_a->getConfigurationState(), state_b->getConfigurationState(), sub_dir);
+    dir.head(sub_dir.size()) = sub_dir;
+    if (not _position_only) {
+        auto velocity_space = getVelocitySpaceConst();
+        velocity_space->computeDirection(state_a->getVelocityState(), state_b->getVelocityState(), sub_dir);
+        dir.tail(sub_dir.size()) = sub_dir;
+    }
+}
+
+void SimEnvObjectStateSpace::shiftState(StateType* state, const Eigen::VectorXf& dir) const {
+    Eigen::VectorXf config;
+    state->getConfiguration(config);
+    config += dir.segment(0, config.size());
+    state->setConfiguration(config);
+    if (not _position_only) {
+        Eigen::VectorXf vel;
+        state->getVelocity(vel);
+        vel += dir.tail(config.size());
+        state->setVelocity(vel);
+    }
 }
 
 ::ompl::base::State* SimEnvObjectStateSpace::allocState() const {
@@ -843,6 +903,18 @@ double SimEnvWorldStateSpace::distance(const ::ompl::base::State* state_1, const
     return ::ompl::base::CompoundStateSpace::distance(state_1, state_2);
 }
 
+void SimEnvWorldStateSpace::copySubState(::ompl::base::State *state_1,
+                                      const ::ompl::base::State *state_2,
+                                      unsigned int obj_id) const
+{
+    auto* world_state_1 = static_cast<SimEnvWorldState*>(state_1);
+    auto* world_state_2 = static_cast<const SimEnvWorldState*>(state_2);
+    auto object_state_1 = world_state_1->getObjectState(obj_id);
+    auto object_state_2 = world_state_2->getObjectState(obj_id);
+    auto subspace = getSubspace(obj_id);
+    subspace->copyState(object_state_1, object_state_2);
+}
+
 sim_env::ObjectConstPtr SimEnvWorldStateSpace::getObject(unsigned int i) const {
     if (i >= _object_names.size()) {
         return nullptr;
@@ -878,7 +950,46 @@ SimEnvObjectStateSpacePtr SimEnvWorldStateSpace::getObjectStateSpace(const std::
     if (obj_idx < 0) {
         return nullptr;
     }
-    return std::dynamic_pointer_cast<SimEnvObjectStateSpace>(getSubspace((unsigned int)obj_idx));
+    return getObjectStateSpace((unsigned int)obj_idx);
+}
+
+SimEnvObjectStateSpacePtr SimEnvWorldStateSpace::getObjectStateSpace(unsigned int obj_idx) {
+    if (obj_idx > getNumObjects()) {
+        return nullptr;
+    }
+    return std::dynamic_pointer_cast<SimEnvObjectStateSpace>(getSubspace(obj_idx));
+}
+
+SimEnvObjectStateSpaceConstPtr SimEnvWorldStateSpace::getObjectStateSpaceConst(unsigned int obj_idx) const {
+    if (obj_idx > getNumObjects()) {
+        return nullptr;
+    }
+    return std::dynamic_pointer_cast<const SimEnvObjectStateSpace>(getSubspace(obj_idx));
+}
+
+void SimEnvWorldStateSpace::computeDirection(StateType const* state_a, StateType const* state_b, Eigen::VectorXf& dir) const {
+    dir.resize(getDimension());
+    assert(getNumObjects() == getSubspaceCount());
+    unsigned int dim_offset = 0;
+    for (unsigned int sub_idx = 0; sub_idx < getSubspaceCount(); ++sub_idx) {
+        auto sub_space = std::dynamic_pointer_cast<SimEnvObjectStateSpace>(getSubspace(sub_idx));
+        Eigen::VectorXf obj_dir;
+        sub_space->computeDirection(state_a->getObjectState(sub_idx), state_b->getObjectState(sub_idx), obj_dir);
+        dir.segment(dim_offset, obj_dir.size()) = obj_dir;
+        dim_offset += obj_dir.size();
+    }
+}
+
+void SimEnvWorldStateSpace::shiftState(StateType *state, const Eigen::VectorXf &dir) const {
+    unsigned int dim_offset = 0;
+    assert(dir.size() == getDimension());
+    for (unsigned int obj_id = 0; obj_id < getNumObjects(); ++obj_id) {
+        auto obj_state = state->getObjectState(obj_id);
+        auto obj_state_space = getObjectStateSpaceConst(obj_id);
+        Eigen::VectorXf component_dir(dir.segment(dim_offset, obj_state_space->getDimension()));
+        obj_state_space->shiftState(obj_state, component_dir);
+        dim_offset += obj_state_space->getDimension();
+    }
 }
 
 void SimEnvWorldStateSpace::setToState(sim_env::WorldPtr world, const StateType* state) const {
