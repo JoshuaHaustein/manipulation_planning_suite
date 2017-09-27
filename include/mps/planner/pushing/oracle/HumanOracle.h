@@ -62,6 +62,8 @@ namespace mps {
                                              const unsigned int& obj_id,
                                              Eigen::VectorXf &new_robot_state) override;
 
+                    float getMaximalPushingDistance() const override;
+
                 private:
                     Parameters _params;
                     RampComputerPtr _ramp_computer;

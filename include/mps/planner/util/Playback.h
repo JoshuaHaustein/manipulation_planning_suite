@@ -22,11 +22,13 @@ namespace mps {
                  * @param robot - the robot that is executing the control actions stored in path
                  * @param state space - State space of the states in path. Required to interpret states.
                  * @param path - a path consisting of motions that store tuples (SimEnvWorldState, VelocityControl)
+                 * @param interrupt_callback - a function that returns true if the playback should be interrupted
                  */
                 void playPath(sim_env::WorldPtr world,
                               sim_env::RobotVelocityControllerPtr controller,
                               mps::planner::ompl::state::SimEnvWorldStateSpaceConstPtr state_space,
-                              const mps::planner::ompl::planning::essentials::PathConstPtr& path);
+                              const mps::planner::ompl::planning::essentials::PathConstPtr& path,
+                              const std::function<bool()>& interrupt_callback);
             }
         }
     }

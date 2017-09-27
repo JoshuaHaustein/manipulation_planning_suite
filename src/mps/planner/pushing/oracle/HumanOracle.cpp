@@ -131,6 +131,10 @@ void HumanOracle::sampleFeasibleState(const Eigen::VectorXf &current_obj_state,
     double pushing_dist = _rng->gaussian(_params.optimal_push_distance, _params.push_distance_tolerance);
     double angle = _rng->gaussian(0.0, _params.push_angle_tolerance);
     Eigen::Vector3f rel_obj(relativeSE2(next_obj_state, current_obj_state));
+    if (rel_obj.norm() == 0.0) {
+        rel_obj[0] = 0.0001 * (0.5f - _rng->uniform01());
+        rel_obj[1] = 0.0001 * (0.5f - _rng->uniform01());
+    }
     Eigen::Vector2f pushing_dir = rel_obj.head(2).normalized();
     Eigen::Rotation2Df rotation((float)angle);
     if (new_robot_state.size() < 3) new_robot_state.resize(3);
@@ -140,6 +144,11 @@ void HumanOracle::sampleFeasibleState(const Eigen::VectorXf &current_obj_state,
     new_robot_state.head(2) -= pushing_offset.head(2);
     // orient the robot so that it faces into the desired pushing direction
     new_robot_state[2] = std::acos(rel_obj[0] / rel_obj.head(2).norm());
+}
+
+float HumanOracle::getMaximalPushingDistance() const {
+    return std::sqrt(2.0f * _params.pushability_covariance(0,0) + 2.0f * _params.pushability_covariance(1,1))
+            + 0.01f * std::sqrt(_params.pushability_covariance(2, 2));
 }
 
 Eigen::Vector3f HumanOracle::relativeSE2(const Eigen::VectorXf& state, const Eigen::VectorXf& ref) {

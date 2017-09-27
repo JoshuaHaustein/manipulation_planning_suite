@@ -18,7 +18,8 @@ namespace oc = ompl::control;
 void mps::planner::util::playback::playPath(sim_env::WorldPtr world,
                                             sim_env::RobotVelocityControllerPtr controller,
                                             mps::planner::ompl::state::SimEnvWorldStateSpaceConstPtr state_space,
-                                            const mps::planner::ompl::planning::essentials::PathConstPtr &path) {
+                                            const mps::planner::ompl::planning::essentials::PathConstPtr &path,
+                                            const std::function<bool()>& interrupt_callback) {
     const std::string log_prefix("[mps::planner::util::playback::playPath]");
     if (!path or path->getNumMotions() <= 1) {
         logging::logWarn("The given path is non-existant, empty or trivial, i.e. only a single state. Nothing to playback.",
@@ -35,6 +36,7 @@ void mps::planner::util::playback::playPath(sim_env::WorldPtr world,
         auto* current_control = dynamic_cast<const mps_control::VelocityControl*>(control);
         float time = 0.0f;
         while (time < current_control->getMaxDuration()) {
+            if (interrupt_callback()) return;
             controller->setTargetVelocity(current_control->getVelocity(time));
             world->stepPhysics(1);
             std::this_thread::sleep_for(std::chrono::milliseconds(time_step_ms));

@@ -21,6 +21,8 @@ std::string mps::planner::util::yaml::algorithmTypeToString(mps::planner::pushin
             return "OracleRRT";
         case mps::planner::pushing::PlanningProblem::AlgorithmType::SliceOracleRRT:
             return "SliceOracleRRT";
+        case mps::planner::pushing::PlanningProblem::AlgorithmType::CompleteSliceOracleRRT:
+            return "CompleteSliceOracleRRT";
     }
 }
 
@@ -41,6 +43,8 @@ mps::planner::pushing::PlanningProblem::AlgorithmType mps::planner::util::yaml::
         return mps::planner::pushing::PlanningProblem::AlgorithmType::OracleRRT;
     } else if (str.compare("SliceOracleRRT") == 0) {
         return mps::planner::pushing::PlanningProblem::AlgorithmType::SliceOracleRRT;
+    } else if (str.compare("CompleteSliceOracleRRT") == 0) {
+        return mps::planner::pushing::PlanningProblem::AlgorithmType::CompleteSliceOracleRRT;
     } else {
         throw std::runtime_error("Unknown algorithm type encountered: " + str);
     }

@@ -51,6 +51,8 @@ namespace mps {
                                              const Eigen::VectorXf &next_obj_state,
                                              const unsigned int& obj_id,
                                              Eigen::VectorXf &new_robot_state) override;
+
+                    float getMaximalPushingDistance() const override;
                 private:
                     /* Paths to pipes for communication with oracle */
                     const char *_action_request_path;

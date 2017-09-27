@@ -193,6 +193,11 @@ void mps::planner::pushing::oracle::LearnedPipeOracle::sampleFeasibleState(const
     new_robot_state[2] = response.robot_radians();
 }
 
+float mps::planner::pushing::oracle::LearnedPipeOracle::getMaximalPushingDistance() const {
+    // TODO
+    return 0.1f;
+}
+
 //int main() {
 //    auto l  = mps::planner::pushing::oracle::LearnedPipeOracle();
 //    Eigen::Vector3f current_robot_state (0.0, 0.0, 0.0);

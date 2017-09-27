@@ -146,6 +146,12 @@ void SimEnvObjectConfigurationSpace::StateType::serializeInNumbers(std::ostream 
     ostream << getConfiguration().transpose().format(eigen_format);
 }
 
+std::string SimEnvObjectConfigurationSpace::StateType::toString() const {
+    std::stringstream ss;
+    serializeInNumbers(ss);
+    return ss.str();
+}
+
 ////////////////////////////////////////////////////////////////////////////////////////
 //////////////////////////// SimEnvObjectConfigurationSpace ////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////
@@ -208,6 +214,8 @@ void SimEnvObjectConfigurationSpace::computeDirection(StateType const* state_1,
 void SimEnvObjectConfigurationSpace::computeDirection(const Eigen::VectorXf& config_1,
                                                       const Eigen::VectorXf& config_2,
                                                       Eigen::VectorXf& dir) const {
+    static const std::string log_prefix("[mps::planner::ompl::state::SimEnvObjectConfigurationSpace::computeDirection]");
+    mps_logging::logDebug(boost::format("Computing direction from configuration %1% to configuration %2%") % config_1.transpose() % config_2.transpose(), log_prefix);
     assert(config_1.size() == config_2.size());
     dir.resize(config_1.size());
     unsigned int c_idx = 0;
@@ -235,6 +243,7 @@ void SimEnvObjectConfigurationSpace::computeDirection(const Eigen::VectorXf& con
         }
         c_idx += space_desc.dim;
     }
+    mps_logging::logDebug(boost::format("Computed direction is %1%") % dir.transpose(), log_prefix);
 }
 
 void SimEnvObjectConfigurationSpace::addPoseSubspace(sim_env::ObjectConstPtr object) {
@@ -469,6 +478,12 @@ void SimEnvObjectVelocitySpace::StateType::serializeInNumbers(std::ostream& ostr
     ostream << getVelocity().transpose().format(eigen_format);
 }
 
+std::string SimEnvObjectVelocitySpace::StateType::toString() const {
+    std::stringstream ss;
+    serializeInNumbers(ss);
+    return ss.str();
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////
 //////////////////////////// SimEnvObjectVelocitySpace ////////////////////////////////////
@@ -524,11 +539,14 @@ void SimEnvObjectVelocitySpace::freeState(::ompl::base::State* state) const {
 void SimEnvObjectVelocitySpace::computeDirection(const StateType* state_a,
                                                  const StateType* state_b,
                                                  Eigen::VectorXf& dir) const {
+    static const std::string log_prefix("[mps::planner::ompl::state::SimEnvObjectVelocitySpace::computeDirection]");
+    mps_logging::logDebug("Computing direction from state " + state_a->toString() + " to state " + state_b->toString(), log_prefix);
     Eigen::VectorXf vel_a;
     state_a->getVelocity(vel_a);
     Eigen::VectorXf vel_b;
     state_b->getVelocity(vel_b);
     dir = vel_b - vel_a;
+    mps_logging::logDebug(boost::format("Computed direction is %1%") % dir.transpose(), log_prefix);
 }
 
 void SimEnvObjectVelocitySpace::addPoseVelocitySubspace(sim_env::ObjectConstPtr object) {
@@ -700,6 +718,13 @@ void SimEnvObjectStateSpace::StateType::print(std::ostream& ostream) const {
     // TODO do we want to print more here?
     serializeInNumbers(ostream);
 }
+
+std::string SimEnvObjectStateSpace::StateType::toString() const {
+    std::stringstream ss;
+    print(ss);
+    return ss.str();
+}
+
 ////////////////////////////////////////////////////////////////////////////////////////
 //////////////////////////// SimEnvObjectStateSpace ////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////
@@ -761,6 +786,8 @@ void SimEnvObjectStateSpace::computeDirection(const StateType* state_a,
                                               const StateType* state_b,
                                               Eigen::VectorXf& dir) const
 {
+    static const std::string log_prefix("[mps::planner::ompl::state::SimEnvObjectStateSpace::computeDirection]");
+    mps_logging::logDebug("Computing direction from state " + state_a->toString() + " to state " + state_b->toString(), log_prefix);
     dir.resize(getDimension());
     auto configuration_space = getConfigurationSpaceConst();
     Eigen::VectorXf sub_dir;
@@ -771,6 +798,7 @@ void SimEnvObjectStateSpace::computeDirection(const StateType* state_a,
         velocity_space->computeDirection(state_a->getVelocityState(), state_b->getVelocityState(), sub_dir);
         dir.tail(sub_dir.size()) = sub_dir;
     }
+    mps_logging::logDebug(boost::format("Computed direction is %1%") % dir.transpose(), log_prefix);
 }
 
 void SimEnvObjectStateSpace::shiftState(StateType* state, const Eigen::VectorXf& dir) const {
@@ -841,6 +869,12 @@ void SimEnvWorldStateSpace::StateType::print(std::ostream& ostream) const {
             ostream << ", ";
         }
     }
+}
+
+std::string SimEnvWorldStateSpace::StateType::toString() const {
+    std::stringstream ss;
+    print(ss);
+    return ss.str();
 }
 ////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////// SimEnvWorldStateSpace ///////////////////////////
@@ -968,6 +1002,8 @@ SimEnvObjectStateSpaceConstPtr SimEnvWorldStateSpace::getObjectStateSpaceConst(u
 }
 
 void SimEnvWorldStateSpace::computeDirection(StateType const* state_a, StateType const* state_b, Eigen::VectorXf& dir) const {
+    static const std::string log_prefix("[mps::planner::ompl::state::SimEnvWorldStateSpace::computeDirection]");
+    mps_logging::logDebug("Computing direction from state " + state_a->toString() + " to state " + state_b->toString(), log_prefix);
     dir.resize(getDimension());
     assert(getNumObjects() == getSubspaceCount());
     unsigned int dim_offset = 0;
@@ -978,9 +1014,12 @@ void SimEnvWorldStateSpace::computeDirection(StateType const* state_a, StateType
         dir.segment(dim_offset, obj_dir.size()) = obj_dir;
         dim_offset += obj_dir.size();
     }
+    mps_logging::logDebug(boost::format("Computed direction is %1%") % dir.transpose(), log_prefix);
 }
 
 void SimEnvWorldStateSpace::shiftState(StateType *state, const Eigen::VectorXf &dir) const {
+    static const std::string log_prefix("[mps::planner::ompl::state::SimEnvWorldStateSpace::shiftState]");
+    mps_logging::logDebug(boost::format("Shifting state " + state->toString() + " by %1%") % dir.transpose(), log_prefix);
     unsigned int dim_offset = 0;
     assert(dir.size() == getDimension());
     for (unsigned int obj_id = 0; obj_id < getNumObjects(); ++obj_id) {
@@ -990,6 +1029,7 @@ void SimEnvWorldStateSpace::shiftState(StateType *state, const Eigen::VectorXf &
         obj_state_space->shiftState(obj_state, component_dir);
         dim_offset += obj_state_space->getDimension();
     }
+    mps_logging::logDebug("Resulting state is " + state->toString(), log_prefix);
 }
 
 void SimEnvWorldStateSpace::setToState(sim_env::WorldPtr world, const StateType* state) const {

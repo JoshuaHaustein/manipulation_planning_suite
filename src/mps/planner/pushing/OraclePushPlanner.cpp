@@ -164,13 +164,15 @@ bool OraclePushPlanner::solve(PlanningSolution& solution) {
     return solution.solved;
 }
 
-void OraclePushPlanner::playback(const PlanningSolution& solution) {
+void OraclePushPlanner::playback(const PlanningSolution& solution,
+                                 const std::function<bool()>& interrupt_callback) {
     if (solution.solved) {
         clearVisualizations();
         mps::planner::util::playback::playPath(_planning_problem.world,
                                                _planning_problem.robot_controller,
                                                _state_space,
-                                               solution.path);
+                                               solution.path,
+                                               interrupt_callback);
     }
 }
 
@@ -306,7 +308,7 @@ mps::planner::pushing::algorithm::RearrangementRRTPtr OraclePushPlanner::createA
                                                                   _planning_problem.num_control_samples);
         util::logging::logDebug("Using naive algorithm, i.e. no oracle at all", log_prefix);
     } else {
-        // both other algorithms need an oracle
+        // all other algorithms need an oracle
         auto robot_state_space = _state_space->getObjectStateSpace(_planning_problem.robot->getName());
         auto robot_configuration_space = robot_state_space->getConfigurationSpace();
         oracle::PushingOraclePtr pushing_oracle;
@@ -329,16 +331,36 @@ mps::planner::pushing::algorithm::RearrangementRRTPtr OraclePushPlanner::createA
                 break;
             }
         }
-        if (pp.algorithm_type == PlanningProblem::AlgorithmType::OracleRRT) {
-            algo = std::make_shared<algorithm::OracleRearrangementRRT>(_space_information,
-                                                                       pushing_oracle,
-                                                                       robot_oracle,
-                                                                       _planning_problem.robot->getName());
-        } else {
-            algo = std::make_shared<algorithm::SliceBasedOracleRRT>(_space_information,
-                                                                    pushing_oracle,
-                                                                    robot_oracle,
-                                                                    _planning_problem.robot->getName());
+        switch (pp.algorithm_type) {
+            case PlanningProblem::AlgorithmType::OracleRRT:
+            {
+                algo = std::make_shared<algorithm::OracleRearrangementRRT>(_space_information,
+                                                                           pushing_oracle,
+                                                                           robot_oracle,
+                                                                           _planning_problem.robot->getName());
+                break;
+            }
+            case PlanningProblem::AlgorithmType ::SliceOracleRRT:
+            {
+                algo = std::make_shared<algorithm::SliceBasedOracleRRT>(_space_information,
+                                                                        pushing_oracle,
+                                                                        robot_oracle,
+                                                                        _planning_problem.robot->getName());
+                break;
+            }
+            case PlanningProblem::AlgorithmType::CompleteSliceOracleRRT:
+            {
+                algo = std::make_shared<algorithm::CompleteSliceBasedOracleRRT>(_space_information,
+                                                                                pushing_oracle,
+                                                                                robot_oracle,
+                                                                                _planning_problem.robot->getName());
+                break;
+            }
+            default:
+            {
+                util::logging::logErr("Invalid algorithm configuration encountered.", log_prefix);
+                throw std::runtime_error("Invalid algorithm configuration encountered");
+            }
         }
     }
     return algo;

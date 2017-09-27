@@ -27,7 +27,7 @@ namespace mps {
                     Human = 0, Learned = 1
                 };
                 enum AlgorithmType {
-                    Naive = 0, OracleRRT = 1, SliceOracleRRT = 2
+                    Naive = 0, OracleRRT = 1, SliceOracleRRT = 2, CompleteSliceOracleRRT = 3
                 };
                 // world related parameters
                 sim_env::WorldPtr world;
@@ -105,7 +105,7 @@ namespace mps {
                 bool setup(PlanningProblem& problem);
                 bool solve(PlanningSolution& solution);
                 // TODO should we move this playback function somewhere else?
-                void playback(const PlanningSolution& solution);
+                void playback(const PlanningSolution& solution, const std::function<bool()>& interrupt_callback=[](){return false;});
                 void clearVisualizations();
                 void generateData(const std::string& file_name,
                                   unsigned int num_samples,

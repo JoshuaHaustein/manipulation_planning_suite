@@ -86,6 +86,7 @@ namespace mps {
                         void getConfiguration(Eigen::VectorXf& vec) const;
                         void setConfiguration(const Eigen::VectorXf& config);
                         void serializeInNumbers(std::ostream& ostream) const;
+                        std::string toString() const;
                     private:
                         const std::vector<internal::SubstateTypeDescription> _state_descriptions;
                         unsigned int _dimension;
@@ -151,6 +152,7 @@ namespace mps {
                         void getVelocity(Eigen::VectorXf& vec) const;
                         void setVelocity(const Eigen::VectorXf& vel);
                         void serializeInNumbers(std::ostream& ostream) const;
+                        std::string toString() const;
                     private:
                         const std::vector<internal::SubstateTypeDescription> _state_descriptions;
                         unsigned int _dimension;
@@ -239,6 +241,7 @@ namespace mps {
                         void setVelocity(const Eigen::VectorXf& vec);
                         void serializeInNumbers(std::ostream& ostream) const;
                         void print(std::ostream& out) const;
+                        std::string toString() const;
                     private:
                         bool _configuration_only;
                         int _num_dofs;
@@ -311,6 +314,7 @@ namespace mps {
                         SimEnvObjectState* getObjectState(unsigned int i) const;
                         void serializeInNumbers(std::ostream& ostream) const;
                         void print(std::ostream& out) const;
+                        std::string toString() const;
 
                     private:
                         unsigned int _num_objects;
