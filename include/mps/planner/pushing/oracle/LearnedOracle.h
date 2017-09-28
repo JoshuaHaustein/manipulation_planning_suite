@@ -57,6 +57,8 @@ namespace mps {
                     const char *_action_response_path;
                     const char *_pushability_request_path;
                     const char *_pushability_response_path;
+                    const char *_pushability_projection_request_path;
+                    const char *_pushability_projection_response_path;
                     const char *_feasibility_request_path;
                     const char *_feasibility_response_path;
                     const char *_feasibility_sample_request_path;

@@ -1,0 +1,90 @@
+syntax = "proto2";
+
+package oracle_communication;
+
+message ActionRequest {
+    // Initial state
+    required float robot_x = 1;
+    required float robot_y = 2;
+    required float robot_radians = 3;
+    required float object_x = 4;
+    required float object_y = 5;
+    required float object_radians = 6;
+
+    // Successor state
+    required float object_x_prime = 7;
+    required float object_y_prime = 8;
+    required float object_radians_prime = 9;
+
+    // Object parameters
+    required float object_mass = 10;
+    required float object_rotational_inertia = 11;
+    required float object_friction = 12;
+    required float object_width = 13;
+    required float object_height = 14;
+}
+
+message ActionResponse {
+    required float dx = 1;
+    required float dy = 2;
+    required float dr = 3;
+    required float t = 4;
+}
+
+message FeasibilityRequest {
+    // Initial state
+    required float robot_x = 1;
+    required float robot_y = 2;
+    required float robot_radians = 3;
+    required float object_x = 4;
+    required float object_y = 5;
+    required float object_radians = 6;
+
+    // Successor state
+    required float object_x_prime = 7;
+    required float object_y_prime = 8;
+    required float object_radians_prime = 9;
+
+    // Object parameters
+    required float object_mass = 10;
+    required float object_rotational_inertia = 11;
+    required float object_friction = 12;
+    required float object_width = 13;
+    required float object_height = 14;
+}
+
+message FeasibilityResponse {
+    required float mahalanobis = 1;
+    required float robot_x = 2;
+    required float robot_y = 3;
+    required float robot_radians = 4;
+}
+
+message PushabilityRequest {
+    // For projection, the number of std's from mean
+    required float num_stds = 1;
+
+    // Initial state
+    required float object_x = 4;
+    required float object_y = 5;
+    required float object_radians = 6;
+
+    // Successor state
+    required float object_x_prime = 7;
+    required float object_y_prime = 8;
+    required float object_radians_prime = 9;
+
+    // Object parameters
+    required float object_mass = 10;
+    required float object_rotational_inertia = 11;
+    required float object_friction = 12;
+    required float object_width = 13;
+    required float object_height = 14;
+}
+
+message PushabilityResponse {
+    required float mahalanobis = 1;
+    required float projected_object_x = 4;
+    required float projected_object_y = 5;
+    required float projected_object_radians = 6;
+}
