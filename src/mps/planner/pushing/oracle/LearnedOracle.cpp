@@ -5,7 +5,7 @@
 // - Isac 28/9/17
 //
 #include <mps/planner/pushing/oracle/LearnedOracle.h>
-#include <mps/planner/pushing/oracle/oracle.pb.h>
+#include <proto/oracle.pb.h>
 #include <mps/planner/util/Logging.h>
 #include <cstdlib>
 #include <fstream>
@@ -136,6 +136,7 @@ void mps::planner::pushing::oracle::LearnedPipeOracle::projectToPushability(cons
     response.ParseFromIstream(&fd_in);
     fd_in.close();
 
+    output.resize(current_obj_state.size());
     output[0] = response.projected_object_x();
     output[1] = response.projected_object_y();
     output[2] = response.projected_object_radians();
@@ -228,6 +229,7 @@ void mps::planner::pushing::oracle::LearnedPipeOracle::sampleFeasibleState(const
     response.ParseFromIstream(&fd_in);
     fd_in.close();
 
+    new_robot_state.resize(3);
     new_robot_state[0] = response.robot_x();
     new_robot_state[1] = response.robot_y();
     new_robot_state[2] = response.robot_radians();
@@ -277,10 +279,12 @@ void mps::planner::pushing::oracle::LearnedPipeOracle::predictAction(const Eigen
     response.ParseFromIstream(&fd_in);
     fd_in.close();
 
+    control.resize(5);
     control[0] = response.dx();
     control[1] = response.dy();
     control[2] = response.dr();
     control[3] = response.t();
+    control[4] = 0.0f;
 
     return;
 }

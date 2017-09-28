@@ -315,6 +315,19 @@ mps::planner::pushing::algorithm::RearrangementRRTPtr OraclePushPlanner::createA
         auto ramp_computer =
                 std::make_shared<oracle::RampComputer>(robot_configuration_space, _control_space);
         oracle::RobotOraclePtr robot_oracle = ramp_computer;
+        // create object data
+        std::vector<mps::planner::pushing::oracle::PushingOracle::ObjectData> object_data;
+        for (unsigned int i = 0; i < _state_space->getNumObjects(); ++i) {
+            auto object = _state_space->getObject(i);
+            mps::planner::pushing::oracle::PushingOracle::ObjectData data;
+            data.mass = object->getMass();
+            data.inertia = object->getInertia();
+            data.mu = object->getGroundFriction();
+            auto aabb = object->getLocalAABB();
+            data.width = aabb.getWidth();
+            data.height = aabb.getHeight();
+            object_data.push_back(data);
+        }
         switch (_planning_problem.oracle_type) {
             case PlanningProblem::OracleType::Human:
             {
@@ -324,9 +337,7 @@ mps::planner::pushing::algorithm::RearrangementRRTPtr OraclePushPlanner::createA
             }
             case PlanningProblem::OracleType::Learned:
             {
-                // mps::planner::pushing::oracle::PushingOraclePtr pushing_oracle = std::make_shared<oracle::LearnedPipeOracle>();
-                // TODO fix me
-                pushing_oracle = nullptr;
+                pushing_oracle = std::make_shared<oracle::LearnedPipeOracle>(object_data);
                 util::logging::logDebug("Using learned oracle!", log_prefix);
                 break;
             }

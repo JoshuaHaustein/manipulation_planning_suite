@@ -13,13 +13,6 @@ namespace mps {
             namespace oracle {
                 class LearnedPipeOracle : public PushingOracle {
                 public:
-                    struct ObjectData {
-                        float mass;
-                        float inertia;
-                        float width;
-                        float height;
-                        float mu;
-                    };
 
                     LearnedPipeOracle(const std::vector<ObjectData>& object_data);
                     ~LearnedPipeOracle() override;

@@ -11,6 +11,13 @@ namespace mps {
             namespace oracle {
                 class PushingOracle {
                 public:
+                    struct ObjectData {
+                        float mass;
+                        float inertia;
+                        float width;
+                        float height;
+                        float mu;
+                    };
                     virtual ~PushingOracle() = 0;
                     // TODO can we make all this functions const?
                     // TODO it would make more sense if these function take SimEnvObjectState* as input rather than Eigen::VectorXf
