@@ -451,7 +451,7 @@ bool OracleRearrangementRRT::extend(MotionPtr start,
 SliceBasedOracleRRT::Slice::Slice(mps::planner::ompl::planning::essentials::MotionPtr repr_in,
                                   SliceDistanceFn distance_fn)
 {
-    slice_samples_nn = std::make_shared<::ompl::NearestNeighborsSqrtApprox <mps::planner::ompl::planning::essentials::MotionPtr> >();
+    slice_samples_nn = std::make_shared<::ompl::NearestNeighborsGNAT<mps::planner::ompl::planning::essentials::MotionPtr> >();
     slice_samples_nn->setDistanceFunction(distance_fn);
     repr = repr_in;
     slice_samples_nn->add(repr);
@@ -509,7 +509,8 @@ void SliceBasedOracleRRT::SliceDistance::setRobotId(unsigned int id) {
 
 double SliceBasedOracleRRT::SliceDistance::distance(const SliceConstPtr &slice_a, const SliceConstPtr &slice_b) const
 {
-    return distance_measure.distance(slice_a->repr->getState(), slice_b->repr->getState());
+    double dist = distance_measure.distance(slice_a->repr->getState(), slice_b->repr->getState());
+    return dist;
 }
 
 //////////////////////////////////////// SliceBasedOracleRRT ////////////////////////////////////////////////
@@ -526,7 +527,7 @@ SliceBasedOracleRRT::SliceBasedOracleRRT(::ompl::control::SpaceInformationPtr si
     _slices_nn = std::make_shared<::ompl::NearestNeighborsGNAT <SlicePtr> >();
 
     _slices_nn->setDistanceFunction(std::bind(&SliceBasedOracleRRT::SliceDistance::distance,
-                                              _slice_distance_fn,
+                                              std::ref(_slice_distance_fn),
                                               std::placeholders::_1,
                                               std::placeholders::_2));
 }
@@ -630,9 +631,7 @@ void SliceBasedOracleRRT::addToTree(MotionPtr new_motion, MotionPtr parent, Plan
     SlicePtr closest_slice = getSlice(new_motion);
     float slice_distance = distanceToSlice(new_motion, closest_slice);
     if (slice_distance > pb.pq.slice_volume) { // we discovered a new slice!
-        auto new_slice = std::make_shared<Slice>(new_motion,
-            std::bind(&SliceBasedOracleRRT::WithinSliceDistance::distance, _within_slice_distance_fn,
-                      std::placeholders::_1, std::placeholders::_2));
+        auto new_slice = getNewSlice(new_motion);
         _slices_nn->add(new_slice);
         _slices_list.push_back(new_slice);
     } else { // the new motion/state is in the same slice
@@ -726,6 +725,10 @@ CompleteSliceBasedOracleRRT::~CompleteSliceBasedOracleRRT() = default;
 void CompleteSliceBasedOracleRRT::setup(const PlanningQuery &pq, PlanningBlackboard &blackboard)
 {
     SliceBasedOracleRRT::setup(pq, blackboard);
+    if (blackboard.pq.max_slice_distance <= 0.0f) {
+        assert(_state_space->getNumObjects() > 1);
+        blackboard.pq.max_slice_distance = (_state_space->getNumObjects() - 1) * _pushing_oracle->getMaximalPushingDistance();
+    }
 }
 
 void CompleteSliceBasedOracleRRT::selectTreeNode(const ompl::planning::essentials::MotionPtr &sample,
@@ -737,6 +740,8 @@ void CompleteSliceBasedOracleRRT::selectTreeNode(const ompl::planning::essential
     logging::logDebug("Selecting tree node to extend for given sample", log_prefix);
     // pick the slice that is closest to the sample
     SlicePtr nearest_slice = getSlice(sample);
+    printState("Rerpresentative of nearest slice is ", nearest_slice->repr->getState());
+
     if (active_obj_id == pb.robot_id) {
         // the selected node is the nearest node to the sample within the selected slice (in terms of robot distance)
         selected_node = nearest_slice->slice_samples_nn->nearest(sample);
@@ -751,7 +756,9 @@ void CompleteSliceBasedOracleRRT::selectTreeNode(const ompl::planning::essential
         // next get all neighbor slices within radius max_slice_distance
         std::vector<ExtensionCandidateTuple> candidate_states;
         std::vector<SlicePtr> candidate_slices;
-        _slices_nn->nearestR(sample_slice, pb.pq.max_slice_distance, candidate_slices);
+        printState("Sample slice is ", sample_slice->repr->getState());
+        _slices_nn->nearestR(sample_slice, 1.00001f * pb.pq.max_slice_distance, candidate_slices);
+        assert(not candidate_slices.empty());
         // due to the projection, there is at least one slice we can extend the search from
         for (auto& candidate_slice : candidate_slices) {
             // run over all and select good robot states for pushing
@@ -820,7 +827,7 @@ void CompleteSliceBasedOracleRRT::extendStep(const std::vector<const ::ompl::con
                                                          new_motion->getControl(),
                                                          new_motion->getState());
         pb.stats.num_state_propagations++;
-        if (extension_success) { // we failed, no tree extension
+        if (not extension_success) { // we failed, no tree extension
             logging::logDebug("A control provided by the oracle failed. ", log_prefix);
             cacheMotion(new_motion);
             return;
@@ -853,8 +860,8 @@ void CompleteSliceBasedOracleRRT::projectSliceOnBall(SlicePtr sample_slice,
     Eigen::VectorXf dir;
     _state_space->computeDirection(sim_env_state_center, sim_env_state_sample, dir);
     float prev_distance = (float)_slice_distance_fn.distance(sample_slice, center_slice);
+    _state_space->copyState(sim_env_state_sample, sim_env_state_center);
     _state_space->shiftState(sim_env_state_sample, radius / prev_distance * dir);
-
 }
 
 CompleteSliceBasedOracleRRT::ExtensionCandidateTuple CompleteSliceBasedOracleRRT::selectStateTuple(

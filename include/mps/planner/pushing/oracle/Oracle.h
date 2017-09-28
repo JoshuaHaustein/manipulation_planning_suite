@@ -86,6 +86,8 @@ namespace mps {
                                                      const Eigen::VectorXf& next_obj_state,
                                                      const unsigned int& obj_id,
                                                      Eigen::VectorXf& new_robot_state) = 0;
+
+                    virtual float getMaximalPushingDistance() const = 0;
                 };
 
                 typedef std::shared_ptr<PushingOracle> PushingOraclePtr;

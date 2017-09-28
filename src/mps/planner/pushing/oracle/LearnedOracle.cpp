@@ -283,6 +283,11 @@ void mps::planner::pushing::oracle::LearnedPipeOracle::predictAction(const Eigen
     return;
 }
 
+float mps::planner::pushing::oracle::LearnedPipeOracle::getMaximalPushingDistance() const {
+    // TODO
+    return 0.1f;
+}
+
 /* Keep as future playground? */
 // int main() {
 //     using namespace mps::planner::pushing::oracle;
