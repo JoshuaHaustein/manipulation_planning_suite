@@ -23,8 +23,8 @@ mps::planner::pushing::oracle::LearnedPipeOracle::LearnedPipeOracle(const std::v
     _feasibility_sample_response_path(std::getenv("FEASIBILITY_SAMPLE_RESPONSE_PIPE_PATH")),
     _pushability_request_path(std::getenv("PUSHABILITY_REQUEST_PIPE_PATH")),
     _pushability_response_path(std::getenv("PUSHABILITY_RESPONSE_PIPE_PATH")),
-    _pushability_projection_request_path(std::getenv("PUSHABILITY_REQUEST_PIPE_PATH")),
-    _pushability_projection_response_path(std::getenv("PUSHABILITY_RESPONSE_PIPE_PATH"))
+    _pushability_projection_request_path(std::getenv("PUSHABILITY_PROJECTION_REQUEST_PIPE_PATH")),
+    _pushability_projection_response_path(std::getenv("PUSHABILITY_PROJECTION_RESPONSE_PIPE_PATH"))
 {
     static const std::string log_prefix("[mps::planner::pushing::oracle::LearnedPipeOracle::LearnedPipeOracle]");
     GOOGLE_PROTOBUF_VERIFY_VERSION;
@@ -34,6 +34,8 @@ mps::planner::pushing::oracle::LearnedPipeOracle::LearnedPipeOracle(const std::v
         _action_response_path == nullptr ||
         _feasibility_sample_request_path == nullptr ||
         _feasibility_sample_response_path == nullptr ||
+        _pushability_projection_request_path == nullptr ||
+        _pushability_projection_response_path == nullptr ||
         _pushability_request_path == nullptr ||
         _pushability_response_path == nullptr
         )
@@ -123,14 +125,14 @@ void mps::planner::pushing::oracle::LearnedPipeOracle::projectToPushability(cons
 
     /* Send buffer over pipe */
     std::ofstream fd_out;
-    fd_out.open(_pushability_request_path, std::ios::out | std::ios::binary);
+    fd_out.open(_pushability_projection_request_path, std::ios::out | std::ios::binary);
     request.SerializeToOstream(&fd_out);
     fd_out.close();
 
     /* Get response */
     auto response = oracle_communication::PushabilityResponse();
     std::ifstream fd_in;
-    fd_in.open(_pushability_response_path, std::ios::in | std::ios::binary);
+    fd_in.open(_pushability_projection_response_path, std::ios::in | std::ios::binary);
     response.ParseFromIstream(&fd_in);
     fd_in.close();
 
