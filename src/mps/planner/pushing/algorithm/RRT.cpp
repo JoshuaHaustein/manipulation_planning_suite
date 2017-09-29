@@ -57,12 +57,19 @@ RearrangementRRT::PlanningBlackboard::PlanningBlackboard(PlanningQuery pq) :
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 RearrangementRRT::DebugDrawer::DebugDrawer(sim_env::WorldViewerPtr world_viewer,
                                            unsigned int robot_id,
+                                           unsigned int target_id) : DebugDrawer(world_viewer, nullptr, robot_id, target_id) {
+}
+
+
+RearrangementRRT::DebugDrawer::DebugDrawer(sim_env::WorldViewerPtr world_viewer,
+                                           SliceDrawerInterfacePtr slice_drawer,
+                                           unsigned int robot_id,
                                            unsigned int target_id) {
     _world_viewer = world_viewer;
+    _slice_drawer = slice_drawer;
     _robot_id = robot_id;
     _target_id = target_id;
 }
-
 RearrangementRRT::DebugDrawer::~DebugDrawer() {
     clear();
 }
@@ -99,6 +106,13 @@ void RearrangementRRT::DebugDrawer::drawStateTransition(const ompl::state::SimEn
     _handles.push_back(_world_viewer->drawLine(pos_parent, pos_child, color, 0.01f));
 //    _handles.push_back(_world_viewer->drawBox(pos_child, extent, true));
 }
+
+//void RearrangementRRT::DebugDrawer::addNewSlice(mps::planner::pushing::algorithm::SliceBasedOracleRRT::SlicePtr slice) {
+//    if(!_slice_drawer) {
+//        return;
+//    }
+//    // TODO add slice to drawer
+//}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////// RearrangementRRT /////////////////////////////////////////////

@@ -13,6 +13,7 @@
 #include <mps/planner/ompl/control/RampVelocityControl.h>
 #include <mps/planner/pushing/PushPlannerDistanceMeasure.h>
 #include <mps/planner/pushing/algorithm/RRT.h>
+#include <mps/planner/pushing/oracle/DataGenerator.h>
 
 namespace mps {
     namespace planner {
@@ -126,6 +127,7 @@ namespace mps {
                 void prepareCollisionPolicy();
                 mps::planner::pushing::algorithm::RearrangementRRTPtr createAlgorithm(const PlanningProblem& pp) const;
 //                ::ompl::control::DirectedControlSamplerPtr allocateDirectedControlSampler(const ::ompl::control::SpaceInformation* si);
+                mps::planner::pushing::oracle::DataGeneratorPtr _data_generator;
             };
         }
     }

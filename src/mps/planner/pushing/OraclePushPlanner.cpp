@@ -117,6 +117,9 @@ bool OraclePushPlanner::setup(PlanningProblem& problem) {
     _space_information->setStatePropagator(_state_propagator);
     _space_information->setup();
     _algorithm = createAlgorithm(_planning_problem);
+    _data_generator = std::make_shared<oracle::DataGenerator>(_space_information, _state_propagator,
+                                                              _planning_problem.world, _planning_problem.robot->getName(),
+                                                              _planning_problem.target_object->getName());
     // TODO this is only for debug
     if (_planning_problem.debug) {
         if (!_debug_drawer) {
@@ -181,43 +184,7 @@ void OraclePushPlanner::clearVisualizations() {
 void OraclePushPlanner::generateData(const std::string& file_name,
                                      unsigned int num_samples,
                                      const std::string& header) {
-    std::shared_ptr<::ompl::base::UniformValidStateSampler> state_sampler =
-            std::make_shared<::ompl::base::UniformValidStateSampler>(_space_information.get());
-    state_sampler->setNrAttempts(100);
-    ::ompl::control::ControlSamplerPtr control_sampler = _space_information->allocControlSampler();
-    ::ompl::base::State* state = _space_information->allocState();
-    ::ompl::base::State* new_state = _space_information->allocState();
-    ::ompl::control::Control* control = _space_information->allocControl();
-    mps::planner::util::serialize::OracleDataDumper data_dumper;
-    data_dumper.setFile(file_name);
-    data_dumper.openFile();
-    data_dumper.writeHeader(header);
-    unsigned int i = 0;
-    while (i < num_samples) {
-        bool has_state = state_sampler->sample(state);
-        if (not has_state) {
-            _planning_problem.world->getLogger()->logWarn("Failed to sample a valid state, we might end up in a infinite loop here!");
-            continue;
-        }
-        control_sampler->sample(control);
-        _planning_problem.world->getLogger()->logDebug("Sampled state");
-        bool success = _state_propagator->propagate(state, control, new_state);
-        _planning_problem.world->getLogger()->logDebug("Propagated state");
-        if (not success) {
-            _planning_problem.world->getLogger()->logDebug("State propagation failed, skipping");
-            continue;
-        }
-        double state_distance = _space_information->distance(state, new_state);
-        if (state_distance <= 0.0000001) {
-            _planning_problem.world->getLogger()->logWarn("Resulting state is equal to start state");
-        }
-        data_dumper.saveData(state, new_state, control);
-        ++i;
-    }
-    data_dumper.closeFile();
-    _space_information->freeState(state);
-    _space_information->freeState(new_state);
-    _space_information->freeControl(control);
+    _data_generator->generateData(file_name, num_samples, header);
 }
 
 void OraclePushPlanner::dummyTest() {

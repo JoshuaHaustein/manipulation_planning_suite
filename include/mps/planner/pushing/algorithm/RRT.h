@@ -114,16 +114,24 @@ namespace mps {
                     class DebugDrawer {
                         // TODO this class may be overfit to a 2d planning case.
                     public:
+                        class SliceDrawerInterface {
+                            // TODO define methods required to draw slices
+                        };
+                        typedef std::shared_ptr<SliceDrawerInterface> SliceDrawerInterfacePtr;
                         DebugDrawer(sim_env::WorldViewerPtr world, unsigned int robot_id, unsigned int target_id);
+                        DebugDrawer(sim_env::WorldViewerPtr world, SliceDrawerInterfacePtr slice_drawer, unsigned int robot_id, unsigned int target_id);
                         ~DebugDrawer();
                         void addNewMotion(mps::planner::ompl::planning::essentials::MotionPtr motion);
                         void clear();
                         void drawStateTransition(const ompl::state::SimEnvObjectState* parent_state,
                                                  const ompl::state::SimEnvObjectState* new_state,
                                                  const Eigen::Vector4f& color);
+                        // TODO forward declaration of SlicePtr
+//                        void addNewSlice(mps::planner::pushing::algorithm::SliceBasedOracleRRT::SlicePtr slice);
 
                     private:
                         sim_env::WorldViewerPtr _world_viewer;
+                        SliceDrawerInterfacePtr _slice_drawer;
                         std::vector<sim_env::WorldViewer::Handle> _handles;
                         unsigned int _robot_id;
                         unsigned int _target_id;
@@ -280,7 +288,6 @@ namespace mps {
                                    mps::planner::ompl::planning::essentials::MotionPtr parent,
                                    PlanningBlackboard& pb) override;
 
-                protected:
                     struct Slice {
                         typedef std::function<double(const mps::planner::ompl::planning::essentials::MotionPtr&,
                                                      const mps::planner::ompl::planning::essentials::MotionPtr&)> SliceDistanceFn;
@@ -294,6 +301,7 @@ namespace mps {
                     };
                     typedef std::shared_ptr<Slice> SlicePtr;
 
+                protected:
 
                     struct WithinSliceDistance {
                         PushPlannerDistanceMeasure distance_measure;

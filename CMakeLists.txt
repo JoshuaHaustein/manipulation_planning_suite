@@ -75,6 +75,7 @@ set(PLANNER_H
 #        include/mps/planner/pushing/oracle/LearnedOracle.h
         include/mps/planner/pushing/oracle/HumanOracle.h
         include/mps/planner/pushing/oracle/RampComputer.h
+        include/mps/planner/pushing/oracle/DataGenerator.h
         include/mps/planner/pushing/algorithm/RRT.h
         include/mps/planner/util/Logging.h
         include/mps/planner/util/Playback.h
@@ -110,6 +111,7 @@ set(PLANNER_SRC
 #        src/mps/planner/pushing/oracle/oracle.pb.cc
         src/mps/planner/pushing/oracle/HumanOracle.cpp
         src/mps/planner/pushing/oracle/RampComputer.cpp
+        src/mps/planner/pushing/oracle/DataGenerator.cpp
         src/mps/planner/pushing/algorithm/RRT.cpp
 )
 
