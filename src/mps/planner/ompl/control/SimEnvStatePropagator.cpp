@@ -97,7 +97,7 @@ bool SimEnvStatePropagator::propagate(const ::ompl::base::State* state, ::ompl::
     state_space->extractState(_world, result_world_state);
     _world->restoreState();
     // TODO there are currently no validity checks performed here, i.e. is the outcoming state physicaly feasible
-    // TODO (remember squeezing issue). Also no invalidation based on collisions.
+    // TODO (remember squeezing issue).
     _world->getLogger()->logDebug(boost::format("Propagation finished. Success: %1%") % propagation_success,
                                   log_prefix);
     std::stringstream ss;

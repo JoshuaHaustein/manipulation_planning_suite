@@ -49,3 +49,35 @@ mps::planner::pushing::PlanningProblem::AlgorithmType mps::planner::util::yaml::
         throw std::runtime_error("Unknown algorithm type encountered: " + str);
     }
 }
+
+void mps::planner::util::yaml::configurePlanningProblem(mps::planner::pushing::PlanningProblem &problem,
+                                                        const OraclePlanningProblemDesc &problem_desc) {
+    problem.control_limits.velocity_limits = problem_desc.control_limits.velocity_limits;
+    problem.control_limits.duration_limits = problem_desc.control_limits.duration_limits;
+    problem.control_limits.acceleration_limits = problem_desc.control_limits.acceleration_limits;
+    // Workspace bounds
+    problem.workspace_bounds.x_limits = problem_desc.x_limits;
+    problem.workspace_bounds.y_limits = problem_desc.y_limits;
+    problem.workspace_bounds.z_limits = problem_desc.z_limits;
+    problem.workspace_bounds.max_rotation_vel = problem_desc.max_rotation_vel;
+    problem.workspace_bounds.max_velocity = problem_desc.max_velocity;
+    // Various planner parameters
+    problem.t_max = problem_desc.t_max;
+    problem.planning_time_out = problem_desc.planning_timeout;
+    problem.num_control_samples = problem_desc.num_control_samples;
+    problem.goal_region_radius = problem_desc.goal_region_radius;
+    problem.algorithm_type = problem_desc.algorithm_type;
+    problem.oracle_type = problem_desc.oracle_type;
+    problem.goal_bias = problem_desc.goal_bias;
+    problem.robot_bias = problem_desc.robot_bias;
+    problem.target_bias = problem_desc.target_bias;
+    // TODO b_semi_dynamic
+    // Collisions policy
+    problem.collision_policy.setStaticCollisions(problem_desc.collision_policy.static_collisions_allowed);
+    for (auto& forbidden_col : problem_desc.collision_policy.static_collisions_blacklist) {
+        problem.collision_policy.setStaticCollisions(forbidden_col, false);
+    }
+    for (auto& forbidden_col : problem_desc.collision_policy.collisions_blacklist) {
+        problem.collision_policy.setCollision(forbidden_col.first, forbidden_col.second, false);
+    }
+}

@@ -128,6 +128,7 @@ namespace mps {
 //                ::ompl::control::DirectedControlSamplerPtr allocateDirectedControlSampler(const ::ompl::control::SpaceInformation* si);
                 mps::planner::pushing::oracle::DataGeneratorPtr _data_generator;
             };
+
         }
     }
 }

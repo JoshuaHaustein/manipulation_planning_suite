@@ -57,6 +57,9 @@ namespace mps {
 
                 mps::planner::pushing::PlanningProblem::AlgorithmType stringToAlgorithmType(const std::string& str);
                 mps::planner::pushing::PlanningProblem::OracleType stringToOracleType(const std::string& str);
+
+                void configurePlanningProblem(mps::planner::pushing::PlanningProblem& problem,
+                                              const OraclePlanningProblemDesc& problem_desc);
             }
         }
     }
