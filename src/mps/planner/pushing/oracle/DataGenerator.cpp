@@ -11,8 +11,8 @@ using namespace mps::planner::pushing::oracle;
 DataGenerator::Parameters::Parameters() {
     obj_orientation_sigma = boost::math::float_constants::pi / 18.0f; // 10 degrees
     obj_position_sigma = 0.01; // 1 cm
-    mass_sigma = 0.02;
-    friction_sigma = 0.01;
+    mass_sigma = 0.002;
+    friction_sigma = 0.004;
 }
 
 DataGenerator::DataGenerator(::ompl::control::SpaceInformationPtr si,
@@ -71,6 +71,7 @@ void DataGenerator::generateData(const std::string& file_name,
     }
     unsigned int i = 0;
     while (i < num_samples) {
+        _world->getLogger()->logInfo(boost::format("Sampling sample %i") % i, "[DataGenerator]");
         bool has_state = sampleValidState(mean_state, state_sampler, validity_checker);
         if (not has_state) {
             _world->getLogger()->logWarn("Failed to sample a valid state, we might end up in a infinite loop here!");
@@ -93,11 +94,7 @@ void DataGenerator::generateData(const std::string& file_name,
                 _world->getLogger()->logDebug("State propagation failed, skipping");
                 continue;
             }
-//            double state_distance = _space_information->distance(noisy_state, new_state);
-//            if (state_distance <= 0.0000001) {
-//                _planning_problem.world->getLogger()->logWarn("Resulting state is equal to start state");
-//            }
-            data_dumper.saveData(mean_state, new_state, control);
+            data_dumper.saveData(noisy_state, new_state, control);
         }
         ++i;
     }
@@ -150,12 +147,13 @@ void DataGenerator::applyNoise(const ::ompl::base::State *mean_state, ::ompl::ba
 }
 
 void DataGenerator::modifyDynamics() {
-    // TODO perturb object data (mass and friction coeffs)
     _original_dynamics.mass = _object->getMass();
     _original_dynamics.friction_coeff = _object->getGroundFriction();
     auto rng = util::random::getDefaultRandomGenerator();
-    _object->getBaseLink()->setMass((float)(rng->gaussian(_original_dynamics.mass, _mass_stddev)));
-    _object->getBaseLink()->setGroundFriction((float)rng->gaussian(_original_dynamics.friction_coeff, _friction_stddev));
+    float new_mass = std::max((float)(rng->gaussian(_original_dynamics.mass, _mass_stddev)), 0.000001f);
+    float new_friction = std::max((float)rng->gaussian(_original_dynamics.friction_coeff, _friction_stddev), 0.00000001f);
+    _object->getBaseLink()->setMass(new_mass);
+    _object->getBaseLink()->setGroundFriction(new_friction);
 }
 
 void DataGenerator::restoreDynamics() {
@@ -173,5 +171,23 @@ void DataGenerator::computeMaxDistance() {
     control_space->getAccelerationLimits(acceleration_limits);
     float max_acceleration_time = velocity_limits[0] / acceleration_limits[0];
     _max_distance = (max_acceleration_time + duration_limits[1]) * velocity_limits[0];
+}
+
+bool DataGenerator::objectMoved(const ::ompl::base::State* initial_state,
+                                const ::ompl::base::State* result_state) const {
+    auto sim_initial_state = dynamic_cast<const ompl::state::SimEnvWorldState*>(initial_state);
+    auto sim_result_state = dynamic_cast<const ompl::state::SimEnvWorldState*>(result_state);
+    auto initial_obj_state = sim_initial_state->getObjectState(_object_id);
+    auto result_obj_state = sim_result_state->getObjectState(_object_id);
+//    std::cout << "Initial state was ";
+//    sim_initial_state->print(std::cout);
+//    std::cout << " Resulting state was ";
+//    sim_result_state->print(std::cout);
+//    std::cout << std::endl;
+    Eigen::VectorXf initial_config;
+    initial_obj_state->getConfiguration(initial_config);
+    Eigen::VectorXf result_config;
+    result_obj_state->getConfiguration(result_config);
+    return (initial_config - result_config).norm() > 0.00001f;
 }
 

@@ -59,6 +59,8 @@ namespace mps {
                     void modifyDynamics();
                     void restoreDynamics();
                     void computeMaxDistance();
+                    bool objectMoved(const ::ompl::base::State* initial_state,
+                                     const ::ompl::base::State* result_state) const;
 
                 };
                 typedef std::shared_ptr<DataGenerator> DataGeneratorPtr;
