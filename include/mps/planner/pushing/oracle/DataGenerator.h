@@ -15,11 +15,19 @@ namespace mps {
             namespace oracle {
                 class DataGenerator {
                 public:
+                    struct Parameters {
+                        float obj_position_sigma;
+                        float obj_orientation_sigma;
+                        float mass_sigma;
+                        float friction_sigma;
+                        Parameters();
+                    };
                     DataGenerator(::ompl::control::SpaceInformationPtr space_info,
                                   mps::planner::ompl::control::SimEnvStatePropagatorPtr state_prop,
                                   sim_env::WorldPtr world,
                                   const std::string& robot_name,
-                                  const std::string& obj_name);
+                                  const std::string& obj_name,
+                                  const Parameters& params=Parameters());
                     ~DataGenerator();
                     void generateData(const std::string& file_name,
                                       unsigned int num_samples,
@@ -27,6 +35,10 @@ namespace mps {
                                       bool deterministic=false,
                                       unsigned int num_noise_samples=10);
                 private:
+                    struct ObjectDynamics {
+                        float mass;
+                        float friction_coeff;
+                    };
                     sim_env::WorldPtr _world;
                     sim_env::RobotPtr _robot;
                     sim_env::ObjectPtr _object;
@@ -36,6 +48,9 @@ namespace mps {
                     mps::planner::ompl::control::SimEnvStatePropagatorPtr _state_propagator;
                     float _max_distance;
                     Eigen::VectorXf _state_sigma;
+                    float _mass_stddev;
+                    float _friction_stddev;
+                    ObjectDynamics _original_dynamics;
 
                     bool sampleValidState(::ompl::base::State* state,
                                           ::ompl::base::StateSamplerPtr state_sampler,
@@ -43,6 +58,7 @@ namespace mps {
                     void applyNoise(const ::ompl::base::State* mean_state, ::ompl::base::State* noisy_state);
                     void modifyDynamics();
                     void restoreDynamics();
+                    void computeMaxDistance();
 
                 };
                 typedef std::shared_ptr<DataGenerator> DataGeneratorPtr;

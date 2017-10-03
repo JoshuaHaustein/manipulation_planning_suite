@@ -4,15 +4,23 @@
 #include <mps/planner/pushing/oracle/DataGenerator.h>
 #include <mps/planner/util/Random.h>
 #include <ompl/base/samplers/UniformValidStateSampler.h>
+#include <boost/math/constants/constants.hpp>
 
 using namespace mps::planner::pushing::oracle;
 
+DataGenerator::Parameters::Parameters() {
+    obj_orientation_sigma = boost::math::float_constants::pi / 18.0f; // 10 degrees
+    obj_position_sigma = 0.01; // 1 cm
+    mass_sigma = 0.02;
+    friction_sigma = 0.01;
+}
 
 DataGenerator::DataGenerator(::ompl::control::SpaceInformationPtr si,
                              mps::planner::ompl::control::SimEnvStatePropagatorPtr state_prop,
                              sim_env::WorldPtr world,
                              const std::string& robot_name,
-                             const std::string& obj_name) :
+                             const std::string& obj_name,
+                             const Parameters& params) :
         _world(world),
         _space_information(si),
         _state_propagator(state_prop)
@@ -28,9 +36,15 @@ DataGenerator::DataGenerator(::ompl::control::SpaceInformationPtr si,
     _object_id = (unsigned int)object_id;
     assert(_robot);
     assert(_object);
-    _max_distance = 1.0f;  // TODO compute using control limits
+    computeMaxDistance();
     _state_sigma.resize(_object->getNumActiveDOFs());
-    _state_sigma.setZero(); // TODO set to reasonable values
+    _state_sigma.setZero();
+    assert(_state_sigma.size() >= 3);
+    _state_sigma[0] = params.obj_position_sigma;
+    _state_sigma[1] = params.obj_position_sigma;
+    _state_sigma[2] = params.obj_orientation_sigma;
+    _mass_stddev = params.mass_sigma;
+    _friction_stddev = params.friction_sigma;
 }
 
 DataGenerator::~DataGenerator() = default;
@@ -137,9 +151,27 @@ void DataGenerator::applyNoise(const ::ompl::base::State *mean_state, ::ompl::ba
 
 void DataGenerator::modifyDynamics() {
     // TODO perturb object data (mass and friction coeffs)
+    _original_dynamics.mass = _object->getMass();
+    _original_dynamics.friction_coeff = _object->getGroundFriction();
+    auto rng = util::random::getDefaultRandomGenerator();
+    _object->getBaseLink()->setMass((float)(rng->gaussian(_original_dynamics.mass, _mass_stddev)));
+    _object->getBaseLink()->setGroundFriction((float)rng->gaussian(_original_dynamics.friction_coeff, _friction_stddev));
 }
 
 void DataGenerator::restoreDynamics() {
-    // TODO restore object data
+    _object->getBaseLink()->setMass(_original_dynamics.mass);
+    _object->getBaseLink()->setGroundFriction(_original_dynamics.friction_coeff);
+}
+
+void DataGenerator::computeMaxDistance() {
+    auto control_space = std::dynamic_pointer_cast<ompl::control::RampVelocityControlSpace>(_space_information->getControlSpace());
+    Eigen::Array2f duration_limits;
+    Eigen::VectorXf velocity_limits;
+    Eigen::VectorXf acceleration_limits;
+    control_space->getDurationLimits(duration_limits);
+    control_space->getVelocityLimits(velocity_limits);
+    control_space->getAccelerationLimits(acceleration_limits);
+    float max_acceleration_time = velocity_limits[0] / acceleration_limits[0];
+    _max_distance = (max_acceleration_time + duration_limits[1]) * velocity_limits[0];
 }
 
