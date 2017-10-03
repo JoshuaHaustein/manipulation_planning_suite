@@ -71,7 +71,7 @@ void DataGenerator::generateData(const std::string& file_name,
     }
     unsigned int i = 0;
     while (i < num_samples) {
-        _world->getLogger()->logInfo(boost::format("Sampling sample %i") % i, "[DataGenerator]");
+//        _world->getLogger()->logInfo(boost::format("Sampling sample %i") % i, "[DataGenerator]");
         bool has_state = sampleValidState(mean_state, state_sampler, validity_checker);
         if (not has_state) {
             _world->getLogger()->logWarn("Failed to sample a valid state, we might end up in a infinite loop here!");
