@@ -12,7 +12,7 @@ namespace mps_logging = mps::planner::util::logging;
 OracleControlSampler::Parameters::Parameters() {
     // TODO what are reasonable values here? Should these values be inside of the oracles instead?
     min_feasibility = 0.05;
-    min_pushability = 0.4;
+    min_pushability = 1.0;
 }
 
 OracleControlSampler::OracleControlSampler(::ompl::control::SpaceInformationPtr si,
@@ -80,8 +80,62 @@ void OracleControlSampler::sampleTo(std::vector<::ompl::control::Control const*>
     }
 }
 
+float OracleControlSampler::sampleFeasibleState(::ompl::base::State* x_state_ompl,
+                                               const ::ompl::base::State* x_prime_state_ompl,
+                                               unsigned int local_target_obj)
+{
+    static const std::string log_prefix("[mps::planner::pushing::oracle::OracleControlSampler::sampleFeasibleState]");
+    auto x_state = dynamic_cast<ompl::state::SimEnvWorldState*>(x_state_ompl);
+    auto x_prime_state = dynamic_cast<const ompl::state::SimEnvWorldState*>(x_prime_state_ompl);
+    assert(x_state);
+    assert(x_prime_state);
+    auto x_prime_t = x_prime_state->getObjectState(local_target_obj);
+    auto x_t = x_state->getObjectState(local_target_obj);
+    auto x_r = x_state->getObjectState(_robot_id);
+    Eigen::VectorXf new_robot_dest;
+    x_r->getConfiguration(new_robot_dest);
+    Eigen::VectorXf current_obj_state;
+    x_t->getConfiguration(current_obj_state);
+    Eigen::VectorXf target_obj_state;
+    x_prime_t->getConfiguration(target_obj_state);
+    _pushing_oracle->sampleFeasibleState(current_obj_state, target_obj_state, local_target_obj, new_robot_dest);
+    mps_logging::logDebug(boost::format("Sampled robot state %1% based on feasibility") % new_robot_dest.transpose(), log_prefix);
+    // the oracle gave us a new robot state we should move to instead
+    x_r->setConfiguration(new_robot_dest);
+    return _pushing_oracle->predictFeasibility(new_robot_dest, current_obj_state, target_obj_state, local_target_obj);
+}
+
+float OracleControlSampler::getFeasibility(const ::ompl::base::State* x_state_ompl,
+                                           const ::ompl::base::State* x_prime_state_ompl,
+                                           unsigned int active_obj_id) const
+{
+    auto x_state = dynamic_cast<const ompl::state::SimEnvWorldState*>(x_state_ompl);
+    auto x_prime_state = dynamic_cast<const ompl::state::SimEnvWorldState*>(x_prime_state_ompl);
+    assert(x_state);
+    assert(x_prime_state);
+    auto x_prime_t = x_prime_state->getObjectState(active_obj_id);
+    auto x_t = x_state->getObjectState(active_obj_id);
+    auto x_r = x_state->getObjectState(_robot_id);
+    Eigen::VectorXf new_robot_dest;
+    x_r->getConfiguration(new_robot_dest);
+    Eigen::VectorXf current_obj_state;
+    x_t->getConfiguration(current_obj_state);
+    Eigen::VectorXf target_obj_state;
+    x_prime_t->getConfiguration(target_obj_state);
+    return _pushing_oracle->predictFeasibility(new_robot_dest, current_obj_state, target_obj_state, active_obj_id);
+}
+
 void OracleControlSampler::setParameters(const OracleControlSampler::Parameters &params) {
     _params = params;
+}
+
+bool OracleControlSampler::steerRobot(std::vector<::ompl::control::Control const *> &controls,
+                                      const ::ompl::base::State *source,
+                                      const ::ompl::base::State *dest)
+{
+    auto x_state = dynamic_cast<const ompl::state::SimEnvWorldState*>(source);
+    auto x_prime_state = dynamic_cast<const ompl::state::SimEnvWorldState*>(dest);
+    return steerRobot(controls, x_state, x_prime_state);
 }
 
 bool OracleControlSampler::steerRobot(std::vector<::ompl::control::Control const *> &controls,
@@ -127,9 +181,8 @@ bool OracleControlSampler::steerPush(std::vector<::ompl::control::Control const 
     dest_obj_state->getConfiguration(dest_obj_config);
     Eigen::VectorXf current_robot_config;
     current_robot_state->getConfiguration(current_robot_config);
-    _pushing_oracle->prepareOracle(current_robot_config, current_obj_config, dest_obj_config);
     // now ask the pushing oracle for pushability
-//    float pushability = _pushing_oracle->predictPushability(current_obj_config, dest_obj_config);
+//    float pushability = _pushing_oracle->predictPushability(current_obj_config, dest_obj_config, object_id);
 //    if (pushability < _params.min_pushability) {// bigger is better (1 / mahalanobis distance?)
 //        mps_logging::logDebug(boost::format("Pushability is only %f, sampling random action") % pushability,
 //                              log_prefix);
@@ -137,22 +190,21 @@ bool OracleControlSampler::steerPush(std::vector<::ompl::control::Control const 
 //    }
     // TODO needs to be evaluated
     mps_logging::logDebug(boost::format("Projecting object state %1% to pushability distribution") % dest_obj_config.transpose(), log_prefix);
-    _pushing_oracle->projectToPushability(current_obj_config, dest_obj_config, dest_obj_config);
+    _pushing_oracle->projectToPushability(current_obj_config, dest_obj_config, _params.min_pushability, object_id, dest_obj_config);
     mps_logging::logDebug(boost::format("Projected state to %1%") % dest_obj_config.transpose(), log_prefix);
-    float pushability = _pushing_oracle->predictPushability(current_obj_config, dest_obj_config);
+    // TODO do not need to actually compute pushability
+    float pushability = _pushing_oracle->predictPushability(current_obj_config, dest_obj_config, object_id);
     mps_logging::logDebug(boost::format("New pushability is %f") % pushability, log_prefix);
     // the oracle can help us at least a little bit
-    mps_logging::logDebug("Sufficient pushability. Asking the pushing oracle for feasibility",
-                          log_prefix);
-    // ask for feasability
+    // ask for feasibility
     float feasibility = _pushing_oracle->predictFeasibility(current_robot_config, current_obj_config,
-                                                           dest_obj_config);
+                                                            dest_obj_config, object_id);
     // if we have too low feasibility, steer robot to a better state
     if (feasibility < _params.min_feasibility) {
         mps_logging::logDebug(boost::format("Feasibility is only %f, steering robot") % feasibility,
                               log_prefix);
         Eigen::VectorXf new_robot_dest(_robot_state->getConfiguration());
-        _pushing_oracle->sampleFeasibleState(new_robot_dest, current_obj_config, dest_obj_config);
+        _pushing_oracle->sampleFeasibleState(current_obj_config, dest_obj_config, object_id, new_robot_dest);
         mps_logging::logDebug(boost::format("Sampled robot state %1% based on feasibility") % new_robot_dest.transpose(), log_prefix);
         // the oracle gave us a new robot state we should move to instead
         _robot_state->setConfiguration(new_robot_dest);
@@ -161,7 +213,67 @@ bool OracleControlSampler::steerPush(std::vector<::ompl::control::Control const 
     // The oracle is confident it can help
     mps_logging::logDebug("The oracle is confident it can help.", log_prefix);
     Eigen::VectorXf control_param;
-    _pushing_oracle->predictAction(current_robot_config, current_obj_config, dest_obj_config, control_param);
+    _pushing_oracle->predictAction(current_robot_config, current_obj_config, dest_obj_config,
+                                   object_id, control_param);
+    auto* control = getControl();
+    control->setParameters(control_param);
+    controls.push_back((::ompl::control::Control const*)control);
+    mps_logging::logDebug(boost::format("The oracle suggested to take action %1%") % control_param.transpose(), log_prefix);
+    return true;
+}
+
+bool OracleControlSampler::steerPushSimple(std::vector<::ompl::control::Control const*>& controls,
+                                           const ::ompl::base::State* source,
+                                           const ::ompl::base::State* dest,
+                                           unsigned int obj_id)
+{
+    auto x_state = dynamic_cast<const ompl::state::SimEnvWorldState*>(source);
+    auto x_prime_state = dynamic_cast<const ompl::state::SimEnvWorldState*>(dest);
+    return steerPushSimple(controls, x_state, x_prime_state, obj_id);
+}
+
+bool OracleControlSampler::steerPushSimple(std::vector<::ompl::control::Control const *> &controls,
+                                     const mps::planner::ompl::state::SimEnvWorldState* source,
+                                     const mps::planner::ompl::state::SimEnvWorldState* dest,
+                                     unsigned int object_id)
+{
+    static const std::string log_prefix("[mps::planner::pushing::oracle::OracleControlSampler::steerPushSimple]");
+    const auto* current_robot_state = source->getObjectState(_robot_id);
+    const auto* current_obj_state = source->getObjectState(object_id);
+    const auto* dest_obj_state = dest->getObjectState(object_id);
+    Eigen::VectorXf current_obj_config;
+    current_obj_state->getConfiguration(current_obj_config);
+    Eigen::VectorXf dest_obj_config;
+    dest_obj_state->getConfiguration(dest_obj_config);
+    Eigen::VectorXf current_robot_config;
+    current_robot_state->getConfiguration(current_robot_config);
+    // TODO needs to be evaluated. Should we really do this projection?
+    mps_logging::logDebug(boost::format("Projecting object state %1% to pushability distribution") % dest_obj_config.transpose(), log_prefix);
+    _pushing_oracle->projectToPushability(current_obj_config, dest_obj_config, _params.min_pushability, object_id, dest_obj_config);
+    mps_logging::logDebug(boost::format("Projected state to %1%") % dest_obj_config.transpose(), log_prefix);
+    // TODO do not need to actually compute pushability
+    float pushability = _pushing_oracle->predictPushability(current_obj_config, dest_obj_config, object_id);
+    mps_logging::logDebug(boost::format("New pushability is %f") % pushability, log_prefix);
+    // ask for feasibility
+    float feasibility = _pushing_oracle->predictFeasibility(current_robot_config, current_obj_config,
+                                                            dest_obj_config, object_id);
+    // if we have too low feasibility, do a random action, i.e. we emulate having a well defined distribution
+    if (feasibility < _params.min_feasibility) {
+        mps_logging::logDebug(boost::format("Feasibility is only %f, steering robot") % feasibility,
+                              log_prefix);
+        Eigen::VectorXf new_robot_dest(_robot_state->getConfiguration());
+        _pushing_oracle->sampleFeasibleState(current_obj_config, dest_obj_config, object_id, new_robot_dest);
+        mps_logging::logDebug(boost::format("Sampled robot state %1% based on feasibility") % new_robot_dest.transpose(), log_prefix);
+        // the oracle gave us a new robot state we should move to instead
+        _robot_state->setConfiguration(new_robot_dest);
+        randomControl(controls, source, dest, object_id);
+        return true;
+    }
+    // The oracle is confident it can help
+    mps_logging::logDebug("The oracle is confident it can help.", log_prefix);
+    Eigen::VectorXf control_param;
+    _pushing_oracle->predictAction(current_robot_config, current_obj_config, dest_obj_config,
+                                   object_id, control_param);
     auto* control = getControl();
     control->setParameters(control_param);
     controls.push_back((::ompl::control::Control const*)control);

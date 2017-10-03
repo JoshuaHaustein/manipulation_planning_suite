@@ -86,6 +86,7 @@ namespace mps {
                         void getConfiguration(Eigen::VectorXf& vec) const;
                         void setConfiguration(const Eigen::VectorXf& config);
                         void serializeInNumbers(std::ostream& ostream) const;
+                        std::string toString() const;
                     private:
                         const std::vector<internal::SubstateTypeDescription> _state_descriptions;
                         unsigned int _dimension;
@@ -101,7 +102,13 @@ namespace mps {
                     /** Overrides from CompoundStateSpace */
                     ::ompl::base::State* allocState() const override;
                     void freeState(::ompl::base::State* state) const override;
-//                    void computeDirection(StateType const* state_1, StateType const* state_2, Eigen::VectorXf& dir) const;
+                    /**
+                     * Computes a direction vector from state_1 to state_2.
+                     * @param state_1 - start state
+                     * @param state_2 - end_state
+                     * @param dir - Eigen vector containing deltas that move state_1 to state_2
+                     */
+                    void computeDirection(StateType const* state_1, StateType const* state_2, Eigen::VectorXf& dir) const;
                     void computeDirection(const Eigen::VectorXf& config_1, const Eigen::VectorXf& config_2,
                                           Eigen::VectorXf& dir ) const;
 
@@ -145,6 +152,7 @@ namespace mps {
                         void getVelocity(Eigen::VectorXf& vec) const;
                         void setVelocity(const Eigen::VectorXf& vel);
                         void serializeInNumbers(std::ostream& ostream) const;
+                        std::string toString() const;
                     private:
                         const std::vector<internal::SubstateTypeDescription> _state_descriptions;
                         unsigned int _dimension;
@@ -160,6 +168,7 @@ namespace mps {
                     /** Overrides from CompoundStateSpace */
                     ::ompl::base::State* allocState() const override;
                     void freeState(::ompl::base::State* state) const override;
+                    void computeDirection(const StateType* state_a, const StateType* state_b, Eigen::VectorXf& dir) const;
 
                 private:
                     sim_env::ObjectConstWeakPtr _object;
@@ -218,6 +227,7 @@ namespace mps {
                         ~StateType();
                         Eigen::VectorXf getConfiguration() const;
                         void getConfiguration(Eigen::VectorXf& vec) const;
+                        SimEnvObjectConfiguration* getConfigurationState() const;
                         void setConfiguration(const Eigen::VectorXf& vec);
                         bool hasVelocity() const;
                         /**
@@ -227,9 +237,11 @@ namespace mps {
                          */
                         Eigen::VectorXf getVelocity() const;
                         void getVelocity(Eigen::VectorXf& vec) const;
+                        SimEnvObjectVelocity* getVelocityState() const;
                         void setVelocity(const Eigen::VectorXf& vec);
                         void serializeInNumbers(std::ostream& ostream) const;
                         void print(std::ostream& out) const;
+                        std::string toString() const;
                     private:
                         bool _configuration_only;
                         int _num_dofs;
@@ -257,6 +269,10 @@ namespace mps {
 
                     SimEnvObjectConfigurationSpacePtr getConfigurationSpace();
                     SimEnvObjectVelocitySpacePtr getVelocitySpace();
+                    SimEnvObjectConfigurationSpaceConstPtr getConfigurationSpaceConst() const;
+                    SimEnvObjectVelocitySpaceConstPtr getVelocitySpaceConst() const;
+                    void computeDirection(const StateType* state_a, const StateType* state_b, Eigen::VectorXf& dir) const;
+                    void shiftState(StateType* state, const Eigen::VectorXf& dir) const;
                     /** Overrides from CompoundStateSpace */
                     ::ompl::base::State* allocState() const override;
                     void freeState(::ompl::base::State* state) const override;
@@ -298,6 +314,7 @@ namespace mps {
                         SimEnvObjectState* getObjectState(unsigned int i) const;
                         void serializeInNumbers(std::ostream& ostream) const;
                         void print(std::ostream& out) const;
+                        std::string toString() const;
 
                     private:
                         unsigned int _num_objects;
@@ -329,6 +346,16 @@ namespace mps {
                     int getObjectIndex(const std::string& obj_name) const;
                     unsigned int getNumObjects() const;
                     SimEnvObjectStateSpacePtr getObjectStateSpace(const std::string& name);
+                    SimEnvObjectStateSpacePtr getObjectStateSpace(unsigned int idx);
+                    SimEnvObjectStateSpaceConstPtr getObjectStateSpaceConst(unsigned int idx) const;
+                    void computeDirection(const StateType* state_a, const StateType* state_b, Eigen::VectorXf& dir) const;
+                    /**
+                     * Shifts the provided state by dir, i.e. state += dir.
+                     *
+                     * @param state - a world state to shift
+                     * @param dir - a direction in world state space as computed by computeDirection
+                     */
+                    void shiftState(StateType* state, const Eigen::VectorXf& dir) const;
 
                     /**
                      * Sets the state of the given world to the given state. The state is assumed to originate
@@ -359,6 +386,7 @@ namespace mps {
                     ::ompl::base::State* allocState() const override;
                     void freeState(::ompl::base::State* state) const override;
                     double distance(const ::ompl::base::State* state_1, const ::ompl::base::State* state_2) const override;
+                    void copySubState(::ompl::base::State* state_1, const ::ompl::base::State* state_2, unsigned int obj_id) const;
 
 
                 private:
@@ -438,6 +466,9 @@ namespace mps {
                         struct PairHash {
                             std::size_t operator()(const std::pair<std::string, std::string>& key) const;
                         };
+
+                        void getForbiddenCollisionPairs(std::vector< std::pair< std::string, std::string> >& pairs);
+                        void getForbiddenStaticCollisions(std::vector<std::string>& black_list);
                     private:
                         bool _b_static_col_allowed;
                         std::unordered_map< std::pair<std::string, std::string>, bool, PairHash> _forbidden_collisions;

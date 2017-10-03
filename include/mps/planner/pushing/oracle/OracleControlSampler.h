@@ -49,9 +49,24 @@ namespace mps {
                                   const ::ompl::base::State* source,
                                   const ::ompl::base::State* dest,
                                   unsigned int local_target_obj);
+                    /**
+                     * Samples a robot state from oracle feasibility p(x_r | x_t, x'_t)
+                     * @param sample_state - contains x_t and as a result will contain the sampled x_r. WARNING: Must be an instance of SimEnvState
+                     * @param target_state - contains x'_t. WARNING: Must be an instance of SimEnvState
+                     * @param local_target_obj - object identifier t
+                     * @return feasibility of sampled state
+                     */
+                    float sampleFeasibleState(::ompl::base::State* x_state,
+                                              const ::ompl::base::State* x_prime_state,
+                                              unsigned int local_target_obj);
+                    float getFeasibility(const ::ompl::base::State* x_state,
+                                         const ::ompl::base::State* x_prime_state,
+                                         unsigned int active_obj_id) const;
                     void setParameters(const Parameters& params);
 
-                protected:
+                    bool steerRobot(std::vector<::ompl::control::Control const*>& controls,
+                                    const ::ompl::base::State* source,
+                                    const ::ompl::base::State* dest);
                     bool steerRobot(std::vector<::ompl::control::Control const*>& controls,
                                     const mps::planner::ompl::state::SimEnvWorldState* source,
                                     const mps::planner::ompl::state::SimEnvWorldState* dest);
@@ -62,10 +77,19 @@ namespace mps {
                                    const mps::planner::ompl::state::SimEnvWorldState* source,
                                    const mps::planner::ompl::state::SimEnvWorldState* dest,
                                    unsigned int obj_id);
-                    void randomControl(std::vector<::ompl::control::Control const*>& controls,
+                    bool steerPushSimple(std::vector<::ompl::control::Control const*>& controls,
+                                         const ::ompl::base::State* source,
+                                         const ::ompl::base::State* dest,
+                                         unsigned int obj_id);
+                    bool steerPushSimple(std::vector<::ompl::control::Control const*>& controls,
                                    const mps::planner::ompl::state::SimEnvWorldState* source,
                                    const mps::planner::ompl::state::SimEnvWorldState* dest,
                                    unsigned int obj_id);
+                    void randomControl(std::vector<::ompl::control::Control const*>& controls,
+                                       const mps::planner::ompl::state::SimEnvWorldState* source,
+                                       const mps::planner::ompl::state::SimEnvWorldState* dest,
+                                       unsigned int obj_id);
+
                 private:
                     ::ompl::control::SpaceInformationPtr _si;
                     ::ompl::control::ControlSamplerPtr _control_sampler;

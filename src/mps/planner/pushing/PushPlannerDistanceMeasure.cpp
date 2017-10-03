@@ -7,6 +7,7 @@
 #include <mps/planner/util/Logging.h>
 
 using namespace mps::planner::pushing;
+namespace mps_logging = mps::planner::util::logging;
 
 PushPlannerDistanceMeasure::PushPlannerDistanceMeasure(ompl::state::SimEnvWorldStateSpacePtr state_space,
                                                        const std::vector<float> &weights):
@@ -43,6 +44,9 @@ double PushPlannerDistanceMeasure::distance(const ::ompl::base::State *state1,
                                                                             sim_env_state_2->getObjectState(i));
         }
     }
+    mps_logging::logDebug("Computed distance between state " + sim_env_state_1->toString() +
+                                  " and state " + sim_env_state_2->toString() + " distance is: " + std::to_string(dist),
+                          "[PushPlannerDistanceMeasure]");
     return dist;
 }
 

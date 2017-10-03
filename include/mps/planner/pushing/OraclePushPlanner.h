@@ -28,7 +28,7 @@ namespace mps {
                     Human = 0, Learned = 1
                 };
                 enum AlgorithmType {
-                    Naive = 0, OracleRRT = 1, SliceOracleRRT = 2
+                    Naive = 0, OracleRRT = 1, SliceOracleRRT = 2, CompleteSliceOracleRRT = 3
                 };
                 // world related parameters
                 sim_env::WorldPtr world;
@@ -38,6 +38,7 @@ namespace mps {
                 // restrictions on the world
                 std::map<std::string, Eigen::VectorXi> active_dofs;
                 mps::planner::ompl::state::PlanningSceneBounds workspace_bounds;
+                mps::planner::ompl::state::SimEnvValidityChecker::CollisionPolicy collision_policy;
                 // time out for planner
                 float planning_time_out;
                 std::function<bool()> stopping_condition;
@@ -105,7 +106,7 @@ namespace mps {
                 bool setup(PlanningProblem& problem);
                 bool solve(PlanningSolution& solution);
                 // TODO should we move this playback function somewhere else?
-                void playback(const PlanningSolution& solution);
+                void playback(const PlanningSolution& solution, const std::function<bool()>& interrupt_callback=[](){return false;});
                 void clearVisualizations();
                 void generateData(const std::string& file_name,
                                   unsigned int num_samples,
@@ -121,10 +122,8 @@ namespace mps {
                 PlanningProblem _planning_problem;
                 mps::planner::pushing::algorithm::RearrangementRRTPtr _algorithm;
                 mps::planner::pushing::algorithm::RearrangementRRT::DebugDrawerPtr _debug_drawer;
-                mps::planner::ompl::state::SimEnvValidityChecker::CollisionPolicy _collision_policy;
                 std::vector<float> _distance_weights;
                 void prepareDistanceWeights();
-                void prepareCollisionPolicy();
                 mps::planner::pushing::algorithm::RearrangementRRTPtr createAlgorithm(const PlanningProblem& pp) const;
 //                ::ompl::control::DirectedControlSamplerPtr allocateDirectedControlSampler(const ::ompl::control::SpaceInformation* si);
                 mps::planner::pushing::oracle::DataGeneratorPtr _data_generator;

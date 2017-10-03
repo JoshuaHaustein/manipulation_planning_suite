@@ -15,6 +15,12 @@ namespace mps {
         namespace util {
             namespace yaml {
 
+                struct CollisionPolicyDesc {
+                    bool static_collisions_allowed;
+                    std::vector<std::string> static_collisions_blacklist;
+                    std::vector<std::pair<std::string, std::string> > collisions_blacklist;
+                };
+
                 struct ControlLimitsDesc {
                     Eigen::VectorXf velocity_limits;
                     Eigen::VectorXf acceleration_limits;
@@ -34,6 +40,7 @@ namespace mps {
                     // todo object weights
                     // todo weight map
                     ControlLimitsDesc control_limits;
+                    CollisionPolicyDesc collision_policy;
                     float t_max;
                     Eigen::Vector3f goal_position;
                     float goal_region_radius;
@@ -56,6 +63,24 @@ namespace mps {
 }
 
 namespace YAML {
+    template<>
+    struct convert<mps::planner::util::yaml::CollisionPolicyDesc> {
+        static Node encode(const mps::planner::util::yaml::CollisionPolicyDesc& policy_desc) {
+            Node node;
+            node["static_collisions_allowed"] = policy_desc.static_collisions_allowed;
+            node["static_collisions_blacklist"] = policy_desc.static_collisions_blacklist;
+            node["collisions_blacklist"] = policy_desc.collisions_blacklist;
+            return node;
+        }
+
+        static bool decode(const Node &node, mps::planner::util::yaml::CollisionPolicyDesc& policy_desc) {
+            policy_desc.static_collisions_allowed = node["static_collisions_allowed"].as<bool>();
+            policy_desc.static_collisions_blacklist = node["static_collisions_blacklist"].as<std::vector<std::string> >();
+            policy_desc.collisions_blacklist = node["collisions_blacklist"].as<std::vector< std::pair<std::string, std::string> > >();
+            return true;
+        }
+    };
+
     template<>
     struct convert<mps::planner::util::yaml::ControlLimitsDesc> {
         static Node encode(const mps::planner::util::yaml::ControlLimitsDesc &control_desc) {
@@ -81,6 +106,7 @@ namespace YAML {
             node["world_file"] = problem_desc.world_file;
             node["robot_name"] = problem_desc.robot_name;
             node["target_name"] = problem_desc.target_name;
+            node["collision_policy"] = problem_desc.collision_policy;
             node["x_limits"] = problem_desc.x_limits;
             node["y_limits"] = problem_desc.y_limits;
             node["z_limits"] = problem_desc.z_limits;
@@ -106,6 +132,7 @@ namespace YAML {
             problem_desc.world_file = node["world_file"].as<std::string>();
             problem_desc.robot_name = node["robot_name"].as<std::string>();
             problem_desc.target_name = node["target_name"].as<std::string>();
+            problem_desc.collision_policy = node["collision_policy"].as<mps::planner::util::yaml::CollisionPolicyDesc>();
             problem_desc.x_limits = node["x_limits"].as<Eigen::Array2f>();
             problem_desc.y_limits = node["y_limits"].as<Eigen::Array2f>();
             problem_desc.z_limits = node["z_limits"].as<Eigen::Array2f>();

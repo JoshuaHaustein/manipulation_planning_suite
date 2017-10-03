@@ -36,29 +36,33 @@ namespace mps {
                                          const Parameters& params=Parameters());
                     ~HumanOracle() override;
 
-                    void prepareOracle(const Eigen::VectorXf &current_robot_state,
-                                       const Eigen::VectorXf &current_obj_state,
-                                       const Eigen::VectorXf &next_obj_state) override;
-
                     float predictPushability(const Eigen::VectorXf &current_obj_state,
-                                             const Eigen::VectorXf &next_obj_state) override;
+                                             const Eigen::VectorXf &next_obj_state,
+                                             const unsigned int& obj_id) override;
 
                     void projectToPushability(const Eigen::VectorXf& current_obj_state,
                                               const Eigen::VectorXf& next_obj_state,
-                                              Eigen::VectorXf& output, float num_std=1.0f) override;
+                                              const float& num_std,
+                                              const unsigned int& obj_id,
+                                              Eigen::VectorXf& output) override;
 
                     float predictFeasibility(const Eigen::VectorXf &current_robot_state,
                                              const Eigen::VectorXf &current_obj_state,
-                                             const Eigen::VectorXf &next_obj_state) override;
+                                             const Eigen::VectorXf &next_obj_state,
+                                             const unsigned int& obj_id) override;
 
                     void predictAction(const Eigen::VectorXf &current_robot_state,
                                        const Eigen::VectorXf &current_obj_state,
                                        const Eigen::VectorXf &next_obj_state,
+                                       const unsigned int& obj_id,
                                        Eigen::VectorXf &control) override;
 
-                    void sampleFeasibleState(Eigen::VectorXf &new_robot_state,
-                                             const Eigen::VectorXf &current_obj_state,
-                                             const Eigen::VectorXf &next_obj_state) override;
+                    void sampleFeasibleState(const Eigen::VectorXf &current_obj_state,
+                                             const Eigen::VectorXf &next_obj_state,
+                                             const unsigned int& obj_id,
+                                             Eigen::VectorXf &new_robot_state) override;
+
+                    float getMaximalPushingDistance() const override;
 
                 private:
                     Parameters _params;

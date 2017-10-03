@@ -15,8 +15,9 @@ find_package(catkin REQUIRED
 find_package(Eigen 3.3 REQUIRED)
 find_package(OMPL REQUIRED)
 #find_package(CUDA REQUIRED)
-find_package(Protobuf REQUIRED)
+#find_package(Protobuf REQUIRED)
 
+add_subdirectory(proto)
 ## Uncomment this if the package has a setup.py. This macro ensures
 ## modules and global scripts declared therein get installed
 ## See http://ros.org/doc/api/catkin/html/user_guide/setup_dot_py.html
@@ -33,7 +34,7 @@ find_package(Protobuf REQUIRED)
 ## DEPENDS: system dependencies of this project that dependent projects also need
 catkin_package(
   INCLUDE_DIRS include
-  LIBRARIES ${PROJECT_NAME}
+  LIBRARIES ${PROJECT_NAME} proto
   CATKIN_DEPENDS sim_env
   DEPENDS Eigen OMPL Protobuf
 )
@@ -48,6 +49,9 @@ add_definitions(-Wno-deprecated-register)
 set(CMAKE_CXX_FLAGS_DEBUG "-g -O0 -Wall")
 set(CMAKE_CXX_FLAGS_RELEASE "-O3")
 
+#message("Proto source: " ${PROTO_SRCS})
+#message("Proto header: " ${PROTO_HDRS})
+
 ## Specify additional locations of header files
 ## Your package locations should be listed before other locations
  include_directories(include
@@ -56,7 +60,12 @@ set(CMAKE_CXX_FLAGS_RELEASE "-O3")
          ${ompl_INCLUDE_DIRS}
          ${catkin_INCLUDE_DIRS}
          ${PROTOBUF_INCLUDE_DIRS}
+         ${CMAKE_CURRENT_BINARY_DIR}
          )
+#get_property(dirs DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY INCLUDE_DIRECTORIES)
+#foreach(dir ${dirs})
+# message(STATUS "dir='${dir}'")
+#endforeach()
 
 ## Define all headers (clion needs this)
 set(PLANNER_H
@@ -72,7 +81,7 @@ set(PLANNER_H
         include/mps/planner/pushing/OraclePushPlanner.h
         include/mps/planner/pushing/oracle/OracleControlSampler.h
         include/mps/planner/pushing/oracle/Oracle.h
-#        include/mps/planner/pushing/oracle/LearnedOracle.h
+        include/mps/planner/pushing/oracle/LearnedOracle.h
         include/mps/planner/pushing/oracle/HumanOracle.h
         include/mps/planner/pushing/oracle/RampComputer.h
         include/mps/planner/pushing/oracle/DataGenerator.h
@@ -107,19 +116,16 @@ set(PLANNER_SRC
         src/mps/planner/pushing/OraclePushPlanner.cpp
         src/mps/planner/pushing/oracle/OracleControlSampler.cpp
         src/mps/planner/pushing/oracle/Oracle.cpp
-#        src/mps/planner/pushing/oracle/LearnedOracle.cpp
-#        src/mps/planner/pushing/oracle/oracle.pb.cc
+        src/mps/planner/pushing/oracle/LearnedOracle.cpp
         src/mps/planner/pushing/oracle/HumanOracle.cpp
         src/mps/planner/pushing/oracle/RampComputer.cpp
         src/mps/planner/pushing/oracle/DataGenerator.cpp
         src/mps/planner/pushing/algorithm/RRT.cpp
 )
 
-#protobuf_generate_cpp(PROTO_SRCS PROTO_HDRS foo.proto)
-
 ## Declare a C++ library
  add_library(${PROJECT_NAME}
-       ${PLANNER_SRC}
+         ${PLANNER_SRC}
          ${PLANNER_H}
  )
 
