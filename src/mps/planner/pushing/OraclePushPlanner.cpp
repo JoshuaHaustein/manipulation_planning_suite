@@ -83,6 +83,13 @@ OraclePushPlanner::OraclePushPlanner() {
 OraclePushPlanner::~OraclePushPlanner() = default;
 
 bool OraclePushPlanner::setup(PlanningProblem& problem) {
+    // TODO this is ugly to have. In principle, I think this slice visualizer should maybe not be there or
+    // TODO have it's copies of everything
+    if (_debug_drawer) {
+        // clearing the slice drawer here, allows it to delete slices before we reset the state space these slices belong to
+        auto slice_drawer = _debug_drawer->getSliceDrawer();
+        if (slice_drawer) slice_drawer->clear();
+    }
     static const std::string log_prefix("[mps::planner::pushing::OraclePushPlanner::setup]");
     // first delete any previous instances
     _space_information.reset();
@@ -124,9 +131,9 @@ bool OraclePushPlanner::setup(PlanningProblem& problem) {
     // TODO this is only for debug
     if (_planning_problem.debug) {
         if (!_debug_drawer) {
-            _debug_drawer = std::make_shared<algorithm::RearrangementRRT::DebugDrawer>(_planning_problem.world->getViewer(),
-                                                                                       _state_space->getObjectIndex(_planning_problem.robot->getName()),
-                                                                                       _state_space->getObjectIndex(_planning_problem.target_object->getName()));
+            _debug_drawer = std::make_shared<algorithm::DebugDrawer>(_planning_problem.world->getViewer(),
+                                                                     _state_space->getObjectIndex(_planning_problem.robot->getName()),
+                                                                     _state_space->getObjectIndex(_planning_problem.target_object->getName()));
         }
         _algorithm->setDebugDrawer(_debug_drawer);
     }
@@ -137,6 +144,11 @@ bool OraclePushPlanner::setup(PlanningProblem& problem) {
 
 bool OraclePushPlanner::solve(PlanningSolution& solution) {
     // TODO run planning algorithm, extract solution and return it
+    if (_debug_drawer) {
+        // TODO this is ugly to do like this
+        auto slice_drawer = _debug_drawer->getSliceDrawer();
+        if (slice_drawer) slice_drawer->setStateSpace(_state_space);
+    }
     // start state
     auto* start_state = _state_space->allocState();
     _state_space->extractState(_planning_problem.world,
@@ -179,9 +191,15 @@ void OraclePushPlanner::playback(const PlanningSolution& solution,
     }
 }
 
+void OraclePushPlanner::setSliceDrawer(algorithm::SliceDrawerInterfacePtr slice_drawer) {
+    _debug_drawer->setSliceDrawer(slice_drawer);
+}
+
 void OraclePushPlanner::clearVisualizations() {
     if (_debug_drawer) {
         _debug_drawer->clear();
+        auto slice_drawer = _debug_drawer->getSliceDrawer();
+        if (slice_drawer) slice_drawer->clear();
     }
 }
 

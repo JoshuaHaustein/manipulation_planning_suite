@@ -107,6 +107,7 @@ namespace mps {
                 bool solve(PlanningSolution& solution);
                 // TODO should we move this playback function somewhere else?
                 void playback(const PlanningSolution& solution, const std::function<bool()>& interrupt_callback=[](){return false;});
+                void setSliceDrawer(algorithm::SliceDrawerInterfacePtr slice_drawer);
                 void clearVisualizations();
                 void generateData(const std::string& file_name,
                                   unsigned int num_samples,
@@ -121,7 +122,7 @@ namespace mps {
                 mps::planner::ompl::control::SimEnvStatePropagatorPtr _state_propagator;
                 PlanningProblem _planning_problem;
                 mps::planner::pushing::algorithm::RearrangementRRTPtr _algorithm;
-                mps::planner::pushing::algorithm::RearrangementRRT::DebugDrawerPtr _debug_drawer;
+                mps::planner::pushing::algorithm::DebugDrawerPtr _debug_drawer;
                 std::vector<float> _distance_weights;
                 void prepareDistanceWeights();
                 mps::planner::pushing::algorithm::RearrangementRRTPtr createAlgorithm(const PlanningProblem& pp) const;

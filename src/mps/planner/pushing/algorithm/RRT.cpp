@@ -53,74 +53,6 @@ RearrangementRRT::PlanningBlackboard::PlanningBlackboard(PlanningQuery pq) :
 {
 }
 
-////////////////////////////////////////////////////////////////////////////////////////////////////
-//////////////////////////////////////// DebugDrawer ///////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////////////////////////
-RearrangementRRT::DebugDrawer::DebugDrawer(sim_env::WorldViewerPtr world_viewer,
-                                           unsigned int robot_id,
-                                           unsigned int target_id) : DebugDrawer(world_viewer, nullptr, robot_id, target_id) {
-}
-
-
-RearrangementRRT::DebugDrawer::DebugDrawer(sim_env::WorldViewerPtr world_viewer,
-                                           SliceDrawerInterfacePtr slice_drawer,
-                                           unsigned int robot_id,
-                                           unsigned int target_id) {
-    _world_viewer = world_viewer;
-    _slice_drawer = slice_drawer;
-    _robot_id = robot_id;
-    _target_id = target_id;
-}
-RearrangementRRT::DebugDrawer::~DebugDrawer() {
-    clear();
-}
-
-void RearrangementRRT::DebugDrawer::addNewMotion(MotionPtr motion) {
-    if (!motion->getParent()) return;
-    auto* parent_state = dynamic_cast<ompl::state::SimEnvWorldState*>(motion->getParent()->getState());
-    auto* new_state = dynamic_cast<ompl::state::SimEnvWorldState*>(motion->getState());
-    auto* parent_object_state = parent_state->getObjectState(_robot_id);
-    auto* new_object_state = new_state->getObjectState(_robot_id);
-    drawStateTransition(parent_object_state, new_object_state, Eigen::Vector4f(0.4, 0, 0.9, 1));
-    parent_object_state = parent_state->getObjectState(_target_id);
-    new_object_state = new_state->getObjectState(_target_id);
-    drawStateTransition(parent_object_state, new_object_state, Eigen::Vector4f(0, 0.7, 0, 1));
-    for (unsigned int i = 0; i < new_state->getNumObjects(); ++i) {
-        if ((i != _target_id) and (i != _robot_id)) {
-            parent_object_state = parent_state->getObjectState(i);
-            new_object_state = new_state->getObjectState(i);
-            drawStateTransition(parent_object_state, new_object_state, Eigen::Vector4f(0.9, 0.9, 0.9, 0.4));
-        }
-    }
-}
-
-void RearrangementRRT::DebugDrawer::clear() {
-    for (auto& handle : _handles) {
-        _world_viewer->removeDrawing(handle);
-    }
-    _handles.clear();
-}
-
-void RearrangementRRT::DebugDrawer::drawStateTransition(const ompl::state::SimEnvObjectState *parent_state,
-                                                      const ompl::state::SimEnvObjectState *new_state,
-                                                      const Eigen::Vector4f& color) {
-    // TODO this is overfit to box2d push planning
-    Eigen::VectorXf config = parent_state->getConfiguration();
-    Eigen::Vector3f pos_parent(config[0], config[1], 0.0f);
-//    Eigen::Vector3f extent(0.1, 0.1, 0.0);
-    config = new_state->getConfiguration();
-    Eigen::Vector3f pos_child(config[0], config[1], 0.0f);
-//    _handles.push_back(_world_viewer->drawBox(pos_parent, extent, true));
-    _handles.push_back(_world_viewer->drawLine(pos_parent, pos_child, color, 0.01f));
-//    _handles.push_back(_world_viewer->drawBox(pos_child, extent, true));
-}
-
-//void RearrangementRRT::DebugDrawer::addNewSlice(mps::planner::pushing::algorithm::SliceBasedOracleRRT::SlicePtr slice) {
-//    if(!_slice_drawer) {
-//        return;
-//    }
-//    // TODO add slice to drawer
-//}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////// RearrangementRRT /////////////////////////////////////////////
@@ -648,6 +580,9 @@ void SliceBasedOracleRRT::addToTree(MotionPtr new_motion, MotionPtr parent, Plan
         auto new_slice = getNewSlice(new_motion);
         _slices_nn->add(new_slice);
         _slices_list.push_back(new_slice);
+        if (_debug_drawer) {
+            _debug_drawer->addNewSlice(new_slice);
+        }
     } else { // the new motion/state is in the same slice
         closest_slice->addSample(new_motion);
     }
@@ -897,3 +832,92 @@ CompleteSliceBasedOracleRRT::ExtensionCandidateTuple CompleteSliceBasedOracleRRT
     return candidates.at(candidates.size() - 1);
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////// DebugDrawer ///////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////
+DebugDrawer::DebugDrawer(sim_env::WorldViewerPtr world_viewer,
+                         unsigned int robot_id,
+                         unsigned int target_id) :
+        DebugDrawer(world_viewer, nullptr, robot_id, target_id)
+{
+}
+
+DebugDrawer::DebugDrawer(sim_env::WorldViewerPtr world_viewer,
+                         SliceDrawerInterfacePtr slice_drawer,
+                         unsigned int robot_id,
+                         unsigned int target_id)
+{
+    _world_viewer = world_viewer;
+    _slice_drawer = slice_drawer;
+    _robot_id = robot_id;
+    _target_id = target_id;
+}
+
+DebugDrawer::~DebugDrawer() {
+    clear();
+}
+
+void DebugDrawer::addNewMotion(MotionPtr motion) {
+    if (!motion->getParent()) return;
+    auto* parent_state = dynamic_cast<ompl::state::SimEnvWorldState*>(motion->getParent()->getState());
+    auto* new_state = dynamic_cast<ompl::state::SimEnvWorldState*>(motion->getState());
+    auto* parent_object_state = parent_state->getObjectState(_robot_id);
+    auto* new_object_state = new_state->getObjectState(_robot_id);
+    drawStateTransition(parent_object_state, new_object_state, Eigen::Vector4f(0.4, 0, 0.9, 1));
+    parent_object_state = parent_state->getObjectState(_target_id);
+    new_object_state = new_state->getObjectState(_target_id);
+    drawStateTransition(parent_object_state, new_object_state, Eigen::Vector4f(0, 0.7, 0, 1));
+    for (unsigned int i = 0; i < new_state->getNumObjects(); ++i) {
+        if ((i != _target_id) and (i != _robot_id)) {
+            parent_object_state = parent_state->getObjectState(i);
+            new_object_state = new_state->getObjectState(i);
+            drawStateTransition(parent_object_state, new_object_state, Eigen::Vector4f(0.9, 0.9, 0.9, 0.4));
+        }
+    }
+}
+
+void DebugDrawer::clear() {
+    for (auto& handle : _handles) {
+        _world_viewer->removeDrawing(handle);
+    }
+    _handles.clear();
+    if (_slice_drawer) {
+        _slice_drawer->clear();
+    }
+}
+
+void DebugDrawer::drawStateTransition(const ompl::state::SimEnvObjectState *parent_state,
+                                      const ompl::state::SimEnvObjectState *new_state,
+                                      const Eigen::Vector4f& color) {
+    // TODO this is overfit to box2d push planning
+    Eigen::VectorXf config = parent_state->getConfiguration();
+    Eigen::Vector3f pos_parent(config[0], config[1], 0.0f);
+//    Eigen::Vector3f extent(0.1, 0.1, 0.0);
+    config = new_state->getConfiguration();
+    Eigen::Vector3f pos_child(config[0], config[1], 0.0f);
+//    _handles.push_back(_world_viewer->drawBox(pos_parent, extent, true));
+    _handles.push_back(_world_viewer->drawLine(pos_parent, pos_child, color, 0.01f));
+//    _handles.push_back(_world_viewer->drawBox(pos_child, extent, true));
+}
+
+void DebugDrawer::addNewSlice(mps::planner::pushing::algorithm::SliceBasedOracleRRT::SliceConstPtr slice) {
+    if(!_slice_drawer) {
+        return;
+    }
+    _slice_drawer->addSlice(slice);
+}
+
+void DebugDrawer::setSliceDrawer(SliceDrawerInterfacePtr slice_drawer) {
+    _slice_drawer = slice_drawer;
+}
+
+SliceDrawerInterfacePtr DebugDrawer::getSliceDrawer() {
+    return _slice_drawer;
+}
+
+SliceDrawerInterface::~SliceDrawerInterface() = default;
+
+void SliceDrawerInterface::setStateSpace(mps::planner::ompl::state::SimEnvWorldStateSpacePtr state_space) {
+    _state_space = state_space;
+}

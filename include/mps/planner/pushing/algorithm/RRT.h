@@ -27,6 +27,11 @@ namespace mps {
     namespace planner {
         namespace pushing {
             namespace algorithm {
+                class DebugDrawer;
+                typedef std::shared_ptr<DebugDrawer> DebugDrawerPtr;
+                class SliceDrawerInterface;
+                typedef std::shared_ptr<SliceDrawerInterface> SliceDrawerInterfacePtr;
+
                 struct PlanningStatistics {
                     unsigned int num_iterations;
                     unsigned int num_state_propagations;
@@ -112,32 +117,6 @@ namespace mps {
                         PlanningQuery(const PlanningQuery& other);
                     };
 
-                    class DebugDrawer {
-                        // TODO this class may be overfit to a 2d planning case.
-                    public:
-                        class SliceDrawerInterface {
-                            // TODO define methods required to draw slices
-                        };
-                        typedef std::shared_ptr<SliceDrawerInterface> SliceDrawerInterfacePtr;
-                        DebugDrawer(sim_env::WorldViewerPtr world, unsigned int robot_id, unsigned int target_id);
-                        DebugDrawer(sim_env::WorldViewerPtr world, SliceDrawerInterfacePtr slice_drawer, unsigned int robot_id, unsigned int target_id);
-                        ~DebugDrawer();
-                        void addNewMotion(mps::planner::ompl::planning::essentials::MotionPtr motion);
-                        void clear();
-                        void drawStateTransition(const ompl::state::SimEnvObjectState* parent_state,
-                                                 const ompl::state::SimEnvObjectState* new_state,
-                                                 const Eigen::Vector4f& color);
-                        // TODO forward declaration of SlicePtr
-//                        void addNewSlice(mps::planner::pushing::algorithm::SliceBasedOracleRRT::SlicePtr slice);
-
-                    private:
-                        sim_env::WorldViewerPtr _world_viewer;
-                        SliceDrawerInterfacePtr _slice_drawer;
-                        std::vector<sim_env::WorldViewer::Handle> _handles;
-                        unsigned int _robot_id;
-                        unsigned int _target_id;
-                    };
-                    typedef std::shared_ptr<DebugDrawer> DebugDrawerPtr;
 
                 protected:
                     struct PlanningBlackboard {
@@ -381,6 +360,40 @@ namespace mps {
                                             PlanningBlackboard& pb);
                     typedef std::tuple<mps::planner::ompl::planning::essentials::MotionPtr, float, mps::planner::ompl::planning::essentials::MotionPtr> ExtensionCandidateTuple;
                     ExtensionCandidateTuple selectStateTuple(const std::vector<ExtensionCandidateTuple>& candidates) const;
+                };
+
+                class DebugDrawer {
+                    // TODO this class may be overfit to a 2d planning case.
+                public:
+                    DebugDrawer(sim_env::WorldViewerPtr world, unsigned int robot_id, unsigned int target_id);
+                    DebugDrawer(sim_env::WorldViewerPtr world, SliceDrawerInterfacePtr slice_drawer, unsigned int robot_id, unsigned int target_id);
+                    ~DebugDrawer();
+                    void setSliceDrawer(SliceDrawerInterfacePtr slice_drawer);
+                    void addNewMotion(mps::planner::ompl::planning::essentials::MotionPtr motion);
+                    void clear();
+                    void drawStateTransition(const ompl::state::SimEnvObjectState* parent_state,
+                                             const ompl::state::SimEnvObjectState* new_state,
+                                             const Eigen::Vector4f& color);
+                    void addNewSlice(mps::planner::pushing::algorithm::SliceBasedOracleRRT::SliceConstPtr slice);
+                    SliceDrawerInterfacePtr getSliceDrawer();
+
+                private:
+                    sim_env::WorldViewerPtr _world_viewer;
+                    SliceDrawerInterfacePtr _slice_drawer;
+                    std::vector<sim_env::WorldViewer::Handle> _handles;
+                    unsigned int _robot_id;
+                    unsigned int _target_id;
+                };
+
+                class SliceDrawerInterface {
+                public:
+                    virtual ~SliceDrawerInterface() = 0;
+                    // TODO functions needed to draw a slice
+                    virtual void clear() = 0;
+                    virtual void addSlice(mps::planner::pushing::algorithm::SliceBasedOracleRRT::SliceConstPtr slice) = 0;
+                    void setStateSpace(mps::planner::ompl::state::SimEnvWorldStateSpacePtr state_space);
+                protected:
+                    mps::planner::ompl::state::SimEnvWorldStateSpacePtr _state_space;
                 };
             }
         }
