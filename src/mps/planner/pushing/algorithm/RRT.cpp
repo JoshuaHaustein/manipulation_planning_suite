@@ -850,6 +850,9 @@ DebugDrawer::DebugDrawer(sim_env::WorldViewerPtr world_viewer,
 {
     _world_viewer = world_viewer;
     _slice_drawer = slice_drawer;
+    if (_slice_drawer) {
+        _slice_drawer->setDebugDrawer(shared_from_this());
+    }
     _robot_id = robot_id;
     _target_id = target_id;
 }
@@ -877,12 +880,12 @@ void DebugDrawer::addNewMotion(MotionPtr motion) {
     }
 }
 
-void DebugDrawer::clear() {
+void DebugDrawer::clear(bool clear_slice_drawer) {
     for (auto& handle : _handles) {
         _world_viewer->removeDrawing(handle);
     }
     _handles.clear();
-    if (_slice_drawer) {
+    if (_slice_drawer and clear_slice_drawer) {
         _slice_drawer->clear();
     }
 }
@@ -910,6 +913,9 @@ void DebugDrawer::addNewSlice(mps::planner::pushing::algorithm::SliceBasedOracle
 
 void DebugDrawer::setSliceDrawer(SliceDrawerInterfacePtr slice_drawer) {
     _slice_drawer = slice_drawer;
+    if (_slice_drawer) {
+        _slice_drawer->setDebugDrawer(shared_from_this());
+    }
 }
 
 SliceDrawerInterfacePtr DebugDrawer::getSliceDrawer() {
@@ -918,6 +924,11 @@ SliceDrawerInterfacePtr DebugDrawer::getSliceDrawer() {
 
 SliceDrawerInterface::~SliceDrawerInterface() = default;
 
+void SliceDrawerInterface::setDebugDrawer(mps::planner::pushing::algorithm::DebugDrawerPtr debug_drawer) {
+    _debug_drawer = debug_drawer;
+}
+
 void SliceDrawerInterface::setStateSpace(mps::planner::ompl::state::SimEnvWorldStateSpacePtr state_space) {
     _state_space = state_space;
 }
+

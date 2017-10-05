@@ -29,6 +29,7 @@ namespace mps {
             namespace algorithm {
                 class DebugDrawer;
                 typedef std::shared_ptr<DebugDrawer> DebugDrawerPtr;
+                typedef std::weak_ptr<DebugDrawer> DebugDrawerWeakPtr;
                 class SliceDrawerInterface;
                 typedef std::shared_ptr<SliceDrawerInterface> SliceDrawerInterfacePtr;
 
@@ -362,7 +363,7 @@ namespace mps {
                     ExtensionCandidateTuple selectStateTuple(const std::vector<ExtensionCandidateTuple>& candidates) const;
                 };
 
-                class DebugDrawer {
+                class DebugDrawer : public std::enable_shared_from_this<DebugDrawer> {
                     // TODO this class may be overfit to a 2d planning case.
                 public:
                     DebugDrawer(sim_env::WorldViewerPtr world, unsigned int robot_id, unsigned int target_id);
@@ -370,7 +371,7 @@ namespace mps {
                     ~DebugDrawer();
                     void setSliceDrawer(SliceDrawerInterfacePtr slice_drawer);
                     void addNewMotion(mps::planner::ompl::planning::essentials::MotionPtr motion);
-                    void clear();
+                    void clear(bool clear_slice_drawer=true);
                     void drawStateTransition(const ompl::state::SimEnvObjectState* parent_state,
                                              const ompl::state::SimEnvObjectState* new_state,
                                              const Eigen::Vector4f& color);
@@ -391,9 +392,11 @@ namespace mps {
                     // TODO functions needed to draw a slice
                     virtual void clear() = 0;
                     virtual void addSlice(mps::planner::pushing::algorithm::SliceBasedOracleRRT::SliceConstPtr slice) = 0;
+                    void setDebugDrawer(mps::planner::pushing::algorithm::DebugDrawerPtr debug_drawer);
                     void setStateSpace(mps::planner::ompl::state::SimEnvWorldStateSpacePtr state_space);
                 protected:
                     mps::planner::ompl::state::SimEnvWorldStateSpacePtr _state_space;
+                    mps::planner::pushing::algorithm::DebugDrawerWeakPtr _debug_drawer;
                 };
             }
         }
