@@ -95,6 +95,7 @@ bool SimEnvStatePropagator::propagate(const ::ompl::base::State* state, ::ompl::
     }
 
     state_space->extractState(_world, result_world_state);
+    propagation_success = propagation_success and _validity_checker->isValid(result_world_state);
     _world->restoreState();
     // TODO there are currently no validity checks performed here, i.e. is the outcoming state physicaly feasible
     // TODO (remember squeezing issue).

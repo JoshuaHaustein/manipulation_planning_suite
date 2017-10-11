@@ -210,7 +210,7 @@ namespace mps {
                          */
                         DistanceWeights() {
                             position_weight = 1.0;
-                            orientation_weight = 0.5;
+                            orientation_weight = 0.08;
                             joint_weight = 0.5;
                             configuration_weight = 1.0;
                             velocity_weight = 0.1;

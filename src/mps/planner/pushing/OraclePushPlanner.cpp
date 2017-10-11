@@ -134,6 +134,9 @@ bool OraclePushPlanner::setup(PlanningProblem& problem) {
             _debug_drawer = std::make_shared<algorithm::DebugDrawer>(_planning_problem.world->getViewer(),
                                                                      _state_space->getObjectIndex(_planning_problem.robot->getName()),
                                                                      _state_space->getObjectIndex(_planning_problem.target_object->getName()));
+        } else {
+            _debug_drawer->setRobotId(_state_space->getObjectIndex(_planning_problem.robot->getName()));
+            _debug_drawer->setTargetId(_state_space->getObjectIndex(_planning_problem.target_object->getName()));
         }
         _algorithm->setDebugDrawer(_debug_drawer);
     }

@@ -13,8 +13,8 @@ HumanOracle::Parameters::Parameters() {
     pushability_covariance(1, 1) = 0.1;
     pushability_covariance(2, 2) = 0.78;
     optimal_push_distance = 0.2;
-    push_distance_tolerance = 0.1;
-    push_angle_tolerance = 0.3;
+    push_distance_tolerance = 0.04;
+    push_angle_tolerance = 0.03;
 }
 
 void HumanOracle::Parameters::computeInverses() {
@@ -143,7 +143,7 @@ void HumanOracle::sampleFeasibleState(const Eigen::VectorXf &current_obj_state,
     Eigen::Vector2f pushing_offset = pushing_dist * rotation.toRotationMatrix() * pushing_dir;
     new_robot_state.head(2) -= pushing_offset.head(2);
     // orient the robot so that it faces into the desired pushing direction
-    new_robot_state[2] = std::acos(rel_obj[0] / rel_obj.head(2).norm());
+    new_robot_state[2] = std::atan2(pushing_dir[1], pushing_dir[0]) - 1.57f; // TODO the -1.57 is specific to the floating end-effector we use
 }
 
 float HumanOracle::getMaximalPushingDistance() const {

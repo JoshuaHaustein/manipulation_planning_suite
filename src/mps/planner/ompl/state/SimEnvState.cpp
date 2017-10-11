@@ -1304,6 +1304,7 @@ bool SimEnvValidityChecker::isValidIntermediate(const ::ompl::base::State* state
 
 bool SimEnvValidityChecker::isValidIntermediate() const {
     _world_space->extractState(_world, _world_state);
+    // TODO do we need to check physical feasibility here, too?
     // first check whether the current state is within bounds
     bool bounds_valid = _world_space->satisfiesBounds(_world_state);
     if (!bounds_valid) {

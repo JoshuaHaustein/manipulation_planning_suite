@@ -370,6 +370,8 @@ namespace mps {
                     DebugDrawer(sim_env::WorldViewerPtr world, SliceDrawerInterfacePtr slice_drawer, unsigned int robot_id, unsigned int target_id);
                     ~DebugDrawer();
                     void setSliceDrawer(SliceDrawerInterfacePtr slice_drawer);
+                    void setRobotId(unsigned int robot_id);
+                    void setTargetId(unsigned int target_id);
                     void addNewMotion(mps::planner::ompl::planning::essentials::MotionPtr motion);
                     void clear(bool clear_slice_drawer=true);
                     void drawStateTransition(const ompl::state::SimEnvObjectState* parent_state,

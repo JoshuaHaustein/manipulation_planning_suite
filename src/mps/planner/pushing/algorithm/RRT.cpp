@@ -37,7 +37,7 @@ RearrangementRRT::PlanningQuery::PlanningQuery(std::shared_ptr<ob::GoalSampleabl
     robot_bias = 0.0f;
     target_bias = 0.25f;
     num_slice_neighbors = 8;
-    slice_volume = 0.0;
+    slice_volume = 0.01;
     max_slice_distance = 0.0;
 }
 
@@ -228,7 +228,8 @@ unsigned int RearrangementRRT::sampleActiveObject(const PlanningBlackboard& pb) 
     } else if (random_value < pb.pq.target_bias + pb.pq.robot_bias) {
         return pb.robot_id;
     } else {
-        return static_cast<unsigned int>(_rng->uniformInt(0, _state_space->getNumObjects() - 1));
+        int value = _rng->uniformInt(0, _state_space->getNumObjects() - 1);
+        return static_cast<unsigned int>(value);
     }
 }
 
@@ -500,12 +501,11 @@ bool SliceBasedOracleRRT::sample(mps::planner::ompl::planning::essentials::Motio
     auto nu = (float)_rng->uniform01();
     if (nu < pb.pq.goal_bias and pb.pq.goal_region->canSample()) {
         pb.pq.goal_region->sampleGoal(motion->getState());
-        target_obj_id = pb.target_id;
         sampled_goal = true;
     } else {
-        target_obj_id = sampleActiveObject(pb);
         _state_sampler->sampleUniform(motion->getState()); // TODO might need valid state sampler
     }
+    target_obj_id = sampleActiveObject(pb);
 
     ////////////////////////////////// Variant 2 //////////////////////////////////
 //    if (nu < pb.pq.robot_bias) { // we want to move the robot
@@ -916,6 +916,14 @@ void DebugDrawer::setSliceDrawer(SliceDrawerInterfacePtr slice_drawer) {
     if (_slice_drawer) {
         _slice_drawer->setDebugDrawer(shared_from_this());
     }
+}
+
+void DebugDrawer::setRobotId(unsigned int robot_id) {
+    _robot_id = robot_id;
+}
+
+void DebugDrawer::setTargetId(unsigned int target_id) {
+    _target_id = target_id;
 }
 
 SliceDrawerInterfacePtr DebugDrawer::getSliceDrawer() {
