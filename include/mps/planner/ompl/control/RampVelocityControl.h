@@ -81,9 +81,22 @@ namespace mps {
                     void computeRamp();
                 };
 
+                class RampVelocityControlSampler : public ::ompl::control::ControlSampler {
+                public:
+                    explicit RampVelocityControlSampler(RampVelocityControlSpaceConstPtr control_space);
+                    ~RampVelocityControlSampler() override;
+
+                    void sample(::ompl::control::Control* control) override;
+                private:
+                    const RampVelocityControlSpaceConstWeakPtr _control_space;
+                    double* _values_buffer;
+
+                };
+
                 class RampVelocityControlSpace : public ::ompl::control::ControlSpace,
                                                  public std::enable_shared_from_this<RampVelocityControlSpace>
                 {
+                    friend class RampVelocityControlSampler;
                 public:
                     struct ControlLimits {
                         Eigen::VectorXf velocity_limits;
@@ -94,6 +107,16 @@ namespace mps {
                                       const Eigen::Array2f& duration_limits);
                     };
                     /**
+                     * Defines a control subspace within the control space.
+                     * The components within this subspace are sampled together from a ball with
+                     * radius limited by norm_limits[1]
+                     */
+                    struct ControlSubspace {
+                        ControlSubspace(const Eigen::VectorXi& sub_indices, const Eigen::Array2f& sub_norm_limits);
+                        Eigen::VectorXi indices; // control indices that form the subspace
+                        Eigen::Array2f norm_limits;
+                    };
+                    /**
                      * Creates a new ramp velocity control space.
                      * @param velocity_limits - absolute maximal velocity for each dof
                      * @param acceleration_limits - absolute maximal acceleration for each dof
@@ -102,35 +125,37 @@ namespace mps {
                     RampVelocityControlSpace(const ::ompl::base::StateSpacePtr &stateSpace,
                                              const Eigen::VectorXf &velocity_limits,
                                              const Eigen::VectorXf &acceleration_limits,
-                                             const Eigen::Array2f &duration_limits);
+                                             const Eigen::Array2f &duration_limits,
+                                             const std::vector<ControlSubspace>& sub_spaces = std::vector<ControlSubspace>());
                     RampVelocityControlSpace(const ::ompl::base::StateSpacePtr &stateSpace,
-                                             const ControlLimits& limits);
-                    ~RampVelocityControlSpace();
+                                             const ControlLimits& limits,
+                                             const std::vector<ControlSubspace>& sub_spaces = std::vector<ControlSubspace>());
+                    ~RampVelocityControlSpace() override;
 
                     /** ControlSpace */
-                    virtual unsigned int getDimension() const override;
-                    virtual ::ompl::control::Control* allocControl() const override;
-                    virtual void freeControl(::ompl::control::Control* control) const override;
-                    virtual void copyControl(::ompl::control::Control* control,
+                    unsigned int getDimension() const override;
+                    ::ompl::control::Control* allocControl() const override;
+                    void freeControl(::ompl::control::Control* control) const override;
+                    void copyControl(::ompl::control::Control* control,
                                              const ::ompl::control::Control* source) const override;
-                    virtual bool equalControls(const ::ompl::control::Control* control_1,
+                    bool equalControls(const ::ompl::control::Control* control_1,
                                                const ::ompl::control::Control* control_2) const override;
-                    virtual void nullControl(::ompl::control::Control* control) const override;
-                    virtual ::ompl::control::ControlSamplerPtr allocDefaultControlSampler() const override;
-                    virtual void printControl(const ::ompl::control::Control* control, std::ostream& out) const override;
-                    virtual void printSettings(std::ostream& out) const override;
-                    virtual void setup() override;
+                    void nullControl(::ompl::control::Control* control) const override;
+                    ::ompl::control::ControlSamplerPtr allocDefaultControlSampler() const override;
+                    void printControl(const ::ompl::control::Control* control, std::ostream& out) const override;
+                    void printSettings(std::ostream& out) const override;
+                    void setup() override;
                     // TODO not implemented
-                    virtual unsigned int getSerializationLength() const override;
+                    unsigned int getSerializationLength() const override;
                     // TODO not implemented
-                    virtual void serialize(void* serialization, const ::ompl::control::Control* ctrl) const override;
+                    void serialize(void* serialization, const ::ompl::control::Control* ctrl) const override;
                     // TODO not implemented
-                    virtual void deserialize(::ompl::control::Control* ctrl, const void *serialization) const override;
-                    virtual bool isCompound() const override;
+                    void deserialize(::ompl::control::Control* ctrl, const void *serialization) const override;
+                    bool isCompound() const override;
                     /**
                      * NOT SUPPORTED. Throws a std::logic_error exception.
                      */
-                    virtual double* getValueAddressAtIndex(::ompl::control::Control* control, unsigned int index) const override;
+                    double* getValueAddressAtIndex(::ompl::control::Control* control, unsigned int index) const override;
 
                     /** RampVelocityControlSpace specific */
                     void getAccelerationLimits(Eigen::VectorXf& limits) const;
@@ -139,22 +164,16 @@ namespace mps {
 
                     const RampVelocityControl* castControl(const ::ompl::control::Control* contrl) const;
                     RampVelocityControl* castControl(::ompl::control::Control* contrl) const;
+                protected:
+                    const std::vector<ControlSubspace>& getControlSubspaces() const;
+
                 private:
                     const Eigen::VectorXf _acceleration_limits;
                     const Eigen::VectorXf _velocity_limits;
                     const Eigen::Array2f _duration_limits;
+                    const std::vector<ControlSubspace> _sub_spaces;
                 };
 
-                class RampVelocityControlSampler : public ::ompl::control::ControlSampler {
-                public:
-                    explicit RampVelocityControlSampler(RampVelocityControlSpaceConstPtr control_space);
-                    ~RampVelocityControlSampler() override;
-
-                    void sample(::ompl::control::Control* control) override;
-                private:
-                    const RampVelocityControlSpaceConstWeakPtr _control_space;
-
-                };
             }
         }
     }

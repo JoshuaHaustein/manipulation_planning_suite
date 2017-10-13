@@ -47,6 +47,7 @@ namespace mps {
                 mps::planner::ompl::state::SimEnvWorldStateSpace::WeightMap weight_map;
                 // parameters restricting action space
                 mps::planner::ompl::control::RampVelocityControlSpace::ControlLimits control_limits;
+                std::vector<mps::planner::ompl::control::RampVelocityControlSpace::ControlSubspace> control_subspaces;
                 // parameters for semi-dynamic planning
                 bool b_semi_dynamic;
                 float t_max;

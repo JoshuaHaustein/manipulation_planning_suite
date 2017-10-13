@@ -105,7 +105,8 @@ bool OraclePushPlanner::setup(PlanningProblem& problem) {
                                                                       _planning_problem.weight_map);
     _control_space =
             std::make_shared<mps_control::RampVelocityControlSpace>(_state_space,
-                                                                    problem.control_limits);
+                                                                    problem.control_limits,
+                                                                    problem.control_subspaces);
     _space_information =
             std::make_shared<::ompl::control::SpaceInformation>(_state_space, _control_space);
     _space_information->setPropagationStepSize(1.0); // NOT USED

@@ -52,9 +52,17 @@ mps::planner::pushing::PlanningProblem::AlgorithmType mps::planner::util::yaml::
 
 void mps::planner::util::yaml::configurePlanningProblem(mps::planner::pushing::PlanningProblem &problem,
                                                         const OraclePlanningProblemDesc &problem_desc) {
+    // load control limits
     problem.control_limits.velocity_limits = problem_desc.control_limits.velocity_limits;
     problem.control_limits.duration_limits = problem_desc.control_limits.duration_limits;
     problem.control_limits.acceleration_limits = problem_desc.control_limits.acceleration_limits;
+    // and subspaces
+    for (auto& indices : problem_desc.control_limits.subspaces) {
+        Eigen::Array2f limits;
+        limits[0] = 0.0;
+        limits[1] = problem_desc.control_limits.velocity_limits(indices[0]);
+        problem.control_subspaces.emplace_back(ompl::control::RampVelocityControlSpace::ControlSubspace(indices, limits));
+    }
     // Workspace bounds
     problem.workspace_bounds.x_limits = problem_desc.x_limits;
     problem.workspace_bounds.y_limits = problem_desc.y_limits;

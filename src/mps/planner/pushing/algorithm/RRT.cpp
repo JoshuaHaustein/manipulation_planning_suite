@@ -506,6 +506,7 @@ bool SliceBasedOracleRRT::sample(mps::planner::ompl::planning::essentials::Motio
         _state_sampler->sampleUniform(motion->getState()); // TODO might need valid state sampler
     }
     target_obj_id = sampleActiveObject(pb);
+    pb.stats.num_samples++;
 
     ////////////////////////////////// Variant 2 //////////////////////////////////
 //    if (nu < pb.pq.robot_bias) { // we want to move the robot

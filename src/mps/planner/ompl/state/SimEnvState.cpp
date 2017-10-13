@@ -1271,14 +1271,15 @@ bool SimEnvValidityChecker::isValid(const ::ompl::base::State *state) const {
     if (not _world->isPhysicallyFeasible()) {
         _world->getLogger()->logDebug("Rejecting state because it is physically infeasible.",
                                       "[mps::planner::ompl::state::SimEnvValidityChecker::isValid]");
+        return false;
     }
     // check for collisions
     std::vector<sim_env::ObjectPtr> objects;
     _world->getObjects(objects, false);
-    for (auto object : objects) {
+    for (auto& object : objects) {
         std::vector<sim_env::Contact> contacts;
         _world->checkCollision(object, contacts);
-        for (auto contact : contacts) {
+        for (auto& contact : contacts) {
             bool contact_ok = checkContact(contact);
             if (!contact_ok) {
                 _world->getLogger()->logDebug("Rejecting state due to violation of contact constraints.",

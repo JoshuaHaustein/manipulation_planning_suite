@@ -30,10 +30,12 @@ namespace mps {
                  * @param min_values - minimal values.
                  * @param max_values - maximal values.
                  * @param output - sampled vector
+                 * @param indices - vector of indices, all indices, if empty
                  * @param rng - (optional) random generator to use
                  */
                 void sampleUniform(const Eigen::VectorXf& min_values, const Eigen::VectorXf& max_values,
-                                   Eigen::VectorXf& output, ::ompl::RNGPtr rng = getDefaultRandomGenerator());
+                                   Eigen::VectorXf& output, const Eigen::VectorXi& indices=Eigen::VectorXi(),
+                                   ::ompl::RNGPtr rng = getDefaultRandomGenerator());
             }
         }
     }

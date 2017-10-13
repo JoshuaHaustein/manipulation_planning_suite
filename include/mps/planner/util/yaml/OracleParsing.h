@@ -9,6 +9,7 @@
 #include <sim_env/utils/YamlUtils.h>
 #include <yaml-cpp/yaml.h>
 #include <Eigen/Core>
+#include <vector>
 
 namespace mps {
     namespace planner {
@@ -25,6 +26,7 @@ namespace mps {
                     Eigen::VectorXf velocity_limits;
                     Eigen::VectorXf acceleration_limits;
                     Eigen::Array2f duration_limits;
+                    std::vector<Eigen::VectorXi> subspaces;
                 };
 
                 struct OraclePlanningProblemDesc {
@@ -91,6 +93,7 @@ namespace YAML {
             node["velocity_limits"] = control_desc.velocity_limits;
             node["acceleration_limits"] = control_desc.acceleration_limits;
             node["duration_limits"] = control_desc.duration_limits;
+            node["subspaces"] = control_desc.subspaces;
             return node;
         }
 
@@ -98,6 +101,9 @@ namespace YAML {
             control_desc.velocity_limits = node["velocity_limits"].as<Eigen::VectorXf>();
             control_desc.acceleration_limits = node["acceleration_limits"].as<Eigen::VectorXf>();
             control_desc.duration_limits = node["duration_limits"].as<Eigen::VectorXf>();
+            if (node["subspaces"]) {
+                control_desc.subspaces = node["subspaces"].as<std::vector<Eigen::VectorXi> >();
+            }
             return true;
         }
     };

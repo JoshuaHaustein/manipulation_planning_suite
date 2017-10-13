@@ -125,6 +125,14 @@ void RampVelocityControl::computeRamp() {
 //////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////// RampVelocityControlSpace //////////////////////////////
 //////////////////////////////////////////////////////////////////////////////////////
+
+RampVelocityControlSpace::ControlSubspace::ControlSubspace(const Eigen::VectorXi &sub_indices,
+                                                           const Eigen::Array2f &sub_norm_limits) :
+    indices(sub_indices),
+    norm_limits(sub_norm_limits)
+{
+}
+
 RampVelocityControlSpace::ControlLimits::ControlLimits(const Eigen::VectorXf &velocity_limits,
                                                        const Eigen::VectorXf &acceleration_limits,
                                                        const Eigen::Array2f &duration_limits) :
@@ -137,20 +145,21 @@ RampVelocityControlSpace::ControlLimits::ControlLimits(const Eigen::VectorXf &ve
 RampVelocityControlSpace::RampVelocityControlSpace(const ::ompl::base::StateSpacePtr &stateSpace,
                                                    const Eigen::VectorXf &velocity_limits,
                                                    const Eigen::VectorXf &acceleration_limits,
-                                                   const Eigen::Array2f &duration_limits) :
+                                                   const Eigen::Array2f &duration_limits,
+                                                   const std::vector<ControlSubspace>& sub_spaces) :
         omc::ControlSpace(stateSpace), _acceleration_limits(acceleration_limits),
-        _velocity_limits(velocity_limits), _duration_limits(duration_limits) {
+        _velocity_limits(velocity_limits), _duration_limits(duration_limits), _sub_spaces(sub_spaces) {
 }
 
 RampVelocityControlSpace::RampVelocityControlSpace(const ::ompl::base::StateSpacePtr &stateSpace,
-                                                   const ControlLimits& limits) :
+                                                   const ControlLimits& limits,
+                                                   const std::vector<ControlSubspace>& sub_spaces) :
         RampVelocityControlSpace(stateSpace, limits.velocity_limits,
-                                 limits.acceleration_limits, limits.duration_limits)
+                                 limits.acceleration_limits, limits.duration_limits, sub_spaces)
 {
 }
 
-RampVelocityControlSpace::~RampVelocityControlSpace() {
-}
+RampVelocityControlSpace::~RampVelocityControlSpace() = default;
 
 unsigned int RampVelocityControlSpace::getDimension() const {
     // 1 dimension per dof velocity + duration of plateau (resting time is not part of the dimension)
@@ -258,12 +267,19 @@ RampVelocityControl* RampVelocityControlSpace::castControl(omc::Control *control
     return ramp_control;
 }
 
+const std::vector<RampVelocityControlSpace::ControlSubspace>& RampVelocityControlSpace::getControlSubspaces() const
+{
+    return _sub_spaces;
+}
+
 RampVelocityControlSampler::RampVelocityControlSampler(RampVelocityControlSpaceConstPtr control_space) :
         ControlSampler(control_space.get()), _control_space(control_space)
 {
+    _values_buffer = new double[control_space->getDimension()];
 }
 
 RampVelocityControlSampler::~RampVelocityControlSampler() {
+    delete[] _values_buffer;
 }
 
 void RampVelocityControlSampler::sample(omc::Control *control) {
@@ -272,18 +288,38 @@ void RampVelocityControlSampler::sample(omc::Control *control) {
         throw std::logic_error("[mps::planner::ompl::control::RampVelocityControlSampler::sample]"
                                        "Invalid pointer. Could not access control space.");
     }
+    auto rng = mps::planner::util::random::getDefaultRandomGenerator();
     RampVelocityControl* ramp_control = control_space->castControl(control);
     // sample values, first velocity
     Eigen::VectorXf velocity_limits;
-    Eigen::VectorXf velocity;
     control_space->getVelocityLimits(velocity_limits);
-    // TODO should we sample from a ball instead? or from a ring, i.e. to prevent too small velocities
-    mps::planner::util::random::sampleUniform(-velocity_limits, velocity_limits, velocity);
+    long num_dofs = velocity_limits.rows();
+    assert(num_dofs > 0);
+    Eigen::VectorXf velocity(num_dofs);
+
+    // we might have control subspaces for which we want to sample jointly from a ball
+    std::vector<bool> index_sampled((unsigned long)num_dofs, false);
+    auto& subspaces = control_space->getControlSubspaces();
+    // run over all subspaces
+    for (auto& subspace : subspaces) {
+        auto subspace_dim = (unsigned int)subspace.indices.size();
+        assert(subspace_dim <= num_dofs);
+        rng->uniformInBall(subspace.norm_limits[1], subspace_dim, _values_buffer);
+        for (long i = 0; i < subspace_dim; ++i) {
+            auto idx = subspace.indices[i];
+            velocity[idx] = _values_buffer[i];
+            index_sampled[idx] = true;
+        }
+    }
+    for (unsigned int i = 0; i < index_sampled.size(); ++i) {
+        if (not index_sampled.at(i)) {
+            velocity[i] = rng->uniformReal(-velocity_limits[i], velocity_limits[i]);
+        }
+    }
     // now sample duration
     Eigen::Array2f duration_limits;
     control_space->getDurationLimits(duration_limits);
-    ::ompl::RNGPtr rng = mps::planner::util::random::getDefaultRandomGenerator();
-    float duration = (float)rng->uniformReal(duration_limits[0], duration_limits[1]);
+    auto duration = (float)rng->uniformReal(duration_limits[0], duration_limits[1]);
     // let the ramp control adapt to these values and we are done
     ramp_control->setMaxVelocities(velocity, duration);
 }
