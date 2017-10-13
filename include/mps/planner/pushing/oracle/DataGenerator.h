@@ -31,7 +31,7 @@ namespace mps {
                     ~DataGenerator();
                     void generateData(const std::string& file_name,
                                       unsigned int num_samples,
-                                      const std::string& header,
+                                      const std::string& annotation,
                                       bool deterministic=false,
                                       unsigned int num_noise_samples=10);
                 private:

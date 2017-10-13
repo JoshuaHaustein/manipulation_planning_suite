@@ -46,18 +46,19 @@ void OracleDataDumper::writeHeader(const std::string& some_text) {
 }
 
 void OracleDataDumper::saveData(::ompl::base::State *start, ::ompl::base::State *result,
-                                ::ompl::control::Control *control) {
+                                ::ompl::control::Control *control,
+                                const std::string& add_info) {
     DataTriplet triplet(start, result, control);
-    saveData(triplet);
+    saveData(triplet, add_info);
 }
 
-void OracleDataDumper::saveData(const DataTriplet& data) {
+void OracleDataDumper::saveData(const DataTriplet& data, const std::string& add_info) {
     std::vector<DataTriplet> a_vector;
     a_vector.push_back(data);
-    saveData(a_vector);
+    saveData(a_vector, add_info);
 }
 
-void OracleDataDumper::saveData(const std::vector<DataTriplet>& data) {
+void OracleDataDumper::saveData(const std::vector<DataTriplet>& data, const std::string& add_info) {
     static const std::string log_prefix("[mps::planner::util::serialize::OracleDataDumper::saveFile]");
     if (not _file_stream.good()) {
         std::stringstream ss;
@@ -96,7 +97,11 @@ void OracleDataDumper::saveData(const std::vector<DataTriplet>& data) {
         result->serializeInNumbers(_file_stream);
         _file_stream << ", ";
         control->serializeInNumbers(_file_stream);
-        _file_stream << "\n";
+        if (add_info.empty()) {
+            _file_stream << "\n";
+        } else {
+            _file_stream << ", " << add_info << "\n";
+        }
     }
     // done
 }

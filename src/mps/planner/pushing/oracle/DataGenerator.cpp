@@ -51,7 +51,7 @@ DataGenerator::~DataGenerator() = default;
 
 void DataGenerator::generateData(const std::string& file_name,
                                  unsigned int num_samples,
-                                 const std::string& header,
+                                 const std::string& annotation,
                                  bool deterministic,
                                  unsigned int num_noise_samples)
 {
@@ -65,7 +65,6 @@ void DataGenerator::generateData(const std::string& file_name,
     mps::planner::util::serialize::OracleDataDumper data_dumper;
     data_dumper.setFile(file_name);
     data_dumper.openFile();
-    data_dumper.writeHeader(header);
     if (deterministic) {
         num_noise_samples = 1;
     }
@@ -94,7 +93,7 @@ void DataGenerator::generateData(const std::string& file_name,
                 _world->getLogger()->logDebug("State propagation failed, skipping");
                 continue;
             }
-            data_dumper.saveData(noisy_state, new_state, control);
+            data_dumper.saveData(noisy_state, new_state, control, annotation);
         }
         ++i;
     }

@@ -49,9 +49,12 @@ namespace mps {
                     void writeHeader(const std::string& some_text);
                     void saveData(::ompl::base::State* start,
                                 ::ompl::base::State* result,
-                                ::ompl::control::Control* control);
-                    void saveData(const DataTriplet& data);
-                    void saveData(const std::vector<DataTriplet>& data);
+                                ::ompl::control::Control* control,
+                                const std::string& add_info = std::string(""));
+                    void saveData(const DataTriplet& data,
+                                  const std::string& add_info = std::string(""));
+                    void saveData(const std::vector<DataTriplet>& data,
+                                  const std::string& add_info = std::string(""));
                     void closeFile();
                 private:
                     bool _file_valid;

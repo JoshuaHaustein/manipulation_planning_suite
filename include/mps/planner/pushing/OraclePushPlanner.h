@@ -112,7 +112,8 @@ namespace mps {
                 void clearVisualizations();
                 void generateData(const std::string& file_name,
                                   unsigned int num_samples,
-                                  const std::string& header);
+                                  const std::string& annotation,
+                                  bool deterministic);
                 void dummyTest();
             private:
                 bool _is_initialized;

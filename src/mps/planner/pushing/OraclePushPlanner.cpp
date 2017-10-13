@@ -209,8 +209,9 @@ void OraclePushPlanner::clearVisualizations() {
 
 void OraclePushPlanner::generateData(const std::string& file_name,
                                      unsigned int num_samples,
-                                     const std::string& header) {
-    _data_generator->generateData(file_name, num_samples, header);
+                                     const std::string& annotation,
+                                     bool deterministic) {
+    _data_generator->generateData(file_name, num_samples, annotation, deterministic);
 }
 
 void OraclePushPlanner::dummyTest() {
