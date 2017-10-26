@@ -14,9 +14,10 @@
 // MPS includes
 #include <mps/planner/ompl/control/SimEnvStatePropagator.h>
 #include <mps/planner/ompl/planning/Essentials.h>
+#include <mps/planner/ompl/state/SimEnvWorldStateDistanceMeasure.h>
+#include <mps/planner/ompl/state/goal/ObjectsRelocationGoal.h>
 #include <mps/planner/util/Random.h>
 #include <mps/planner/util/Time.h>
-#include <mps/planner/pushing/PushPlannerDistanceMeasure.h>
 // stl
 #include <stack>
 #include <mps/planner/ompl/control/NaiveControlSampler.h>
@@ -97,23 +98,21 @@ namespace mps {
                 public:
 
                     struct PlanningQuery {
-                        std::shared_ptr<::ompl::base::GoalSampleableRegion> goal_region; // goal region
+                        ompl::state::goal::ObjectsRelocationGoalPtr goal_region; // goal region
                         ::ompl::base::State* start_state; // start state of the problem (SimEnvWorldStateSpace)
-                        std::string target_name;
                         std::string robot_name;
                         float time_out; // time out in seconds
                         float goal_bias;
-                        float target_bias; // fraction of times the planner should focus at least on moving the target
+                        float target_bias; // fraction of times the planner should focus at least on moving the target objects
                         float robot_bias; // fraction of times the planner should focus at least on moving the robot
                         unsigned int num_slice_neighbors; // number of nearest slice neighbors (only for SliceBasedOracleRRT)
                         float slice_volume;
                         float max_slice_distance; // maximum distance two slices can be apart from each other such that there still can exist an action connecting them
                         std::vector<float> weights; // optional weights for the distance function
                         std::function<bool()> stopping_condition; // optionally a customized stopping condition
-                        PlanningQuery(std::shared_ptr<::ompl::base::GoalSampleableRegion> goal_region,
+                        PlanningQuery(ompl::state::goal::ObjectsRelocationGoalPtr goal_region,
                                       ::ompl::base::State* start_state,
                                       float time_out,
-                                      const std::string& target_name,
                                       const std::string& robot_name);
                         PlanningQuery(const PlanningQuery& other);
                     };
@@ -123,7 +122,6 @@ namespace mps {
                     struct PlanningBlackboard {
                         PlanningQuery pq;
                         PlanningStatistics stats;
-                        unsigned int target_id;
                         unsigned int robot_id;
                         explicit PlanningBlackboard(PlanningQuery pq);
                     };
@@ -188,7 +186,7 @@ namespace mps {
                     ::ompl::control::SpaceInformationPtr _si;
                     ::ompl::base::StateSamplerPtr _state_sampler;
                     mps::planner::ompl::state::SimEnvWorldStateSpacePtr _state_space;
-                    mps::planner::pushing::PushPlannerDistanceMeasurePtr _distance_measure;
+                    mps::planner::ompl::state::SimEnvWorldStateDistanceMeasurePtr _distance_measure;
                     ::ompl::RNGPtr _rng;
                     DebugDrawerPtr _debug_drawer;
 
@@ -288,7 +286,7 @@ namespace mps {
                 protected:
 
                     struct WithinSliceDistance {
-                        PushPlannerDistanceMeasure distance_measure;
+                        ompl::state::SimEnvWorldStateDistanceMeasure distance_measure;
                         double distance(const ompl::planning::essentials::MotionPtr& motion_a,
                                         const ompl::planning::essentials::MotionPtr& motion_b) const;
                         void setRobotId(unsigned int id);
@@ -297,7 +295,7 @@ namespace mps {
                     };
 
                     struct SliceDistance {
-                        PushPlannerDistanceMeasure distance_measure;
+                        ompl::state::SimEnvWorldStateDistanceMeasure distance_measure;
                         void setRobotId(unsigned int id);
                         double distance(const SliceConstPtr& slice_a, const SliceConstPtr& slice_b) const;
                         explicit SliceDistance(ompl::state::SimEnvWorldStateSpacePtr state_space,
@@ -366,12 +364,12 @@ namespace mps {
                 class DebugDrawer : public std::enable_shared_from_this<DebugDrawer> {
                     // TODO this class may be overfit to a 2d planning case.
                 public:
-                    DebugDrawer(sim_env::WorldViewerPtr world, unsigned int robot_id, unsigned int target_id);
-                    DebugDrawer(sim_env::WorldViewerPtr world, SliceDrawerInterfacePtr slice_drawer, unsigned int robot_id, unsigned int target_id);
+                    DebugDrawer(sim_env::WorldViewerPtr world, unsigned int robot_id, const std::vector<unsigned int>& target_indices);
+                    DebugDrawer(sim_env::WorldViewerPtr world, SliceDrawerInterfacePtr slice_drawer, unsigned int robot_id, const std::vector<unsigned int>& target_indices);
                     ~DebugDrawer();
                     void setSliceDrawer(SliceDrawerInterfacePtr slice_drawer);
                     void setRobotId(unsigned int robot_id);
-                    void setTargetId(unsigned int target_id);
+                    void setTargetIds(const std::vector<unsigned int>& target_ids);
                     void addNewMotion(mps::planner::ompl::planning::essentials::MotionPtr motion);
                     void clear(bool clear_slice_drawer=true);
                     void drawStateTransition(const ompl::state::SimEnvObjectState* parent_state,
@@ -385,7 +383,7 @@ namespace mps {
                     SliceDrawerInterfacePtr _slice_drawer;
                     std::vector<sim_env::WorldViewer::Handle> _handles;
                     unsigned int _robot_id;
-                    unsigned int _target_id;
+                    std::vector<unsigned int> _target_ids;
                 };
 
                 class SliceDrawerInterface {

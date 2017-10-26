@@ -21,14 +21,12 @@ using namespace mps::planner::ompl::planning::essentials;
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////// PlanningQuery ///////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-RearrangementRRT::PlanningQuery::PlanningQuery(std::shared_ptr<ob::GoalSampleableRegion> goal_region,
+RearrangementRRT::PlanningQuery::PlanningQuery(ompl::state::goal::ObjectsRelocationGoalPtr goal_region,
                                              ob::State *start_state,
                                              float time_out,
-                                             const std::string& target_name,
                                              const std::string& robot_name) :
     goal_region(goal_region),
     start_state(start_state),
-    target_name(target_name),
     robot_name(robot_name),
     time_out(time_out)
 {
@@ -48,7 +46,6 @@ RearrangementRRT::PlanningQuery::PlanningQuery(const PlanningQuery &other) = def
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 RearrangementRRT::PlanningBlackboard::PlanningBlackboard(PlanningQuery pq) :
         pq(pq),
-        target_id(1),
         robot_id(0)
 {
 }
@@ -65,7 +62,7 @@ RearrangementRRT::RearrangementRRT(::ompl::control::SpaceInformationPtr si) :
     if (!_state_space) {
         throw std::logic_error(_log_prefix + "setup] Could not cast state space to SimEnvWorldStateSpace");
     }
-    _distance_measure = std::make_shared<mps::planner::pushing::PushPlannerDistanceMeasure>(_state_space);
+    _distance_measure = std::make_shared<mps::planner::ompl::state::SimEnvWorldStateDistanceMeasure>(_state_space);
     _state_space->setDistanceMeasure(_distance_measure);
     // set up our search tree
     if (!_tree) {
@@ -165,7 +162,7 @@ bool RearrangementRRT::sample(mps::planner::ompl::planning::essentials::MotionPt
     if( _rng->uniform01() < pb.pq.goal_bias && pb.pq.goal_region->canSample()){
         logging::logDebug("Sampling a goal state", log_prefix);
         pb.pq.goal_region->sampleGoal(motion->getState());
-        target_obj_id = pb.target_id;
+        target_obj_id = pb.pq.goal_region->sampleTargetObjectIndex();
         is_goal = true;
     }else{
         logging::logDebug("Sampling a state uniformly", log_prefix);
@@ -224,7 +221,7 @@ void RearrangementRRT::addToTree(mps::planner::ompl::planning::essentials::Motio
 unsigned int RearrangementRRT::sampleActiveObject(const PlanningBlackboard& pb) const {
     double random_value = _rng->uniform01();
     if (random_value < pb.pq.target_bias) {
-        return pb.target_id;
+        return pb.pq.goal_region->sampleTargetObjectIndex();
     } else if (random_value < pb.pq.target_bias + pb.pq.robot_bias) {
         return pb.robot_id;
     } else {
@@ -268,15 +265,12 @@ void RearrangementRRT::setDebugDrawer(DebugDrawerPtr debug_drawer) {
 
 void RearrangementRRT::setupBlackboard(PlanningBlackboard &pb) {
     pb.robot_id = 0;
-    pb.target_id = 1;
     {
         int tmp_robot_id = _state_space->getObjectIndex(pb.pq.robot_name);
-        int tmp_target_id = _state_space->getObjectIndex(pb.pq.target_name);
-        if (tmp_robot_id < 0 || tmp_target_id < 0) {
+        if (tmp_robot_id < 0) {
             throw std::logic_error("[mps::planner::pushing::oracle::RearrangementRRT::setupBlackboard]"
-                    "Could not retrieve ids for robot or target object. Are they in the state space?");
+                    "Could not retrieve id for robot " + pb.pq.robot_name);
         }
-        pb.target_id = (unsigned int)tmp_target_id;
         pb.robot_id = (unsigned int)tmp_robot_id;
     }
 }
@@ -839,15 +833,15 @@ CompleteSliceBasedOracleRRT::ExtensionCandidateTuple CompleteSliceBasedOracleRRT
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 DebugDrawer::DebugDrawer(sim_env::WorldViewerPtr world_viewer,
                          unsigned int robot_id,
-                         unsigned int target_id) :
-        DebugDrawer(world_viewer, nullptr, robot_id, target_id)
+                         const std::vector<unsigned int>& target_ids) :
+        DebugDrawer(world_viewer, nullptr, robot_id, target_ids)
 {
 }
 
 DebugDrawer::DebugDrawer(sim_env::WorldViewerPtr world_viewer,
                          SliceDrawerInterfacePtr slice_drawer,
                          unsigned int robot_id,
-                         unsigned int target_id)
+                         const std::vector<unsigned int>& target_ids)
 {
     _world_viewer = world_viewer;
     _slice_drawer = slice_drawer;
@@ -855,7 +849,7 @@ DebugDrawer::DebugDrawer(sim_env::WorldViewerPtr world_viewer,
         _slice_drawer->setDebugDrawer(shared_from_this());
     }
     _robot_id = robot_id;
-    _target_id = target_id;
+    _target_ids = target_ids;
 }
 
 DebugDrawer::~DebugDrawer() {
@@ -869,11 +863,11 @@ void DebugDrawer::addNewMotion(MotionPtr motion) {
     auto* parent_object_state = parent_state->getObjectState(_robot_id);
     auto* new_object_state = new_state->getObjectState(_robot_id);
     drawStateTransition(parent_object_state, new_object_state, Eigen::Vector4f(0.4, 0, 0.9, 1));
-    parent_object_state = parent_state->getObjectState(_target_id);
-    new_object_state = new_state->getObjectState(_target_id);
+    parent_object_state = parent_state->getObjectState(_target_ids.at(0)); // TODO also print other objects
+    new_object_state = new_state->getObjectState(_target_ids.at(0)); // TODO also draw other target objects
     drawStateTransition(parent_object_state, new_object_state, Eigen::Vector4f(0, 0.7, 0, 1));
     for (unsigned int i = 0; i < new_state->getNumObjects(); ++i) {
-        if ((i != _target_id) and (i != _robot_id)) {
+        if ((i != _target_ids.at(0)) and (i != _robot_id)) { // TODO also other target objects
             parent_object_state = parent_state->getObjectState(i);
             new_object_state = new_state->getObjectState(i);
             drawStateTransition(parent_object_state, new_object_state, Eigen::Vector4f(0.9, 0.9, 0.9, 0.4));
@@ -923,8 +917,8 @@ void DebugDrawer::setRobotId(unsigned int robot_id) {
     _robot_id = robot_id;
 }
 
-void DebugDrawer::setTargetId(unsigned int target_id) {
-    _target_id = target_id;
+void DebugDrawer::setTargetIds(const std::vector<unsigned int>& target_ids) {
+    _target_ids = target_ids;
 }
 
 SliceDrawerInterfacePtr DebugDrawer::getSliceDrawer() {

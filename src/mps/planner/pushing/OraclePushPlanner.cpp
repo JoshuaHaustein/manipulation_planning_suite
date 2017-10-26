@@ -5,7 +5,7 @@
 #include <ompl/base/samplers/UniformValidStateSampler.h>
 #include <mps/planner/pushing/OraclePushPlanner.h>
 #include <mps/planner/util/Serialize.h>
-#include <mps/planner/ompl/state/goal/ObjectRelocationGoal.h>
+#include <mps/planner/ompl/state/goal/ObjectsRelocationGoal.h>
 #include <mps/planner/pushing/oracle/OracleControlSampler.h>
 #include <mps/planner/ompl/control/NaiveControlSampler.h>
 #include <mps/planner/util/Logging.h>
@@ -25,16 +25,21 @@ PlanningProblem::PlanningProblem() :
 {
 }
 
+PlanningProblem::PlanningProblem(sim_env::WorldPtr world, sim_env::RobotPtr robot, 
+                                 sim_env::RobotVelocityControllerPtr controller,
+                                 const ompl::state::goal::RelocationGoalSpecification& goal) :
+            PlanningProblem(world, robot, controller, std::vector<ompl::state::goal::RelocationGoalSpecification>(1, goal))
+{
+}
+
 PlanningProblem::PlanningProblem(sim_env::WorldPtr world, sim_env::RobotPtr robot,
                                  sim_env::RobotVelocityControllerPtr controller,
-                                 sim_env::ObjectPtr target_object,
-                                 const Eigen::Vector3f& goal_position):
-        world(world), robot(robot), robot_controller(controller), target_object(target_object),
-        control_limits(Eigen::VectorXf(robot->getNumActiveDOFs()), Eigen::VectorXf(robot->getNumActiveDOFs()),
-                       Eigen::Array2f()),
-        goal_position(goal_position)
+                                 const std::vector<ompl::state::goal::RelocationGoalSpecification>& goals) :
+        world(world), robot(robot), robot_controller(controller),
+        control_limits(Eigen::VectorXf(robot->getNumActiveDOFs()), Eigen::VectorXf(robot->getNumActiveDOFs()), Eigen::Array2f()),
+        relocation_goals(goals)
 {
-
+    assert(relocation_goals.size() > 0);
     planning_time_out = 60.0f;
     b_semi_dynamic = true;
     t_max = 8.0f;
@@ -128,16 +133,20 @@ bool OraclePushPlanner::setup(PlanningProblem& problem) {
     _algorithm = createAlgorithm(_planning_problem);
     _data_generator = std::make_shared<oracle::DataGenerator>(_space_information, _state_propagator,
                                                               _planning_problem.world, _planning_problem.robot->getName(),
-                                                              _planning_problem.target_object->getName());
+                                                              _planning_problem.relocation_goals.at(0).object_name);
     // TODO this is only for debug
     if (_planning_problem.debug) {
+        std::vector<unsigned int> target_object_ids;
+        for (auto& goal : _planning_problem.relocation_goals) {
+            target_object_ids.emplace_back(_state_space->getObjectIndex(goal.object_name));
+        }
         if (!_debug_drawer) {
             _debug_drawer = std::make_shared<algorithm::DebugDrawer>(_planning_problem.world->getViewer(),
                                                                      _state_space->getObjectIndex(_planning_problem.robot->getName()),
-                                                                     _state_space->getObjectIndex(_planning_problem.target_object->getName()));
+                                                                     target_object_ids);
         } else {
             _debug_drawer->setRobotId(_state_space->getObjectIndex(_planning_problem.robot->getName()));
-            _debug_drawer->setTargetId(_state_space->getObjectIndex(_planning_problem.target_object->getName()));
+            _debug_drawer->setTargetIds(target_object_ids);
         }
         _algorithm->setDebugDrawer(_debug_drawer);
     }
@@ -158,18 +167,15 @@ bool OraclePushPlanner::solve(PlanningSolution& solution) {
     _state_space->extractState(_planning_problem.world,
                                dynamic_cast<ompl::state::SimEnvWorldStateSpace::StateType *>(start_state));
     // goal
-    ompl::state::goal::ObjectRelocationGoalPtr goal_region =
-            std::make_shared<ompl::state::goal::ObjectRelocationGoal>(_space_information,
-                                                                      _planning_problem.target_object->getName(),
-                                                                      _planning_problem.goal_position,
-                                                                      Eigen::Quaternionf(),
-                                                                      _planning_problem.goal_region_radius,
-                                                                      0.0f);
+    ompl::state::goal::ObjectsRelocationGoalPtr goal_region =
+            std::make_shared<ompl::state::goal::ObjectsRelocationGoal>(_space_information,
+                                                                       _planning_problem.relocation_goals,
+                                                                       _planning_problem.goal_region_radius,
+                                                                       0.0f);
     // planning query
     algorithm::RearrangementRRT::PlanningQuery pq(goal_region,
                                                   start_state,
                                                   _planning_problem.planning_time_out,
-                                                  _planning_problem.target_object->getName(),
                                                   _planning_problem.robot->getName());
     pq.stopping_condition = _planning_problem.stopping_condition;
     pq.weights = _distance_weights;

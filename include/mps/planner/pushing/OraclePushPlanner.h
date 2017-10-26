@@ -8,17 +8,17 @@
 #include <map>
 #include <sim_env/SimEnv.h>
 #include <mps/planner/ompl/state/SimEnvState.h>
+#include <mps/planner/ompl/state/SimEnvWorldStateDistanceMeasure.h>
+#include <mps/planner/ompl/state/goal/ObjectsRelocationGoal.h>
 #include <mps/planner/ompl/control/SimEnvStatePropagator.h>
 #include <mps/planner/ompl/control/Interfaces.h>
 #include <mps/planner/ompl/control/RampVelocityControl.h>
-#include <mps/planner/pushing/PushPlannerDistanceMeasure.h>
 #include <mps/planner/pushing/algorithm/RRT.h>
 #include <mps/planner/pushing/oracle/DataGenerator.h>
 
 namespace mps {
     namespace planner {
         namespace pushing {
-
             /**
              * Definition of a push planning problem.
              */
@@ -34,7 +34,6 @@ namespace mps {
                 sim_env::WorldPtr world;
                 sim_env::RobotPtr robot;
                 sim_env::RobotVelocityControllerPtr robot_controller;
-                sim_env::ObjectPtr target_object;
                 // restrictions on the world
                 std::map<std::string, Eigen::VectorXi> active_dofs;
                 mps::planner::ompl::state::PlanningSceneBounds workspace_bounds;
@@ -52,8 +51,8 @@ namespace mps {
                 bool b_semi_dynamic;
                 float t_max;
                 // goal region
-                Eigen::Vector3f goal_position;
-                float goal_region_radius;
+                std::vector<ompl::state::goal::RelocationGoalSpecification> relocation_goals;
+                float goal_region_radius; // TODO should we have different radii for each object?
                 // settings for control sampler
                 OracleType oracle_type;
                 AlgorithmType algorithm_type;
@@ -73,8 +72,11 @@ namespace mps {
                 PlanningProblem(sim_env::WorldPtr world,
                                 sim_env::RobotPtr robot,
                                 sim_env::RobotVelocityControllerPtr controller,
-                                sim_env::ObjectPtr target_object,
-                                const Eigen::Vector3f& goal_position);
+                                const std::vector<ompl::state::goal::RelocationGoalSpecification>& goals);
+                PlanningProblem(sim_env::WorldPtr world,
+                                sim_env::RobotPtr robot,
+                                sim_env::RobotVelocityControllerPtr controller,
+                                const ompl::state::goal::RelocationGoalSpecification& goal);
             protected:
                 // constructor that doesn't force you to provide mandatory arguments - used internally
                 PlanningProblem();
