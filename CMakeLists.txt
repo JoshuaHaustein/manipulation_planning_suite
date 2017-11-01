@@ -12,10 +12,9 @@ find_package(catkin REQUIRED
 
 ## System dependencies are found with CMake's conventions
 # find_package(Boost REQUIRED COMPONENTS system)
-find_package(Eigen 3.3 REQUIRED)
+find_package(Eigen3 3.3 REQUIRED)
 find_package(OMPL REQUIRED)
-#find_package(CUDA REQUIRED)
-#find_package(Protobuf REQUIRED)
+# find_package(Protobuf REQUIRED)
 
 add_subdirectory(proto)
 ## Uncomment this if the package has a setup.py. This macro ensures
@@ -36,7 +35,7 @@ catkin_package(
   INCLUDE_DIRS include
   LIBRARIES ${PROJECT_NAME} proto
   CATKIN_DEPENDS sim_env
-  DEPENDS Eigen OMPL Protobuf
+  DEPENDS EIGEN3 OMPL 
 )
 
 ###########
