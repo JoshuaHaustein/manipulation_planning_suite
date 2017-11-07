@@ -50,16 +50,20 @@ namespace mps {
                         os << "     num_nearest_neighbor_queries: " << num_nearest_neighbor_queries;
                         os << "     run_time: " << std::fixed << runtime << std::setprecision(3);
                         os << "     success: " << success;
-                        os << " \n";
+                        os << std::endl;
                     }
 
-                    void printCVS(std::ostream& os) const{
+                    void printCVSHeader(std::ostream& os) const {
+                        os << "#iterations,#propagations,#samples,#nn_queries,runtime,success" << std::endl;
+                    }
+
+                    void printCVS(std::ostream& os) const {
                         os << num_iterations << ", "
                            << num_state_propagations << ", "
                            << num_samples << ", "
                            << num_nearest_neighbor_queries << ", "
                            << runtime << ", "
-                           << success << "\n";
+                           << success << std::endl;
                     }
 
                     std::string to_string() const{
