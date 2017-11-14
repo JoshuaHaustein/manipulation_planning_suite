@@ -496,11 +496,12 @@ bool SliceBasedOracleRRT::sample(mps::planner::ompl::planning::essentials::Motio
     auto nu = (float)_rng->uniform01();
     if (nu < pb.pq.goal_bias and pb.pq.goal_region->canSample()) {
         pb.pq.goal_region->sampleGoal(motion->getState());
+        target_obj_id = pb.pq.goal_region->sampleTargetObjectIndex();
         sampled_goal = true;
     } else {
         _state_sampler->sampleUniform(motion->getState()); // TODO might need valid state sampler
+        target_obj_id = sampleActiveObject(pb);
     }
-    target_obj_id = sampleActiveObject(pb);
     pb.stats.num_samples++;
 
     ////////////////////////////////// Variant 2 //////////////////////////////////
