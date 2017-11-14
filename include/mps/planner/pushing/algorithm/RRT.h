@@ -330,7 +330,7 @@ namespace mps {
                 };
 
                 class CompleteSliceBasedOracleRRT : public SliceBasedOracleRRT {
-                public :
+                public:
                     CompleteSliceBasedOracleRRT(::ompl::control::SpaceInformationPtr si,
                                                 mps::planner::pushing::oracle::PushingOraclePtr pushing_oracle,
                                                 mps::planner::pushing::oracle::RobotOraclePtr robot_oracle,
@@ -365,6 +365,22 @@ namespace mps {
                     ExtensionCandidateTuple selectStateTuple(const std::vector<ExtensionCandidateTuple>& candidates) const;
                 };
 
+                class GNATSamplingSliceBasedOracleRRT : public CompleteSliceBasedOracleRRT {
+                public:
+                    GNATSamplingSliceBasedOracleRRT(::ompl::control::SpaceInformationPtr si,
+                                                mps::planner::pushing::oracle::PushingOraclePtr pushing_oracle,
+                                                mps::planner::pushing::oracle::RobotOraclePtr robot_oracle,
+                                                const std::string& robot_name,
+                                                const oracle::OracleControlSampler::Parameters& params=
+                                                oracle::OracleControlSampler::Parameters());
+                    ~GNATSamplingSliceBasedOracleRRT() override;
+                    bool sample(mps::planner::ompl::planning::essentials::MotionPtr motion,
+                                unsigned int& target_obj_id,
+                                PlanningBlackboard& pb) override;
+                protected:
+                private:
+                };
+
                 class DebugDrawer : public std::enable_shared_from_this<DebugDrawer> {
                     // TODO this class may be overfit to a 2d planning case.
                 public:
@@ -379,6 +395,7 @@ namespace mps {
                     void drawStateTransition(const ompl::state::SimEnvObjectState* parent_state,
                                              const ompl::state::SimEnvObjectState* new_state,
                                              const Eigen::Vector4f& color);
+                    void showState(const ompl::state::SimEnvWorldState* state, const ompl::state::SimEnvWorldStateSpaceConstPtr state_space);
                     void addNewSlice(mps::planner::pushing::algorithm::SliceBasedOracleRRT::SliceConstPtr slice);
                     SliceDrawerInterfacePtr getSliceDrawer();
 

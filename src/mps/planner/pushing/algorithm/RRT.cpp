@@ -5,6 +5,7 @@
 #include <mps/planner/pushing/algorithm/RRT.h>
 #include <mps/planner/util/Logging.h>
 #include <mps/planner/ompl/control/Interfaces.h>
+#define GNAT_SAMPLER
 #include <ompl/datastructures/NearestNeighborsGNAT.h>
 #include <ompl/datastructures/NearestNeighborsSqrtApprox.h>
 
@@ -237,7 +238,7 @@ void RearrangementRRT::printState(const std::string& msg, ::ompl::base::State *s
     ss << msg;
     world_state->print(ss);
     logging::logDebug(ss.str(), "[mps::planner::pushing::oracle::RearrangementRRT::printState]");
-
+    _debug_drawer->showState(world_state, _state_space);
 }
 
 MotionPtr RearrangementRRT::getNewMotion() {
@@ -735,7 +736,7 @@ bool CompleteSliceBasedOracleRRT::extend(mps::planner::ompl::planning::essential
 {
     static const std::string log_prefix("[mps::planner::pushing::algorithm::CompleteSliceBasedOracleRRT::extend]");
     std::vector<const ::ompl::control::Control*> controls;
-    // first only move the robot
+    // first only move the robot TODO: This often pushes the object away from us
     _oracle_sampler.steerRobot(controls, start->getState(), dest);
     if (controls.empty()) {
         logging::logErr("OracleControlSampler provided no controls at all", log_prefix);
@@ -827,6 +828,43 @@ CompleteSliceBasedOracleRRT::ExtensionCandidateTuple CompleteSliceBasedOracleRRT
     return candidates.at(candidates.size() - 1);
 }
 
+//////////////////////////////////////// GNATSamplingSliceBasedOracleRRT ////////////////////////////////////////////////
+GNATSamplingSliceBasedOracleRRT::GNATSamplingSliceBasedOracleRRT(::ompl::control::SpaceInformationPtr si,
+                                                         mps::planner::pushing::oracle::PushingOraclePtr pushing_oracle,
+                                                         mps::planner::pushing::oracle::RobotOraclePtr robot_oracle,
+                                                         const std::string &robot_name,
+                                                         const oracle::OracleControlSampler::Parameters &params) :
+    CompleteSliceBasedOracleRRT(si, pushing_oracle, robot_oracle, robot_name, params)
+{
+}
+
+GNATSamplingSliceBasedOracleRRT::~GNATSamplingSliceBasedOracleRRT() = default;
+
+bool GNATSamplingSliceBasedOracleRRT::sample(mps::planner::ompl::planning::essentials::MotionPtr motion,
+                              unsigned int& target_obj_id,
+                              PlanningBlackboard& pb)
+{
+    static const std::string log_prefix("mps::planner::pushing::algorithm::GNATSamplingSliceBasedOracleRRT::sample]");
+    bool is_goal = false;
+    // sample random state with goal biasing
+    if( _rng->uniform01() < pb.pq.goal_bias && pb.pq.goal_region->canSample()){
+        logging::logDebug("Sampling a goal state", log_prefix);
+        pb.pq.goal_region->sampleGoal(motion->getState());
+        target_obj_id = pb.pq.goal_region->sampleTargetObjectIndex();
+        is_goal = true;
+    }else{
+        logging::logDebug("Sampling from GNAT sampler", log_prefix);
+        target_obj_id = 0;
+        auto gnat_tree = std::static_pointer_cast<::ompl::NearestNeighborsGNAT<SlicePtr> >(_slices_nn);
+        ::ompl::RNG rng(_rng->getLocalSeed());
+        auto sampled_slice = gnat_tree->sample(rng);
+        // TODO this variance is completely arbitrary
+        _state_sampler->sampleGaussian(motion->getState(), sampled_slice->repr->getState(), 0.9);
+        target_obj_id = sampleActiveObject(pb);
+    }
+    pb.stats.num_samples++;
+    return is_goal;
+}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////// DebugDrawer ///////////////////////////////////////////////
@@ -897,6 +935,12 @@ void DebugDrawer::drawStateTransition(const ompl::state::SimEnvObjectState *pare
 //    _handles.push_back(_world_viewer->drawBox(pos_parent, extent, true));
     _handles.push_back(_world_viewer->drawLine(pos_parent, pos_child, color, 0.01f));
 //    _handles.push_back(_world_viewer->drawBox(pos_child, extent, true));
+}
+
+void DebugDrawer::showState(const ompl::state::SimEnvWorldState* state,
+                            const ompl::state::SimEnvWorldStateSpaceConstPtr state_space) {
+    auto world = _world_viewer->getWorld();
+    state_space->setToState(world, state);
 }
 
 void DebugDrawer::addNewSlice(mps::planner::pushing::algorithm::SliceBasedOracleRRT::SliceConstPtr slice) {

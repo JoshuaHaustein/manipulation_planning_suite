@@ -28,7 +28,8 @@ namespace mps {
                     Human = 0, Learned = 1
                 };
                 enum AlgorithmType {
-                    Naive = 0, OracleRRT = 1, SliceOracleRRT = 2, CompleteSliceOracleRRT = 3
+                    Naive = 0, OracleRRT = 1, SliceOracleRRT = 2, CompleteSliceOracleRRT = 3,
+                    GNATSamplingSliceOracleRRT = 4, SemanticGNATSamplingSliceOracleRRT = 5
                 };
                 // world related parameters
                 sim_env::WorldPtr world;

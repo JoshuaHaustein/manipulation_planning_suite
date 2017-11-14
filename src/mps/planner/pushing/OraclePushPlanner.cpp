@@ -363,6 +363,14 @@ mps::planner::pushing::algorithm::RearrangementRRTPtr OraclePushPlanner::createA
                                                                                 _planning_problem.robot->getName());
                 break;
             }
+            case PlanningProblem::AlgorithmType::GNATSamplingSliceOracleRRT:
+            {
+                algo = std::make_shared<algorithm::GNATSamplingSliceBasedOracleRRT>(_space_information,
+                                                                                pushing_oracle,
+                                                                                robot_oracle,
+                                                                                _planning_problem.robot->getName());
+                break;
+            }
             default:
             {
                 util::logging::logErr("Invalid algorithm configuration encountered.", log_prefix);
