@@ -25,7 +25,7 @@ PlanningProblem::PlanningProblem() :
 {
 }
 
-PlanningProblem::PlanningProblem(sim_env::WorldPtr world, sim_env::RobotPtr robot, 
+PlanningProblem::PlanningProblem(sim_env::WorldPtr world, sim_env::RobotPtr robot,
                                  sim_env::RobotVelocityControllerPtr controller,
                                  const ompl::state::goal::RelocationGoalSpecification& goal) :
             PlanningProblem(world, robot, controller, std::vector<ompl::state::goal::RelocationGoalSpecification>(1, goal))
@@ -184,7 +184,11 @@ bool OraclePushPlanner::solve(PlanningSolution& solution) {
     pq.robot_bias = _planning_problem.robot_bias;
     pq.target_bias = _planning_problem.target_bias;
     solution.path = std::make_shared<mps::planner::ompl::planning::essentials::Path>(_space_information);
+    // before planning. let's save the state of the world
+    auto world_state = _planning_problem.world->getWorldState();
     solution.solved = _algorithm->plan(pq, solution.path, solution.stats);
+    // make sure the state of the world is the same as before
+    _planning_problem.world->setWorldState(world_state);
     _state_space->freeState(start_state);
     return solution.solved;
 }

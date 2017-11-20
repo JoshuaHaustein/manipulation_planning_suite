@@ -237,7 +237,6 @@ void RearrangementRRT::printState(const std::string& msg, ::ompl::base::State *s
     ss << msg;
     world_state->print(ss);
     logging::logDebug(ss.str(), "[mps::planner::pushing::oracle::RearrangementRRT::printState]");
-
 }
 
 MotionPtr RearrangementRRT::getNewMotion() {
