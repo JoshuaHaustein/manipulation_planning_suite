@@ -35,7 +35,7 @@ catkin_package(
   INCLUDE_DIRS include
   LIBRARIES ${PROJECT_NAME} proto
   CATKIN_DEPENDS sim_env
-  DEPENDS EIGEN3 OMPL 
+  DEPENDS EIGEN3 OMPL
 )
 
 ###########
@@ -45,7 +45,7 @@ set(CMAKE_CXX_COMPILER /usr/bin/clang++)
 set(CMAKE_CXX_STANDARD 11)
 add_definitions(-std=c++11)
 add_definitions(-Wno-deprecated-register)
-set(CMAKE_CXX_FLAGS_DEBUG "-g -O0 -Wall")
+set(CMAKE_CXX_FLAGS_DEBUG "-g -O0 -Wall -DDEBUG_VISUALIZE")
 set(CMAKE_CXX_FLAGS_RELEASE "-O3")
 
 #message("Proto source: " ${PROTO_SRCS})

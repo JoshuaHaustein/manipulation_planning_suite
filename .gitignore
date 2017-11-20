@@ -27,3 +27,7 @@
 *.exe
 *.out
 *.app
+
+# Visual Studio Code files
+.vscode/c_cpp_properties.json
+.vscode/settings.json
