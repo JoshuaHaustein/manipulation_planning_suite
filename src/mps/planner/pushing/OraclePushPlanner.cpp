@@ -43,7 +43,6 @@ PlanningProblem::PlanningProblem(sim_env::WorldPtr world, sim_env::RobotPtr robo
     planning_time_out = 60.0f;
     b_semi_dynamic = true;
     t_max = 8.0f;
-    goal_region_radius = 0.05f;
     goal_bias = 0.1f;
     robot_bias = 0.1f;
     target_bias = 0.1f;
@@ -169,9 +168,7 @@ bool OraclePushPlanner::solve(PlanningSolution& solution) {
     // goal
     ompl::state::goal::ObjectsRelocationGoalPtr goal_region =
             std::make_shared<ompl::state::goal::ObjectsRelocationGoal>(_space_information,
-                                                                       _planning_problem.relocation_goals,
-                                                                       _planning_problem.goal_region_radius,
-                                                                       0.0f);
+                                                                       _planning_problem.relocation_goals);
     // planning query
     algorithm::RearrangementRRT::PlanningQuery pq(goal_region,
                                                   start_state,

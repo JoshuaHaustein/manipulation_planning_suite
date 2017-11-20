@@ -81,7 +81,6 @@ void mps::planner::util::yaml::configurePlanningProblem(mps::planner::pushing::P
     problem.t_max = problem_desc.t_max;
     problem.planning_time_out = problem_desc.planning_timeout;
     problem.num_control_samples = problem_desc.num_control_samples;
-    problem.goal_region_radius = problem_desc.goal_region_radius;
     problem.algorithm_type = problem_desc.algorithm_type;
     problem.oracle_type = problem_desc.oracle_type;
     problem.goal_bias = problem_desc.goal_bias;

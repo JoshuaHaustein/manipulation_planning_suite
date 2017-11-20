@@ -21,23 +21,30 @@ namespace mps {
                         std::string object_name;
                         Eigen::Vector3f goal_position;
                         Eigen::Quaternionf goal_orientation;
+                        float position_tolerance;
+                        float orientation_tolerance;
                         unsigned int id;
                         /**
                          * A RelocationGoalSpecification specifies where a certain object is supposed to be relocated to.
                          * @param name - the target object to relocate
                          * @param position - the desired goal position of the target object
                          * @param orienation - the desired goal orientation of the target object (TODO not supported yet)
+                         * @param position_tolerance - allowed error in position
+                         * @param angle_tolerance - allowed error in angle
                         */
                         RelocationGoalSpecification(const std::string& name,
                                                     const Eigen::Vector3f& position,
-                                                    const Eigen::Quaternionf& orientation);
+                                                    const Eigen::Quaternionf& orientation,
+                                                    float position_tolerance,
+                                                    float angle_tolerance);
                         RelocationGoalSpecification(const RelocationGoalSpecification& other);
                         RelocationGoalSpecification& operator=(const RelocationGoalSpecification& other);
                     };
+
                     /**
                      * An ObjectsRelocationGoal represents the goal of relocating
                      * one or multiple objects in a scene. The goal is fulfilled if all target objects,
-                     * are within proximity to a target pose. The target objects as well as 
+                     * are within proximity to a target pose. The target objects as well as
                      * their target poses can be specified by the user.
                      * TODO: This class currently only supports position goals in SE(2), ignoring orientation
                      */
@@ -53,20 +60,14 @@ namespace mps {
                          * @param orientation_tolerance - orientation tolerance, i.e. maximal error in orientation that is acceptable (TODO not supported yet)
                          */
                         ObjectsRelocationGoal(::ompl::base::SpaceInformationPtr si,
-                                             const RelocationGoalSpecification& goal_specification,
-                                             float position_tolerance,
-                                             float orientation_tolerance);
+                                             const RelocationGoalSpecification& goal_specification);
                         /**
                          * Creates a new ObjectsRelocationGoal where multiple objects are required to be relocated.
                          * @param si - space information
                          * @param goal_specifications - a vector of relocation goals - there must be at most one per object
-                         * @param position_tolerance - a position tolerance, i.e. a radius around the target position, which is acceptable
-                         * @param orientation_tolerance - orientation tolerance, i.e. maximal error in orientation that is acceptable (TODO not supported yet)
                          */
                         ObjectsRelocationGoal(::ompl::base::SpaceInformationPtr si,
-                                             const std::vector<RelocationGoalSpecification>& goal_specifications,
-                                             float position_tolerance,
-                                             float orientation_tolerance);
+                                             const std::vector<RelocationGoalSpecification>& goal_specifications);
                         ~ObjectsRelocationGoal();
 
                         /**
@@ -84,8 +85,6 @@ namespace mps {
                         unsigned int sampleTargetObjectIndex() const;
                     private:
                         std::vector<RelocationGoalSpecification> _goal_specifications;
-                        const float _position_tolerance;
-                        const float _orientation_tolerance;
                         std::vector<unsigned int> _target_indices;
                         ::ompl::base::StateSamplerPtr _state_sampler;
                         ::ompl::RNGPtr _rng;

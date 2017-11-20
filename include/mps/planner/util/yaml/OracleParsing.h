@@ -29,6 +29,12 @@ namespace mps {
                     std::vector<Eigen::VectorXi> subspaces;
                 };
 
+                struct GoalDesc {
+                    std::string obj_name;
+                    Eigen::Vector3f goal_position;
+                    float goal_region_radius;
+                };
+
                 struct OraclePlanningProblemDesc {
                     std::string world_file;
                     std::string robot_name;
@@ -44,8 +50,7 @@ namespace mps {
                     ControlLimitsDesc control_limits;
                     CollisionPolicyDesc collision_policy;
                     float t_max;
-                    Eigen::Vector3f goal_position;
-                    float goal_region_radius;
+                    std::vector<GoalDesc> goals;
                     float goal_bias;
                     float target_bias;
                     float robot_bias;
@@ -109,6 +114,24 @@ namespace YAML {
     };
 
     template<>
+    struct convert<mps::planner::util::yaml::GoalDesc> {
+        static Node encode(const mps::planner::util::yaml::GoalDesc &goal_desc) {
+            Node node;
+            node["position"] = goal_desc.goal_position;
+            node["radius"] = goal_desc.goal_region_radius;
+            node["object_name"] = goal_desc.obj_name;
+            return node;
+        }
+
+        static bool decode(const Node &node, mps::planner::util::yaml::GoalDesc &goal_desc) {
+            goal_desc.goal_position = node["position"].as<Eigen::Vector3f>();
+            goal_desc.goal_region_radius = node["radius"].as<float>();
+            goal_desc.obj_name = node["object_name"].as<std::string>();
+            return true;
+        }
+    };
+
+    template<>
     struct convert<mps::planner::util::yaml::OraclePlanningProblemDesc> {
         static Node encode(const mps::planner::util::yaml::OraclePlanningProblemDesc &problem_desc) {
             Node node;
@@ -129,8 +152,7 @@ namespace YAML {
             node["robot_bias"] = problem_desc.robot_bias;
             node["target_bias"] = problem_desc.target_bias;
             node["goal_bias"] = problem_desc.goal_bias;
-            node["goal_position"] = problem_desc.goal_position;
-            node["goal_region_radius"] = problem_desc.goal_region_radius;
+            node["goals"] = problem_desc.goals;
             node["oracle_type"] = mps::planner::util::yaml::oracleTypeToString(problem_desc.oracle_type);
             node["algorithm_type"] = mps::planner::util::yaml::algorithmTypeToString(problem_desc.algorithm_type);
             node["num_control_samples"] = problem_desc.num_control_samples;
@@ -140,7 +162,6 @@ namespace YAML {
         static bool decode(const Node &node, mps::planner::util::yaml::OraclePlanningProblemDesc &problem_desc) {
             problem_desc.world_file = node["world_file"].as<std::string>();
             problem_desc.robot_name = node["robot_name"].as<std::string>();
-            problem_desc.target_name = node["target_name"].as<std::string>();
             problem_desc.collision_policy = node["collision_policy"].as<mps::planner::util::yaml::CollisionPolicyDesc>();
             problem_desc.x_limits = node["x_limits"].as<Eigen::Array2f>();
             problem_desc.y_limits = node["y_limits"].as<Eigen::Array2f>();
@@ -152,8 +173,10 @@ namespace YAML {
             // todo weight map
             problem_desc.control_limits = node["control_limits"].as<mps::planner::util::yaml::ControlLimitsDesc>();
             problem_desc.t_max = node["t_max"].as<float>();
-            problem_desc.goal_position = node["goal_position"].as<Eigen::VectorXf>();
-            problem_desc.goal_region_radius = node["goal_region_radius"].as<float>();
+            for (auto yaml_goal : node["goals"]) {
+                auto goal_desc = yaml_goal.as<mps::planner::util::yaml::GoalDesc>();
+                problem_desc.goals.push_back(goal_desc);
+            }
             problem_desc.oracle_type = mps::planner::util::yaml::stringToOracleType(node["oracle_type"].as<std::string>());
             problem_desc.algorithm_type = mps::planner::util::yaml::stringToAlgorithmType(node["algorithm_type"].as<std::string>());
             problem_desc.num_control_samples = node["num_control_samples"].as<unsigned int>();

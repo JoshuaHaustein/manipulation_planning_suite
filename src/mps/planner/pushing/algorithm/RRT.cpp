@@ -239,7 +239,7 @@ void RearrangementRRT::printState(const std::string& msg, ::ompl::base::State *s
     world_state->print(ss);
     logging::logDebug(ss.str(), "[mps::planner::pushing::oracle::RearrangementRRT::printState]");
     #ifdef DEBUG_VISUALIZE
-    _debug_drawer->showState(world_state, _state_space);
+    if (_debug_drawer) _debug_drawer->showState(world_state, _state_space);
     #endif
 }
 

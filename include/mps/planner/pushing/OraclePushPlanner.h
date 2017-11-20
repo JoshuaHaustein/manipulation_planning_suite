@@ -53,7 +53,6 @@ namespace mps {
                 float t_max;
                 // goal region
                 std::vector<ompl::state::goal::RelocationGoalSpecification> relocation_goals;
-                float goal_region_radius; // TODO should we have different radii for each object?
                 // settings for control sampler
                 OracleType oracle_type;
                 AlgorithmType algorithm_type;
