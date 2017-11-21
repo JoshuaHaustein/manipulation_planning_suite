@@ -283,6 +283,66 @@ void OraclePushPlanner::dummyTest() {
     _space_information->freeControl(control);
 }
 
+mps::planner::ompl::planning::essentials::PathPtr OraclePushPlanner::testOracle(const ompl::state::goal::RelocationGoalSpecification& goal) const
+{
+    ///////////////////////////////////// First make sure everything is set up properly /////////////////////////////
+    const static std::string log_prefix("[mps::planner::pushing::OraclePushPlanner]");
+    if (not _is_initialized) {
+        auto logger = sim_env::DefaultLogger::getInstance();
+        logger->logErr("Could not test oracle. Planner is not initialized. Call setup(...) first.", log_prefix);
+        return nullptr;
+    }
+    auto logger = _planning_problem.world->getLogger();
+    auto oracle_rrt = std::dynamic_pointer_cast<algorithm::OracleRearrangementRRT>(_algorithm);
+    if (!oracle_rrt) {
+        logger->logErr("Could not test oracle. The selected algorithm is not of type OracleRearrangementRRT.",
+                       log_prefix);
+        return nullptr;
+    }
+    int target_id = _state_space->getObjectIndex(goal.object_name);
+    int robot_id = _state_space->getObjectIndex(_planning_problem.robot->getName());
+    assert(robot_id >= 0); // the robot is a sim_env object, so it should always be a valid id here
+    if (target_id < 0) {
+        logger->logErr("Could not test oracle - invalid target name " + goal.object_name, log_prefix);
+        return nullptr;
+    }
+    ///////////////////////////////////// Now we can ask the oracle /////////////////////////////
+    auto oracle_sampler = oracle_rrt->getOracleSampler();
+    auto* target_state = dynamic_cast<mps::planner::ompl::state::SimEnvWorldState*>(_state_space->allocState());
+    auto start_motion = std::make_shared<ompl::planning::essentials::Motion>(_space_information);
+    _state_space->extractState(_planning_problem.world,
+                               dynamic_cast<mps::planner::ompl::state::SimEnvWorldState*>(start_motion->getState()));
+    _state_space->copyState(target_state, start_motion->getState());
+    auto* object_state = target_state->getObjectState(target_id);
+    Eigen::VectorXf target_config(3);
+    target_config.head(3) = goal.goal_position.head(3);
+    object_state->setConfiguration(target_config);
+    std::vector<::ompl::control::Control const*> oracle_controls;
+    bool success = false;
+    if (target_id == robot_id) {
+        success = oracle_sampler->steerRobot(oracle_controls, start_motion->getState(), target_state);
+    } else {
+        success = oracle_sampler->steerPushSimple(oracle_controls, start_motion->getState(), target_state, target_id);
+    }
+    // Done, cleanup
+    _state_space->freeState(target_state);
+    if (not success) {
+        logger->logWarn("The oracle failed at providing controls", log_prefix);
+        return nullptr;
+    }
+    // Create Path
+    auto path = std::make_shared<ompl::planning::essentials::Path>(_space_information);
+    _control_space->copyControl(start_motion->getControl(), oracle_controls.at(0));
+    path->append(start_motion);
+    for (size_t i = 1; i < oracle_controls.size(); ++i) {
+        auto new_motion = std::make_shared<ompl::planning::essentials::Motion>(_space_information);
+        _control_space->copyControl(new_motion->getControl(), oracle_controls.at(i));
+        new_motion->setParent(path->getMotion(i - 1));
+        path->append(new_motion);
+    }
+    return path;
+}
+
 void OraclePushPlanner::prepareDistanceWeights() {
     _distance_weights.resize(_state_space->getNumObjects());
     for (unsigned int i = 0; i < _distance_weights.size(); ++i) {

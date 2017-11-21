@@ -21,8 +21,8 @@ void mps::planner::util::playback::playPath(sim_env::WorldPtr world,
                                             const mps::planner::ompl::planning::essentials::PathConstPtr &path,
                                             const std::function<bool()>& interrupt_callback) {
     const std::string log_prefix("[mps::planner::util::playback::playPath]");
-    if (!path or path->getNumMotions() <= 1) {
-        logging::logWarn("The given path is non-existant, empty or trivial, i.e. only a single state. Nothing to playback.",
+    if (!path or path->getNumMotions() == 0) {
+        logging::logWarn("The given path is empty or does not exist. Nothing to playback.",
                          log_prefix);
         return;
     }

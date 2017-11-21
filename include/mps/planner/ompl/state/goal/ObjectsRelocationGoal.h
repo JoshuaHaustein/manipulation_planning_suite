@@ -25,6 +25,10 @@ namespace mps {
                         float orientation_tolerance;
                         unsigned int id;
                         /**
+                         * Default constructor. WARNING: Sets default values that are not a valid goal!
+                         */
+                        RelocationGoalSpecification();
+                        /**
                          * A RelocationGoalSpecification specifies where a certain object is supposed to be relocated to.
                          * @param name - the target object to relocate
                          * @param position - the desired goal position of the target object

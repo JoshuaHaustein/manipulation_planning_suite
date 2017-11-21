@@ -11,6 +11,8 @@
 
 using namespace mps::planner::ompl::state::goal;
 
+RelocationGoalSpecification::RelocationGoalSpecification() = default;
+
 RelocationGoalSpecification::RelocationGoalSpecification(const std::string& name,
                                                          const Eigen::Vector3f& position,
                                                          const Eigen::Quaternionf& orientation,

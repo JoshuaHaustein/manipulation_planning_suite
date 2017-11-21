@@ -330,9 +330,9 @@ OracleRearrangementRRT::OracleRearrangementRRT(::ompl::control::SpaceInformation
                                              mps::planner::pushing::oracle::RobotOraclePtr robot_oracle,
                                              const std::string& robot_name,
                                              const oracle::OracleControlSampler::Parameters& params) :
-        RearrangementRRT(si),
-        _oracle_sampler(si, pushing_oracle, robot_oracle, robot_name, params)
+        RearrangementRRT(si)
 {
+    _oracle_sampler = std::make_shared<mps::planner::pushing::oracle::OracleControlSampler>(si, pushing_oracle, robot_oracle, robot_name, params);
     _state_propagator = std::dynamic_pointer_cast<mps_control::SimEnvStatePropagator>(si->getStatePropagator());
     assert(_state_propagator);
 }
@@ -341,7 +341,7 @@ OracleRearrangementRRT::~OracleRearrangementRRT() = default;
 
 void OracleRearrangementRRT::setOracleSamplerParameters(
         const mps::planner::pushing::oracle::OracleControlSampler::Parameters &params) {
-    _oracle_sampler.setParameters(params);
+    _oracle_sampler->setParameters(params);
 }
 
 bool OracleRearrangementRRT::extend(MotionPtr start,
@@ -351,10 +351,10 @@ bool OracleRearrangementRRT::extend(MotionPtr start,
                                    RearrangementRRT::PlanningBlackboard &pb) {
     static const std::string log_prefix("[mps::planner::pushing::algorithm::OracleRearrangementRRT]");
     std::vector<const ::ompl::control::Control*> controls;
-    _oracle_sampler.sampleTo(controls,
-                             start->getState(),
-                             dest,
-                             active_obj_id);
+    _oracle_sampler->sampleTo(controls,
+                              start->getState(),
+                              dest,
+                              active_obj_id);
     if (controls.empty()) {
         logging::logErr("OracleControlSampler provided no controls at all", log_prefix);
     }
@@ -385,6 +385,10 @@ bool OracleRearrangementRRT::extend(MotionPtr start,
         prev_motion = new_motion;
     }
     return false;
+}
+
+mps::planner::pushing::oracle::OracleControlSamplerPtr OracleRearrangementRRT::getOracleSampler() const {
+    return _oracle_sampler;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -713,12 +717,12 @@ void CompleteSliceBasedOracleRRT::selectTreeNode(const ompl::planning::essential
             auto new_motion = getNewMotion();
             _state_space->copyState(new_motion->getState(), candidate_slice->repr->getState());
             // we do this by sampling a feasible state
-            _oracle_sampler.sampleFeasibleState(new_motion->getState(),
+            _oracle_sampler->sampleFeasibleState(new_motion->getState(),
                                                 sample_slice->repr->getState(),
                                                 active_obj_id);
             // and selecting the nearest one
             auto nearest_state = candidate_slice->slice_samples_nn->nearest(new_motion);
-            float feasibility = _oracle_sampler.getFeasibility(nearest_state->getState(),
+            float feasibility = _oracle_sampler->getFeasibility(nearest_state->getState(),
                                                                sample_slice->repr->getState(),
                                                                active_obj_id);
             // save what we found
@@ -740,7 +744,7 @@ bool CompleteSliceBasedOracleRRT::extend(mps::planner::ompl::planning::essential
     static const std::string log_prefix("[mps::planner::pushing::algorithm::CompleteSliceBasedOracleRRT::extend]");
     std::vector<const ::ompl::control::Control*> controls;
     // first only move the robot TODO: This often pushes the object away from us
-    _oracle_sampler.steerRobot(controls, start->getState(), dest);
+    _oracle_sampler->steerRobot(controls, start->getState(), dest);
     if (controls.empty()) {
         logging::logErr("OracleControlSampler provided no controls at all", log_prefix);
         return false;
@@ -751,7 +755,7 @@ bool CompleteSliceBasedOracleRRT::extend(mps::planner::ompl::planning::essential
     // next, if the active object is not the robot, try a push
     if (extension_success and active_obj_id != pb.robot_id and not b_goal) {
         controls.clear();
-        _oracle_sampler.steerPushSimple(controls, last_motion->getState(), dest, active_obj_id);
+        _oracle_sampler->steerPushSimple(controls, last_motion->getState(), dest, active_obj_id);
         extendStep(controls, last_motion, last_motion, pb, extension_success, b_goal);
     }
     return b_goal;

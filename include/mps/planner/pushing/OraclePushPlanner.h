@@ -117,6 +117,21 @@ namespace mps {
                                   const std::string& annotation,
                                   bool deterministic);
                 void dummyTest();
+
+                /**
+                 * This function allows to evaluate the oracle used by the current planning algorithm.
+                 * If the planner is not setup or does not use an oracle,
+                 * this function will immediately return. If the planner is setup and
+                 * utilizes an oracle, this function will ask this oracle to provide a control
+                 * that moves the world closer to the provided goal.
+                 * @param goal - a relocation goal specification. If the name of the object is the robot,
+                 *              the oracle will be asked to provide a control to move the robot to the
+                 *              desired state.
+                 *              If the object name is an object, the control will be asked to
+                 *              provide controls to move this object to the desired state.
+                 * @return a path containing the sequence of controls provided by the oracle. Nullptr in case of failure
+                 */
+                ompl::planning::essentials::PathPtr testOracle(const ompl::state::goal::RelocationGoalSpecification& goal) const;
             private:
                 bool _is_initialized;
                 mps::planner::ompl::state::SimEnvWorldStateSpacePtr _state_space;

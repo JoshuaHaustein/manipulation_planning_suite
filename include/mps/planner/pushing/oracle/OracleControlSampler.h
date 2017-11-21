@@ -105,6 +105,10 @@ namespace mps {
                     inline mps::planner::ompl::control::RealValueParameterizedControl* getControl();
                     inline void resetControlIdx();
                 };
+                typedef std::shared_ptr<OracleControlSampler> OracleControlSamplerPtr;
+                typedef std::shared_ptr<const OracleControlSampler> OracleControlSamplerConstPtr;
+                typedef std::weak_ptr<OracleControlSampler> OracleControlSamplerWeakPtr;
+                typedef std::weak_ptr<const OracleControlSampler> OracleControlSamplerWeakConstPtr;
             }
         }
     }

@@ -243,9 +243,17 @@ namespace mps {
                                 unsigned int active_obj_id,
                                 mps::planner::ompl::planning::essentials::MotionPtr& last_motion,
                                 PlanningBlackboard& pb) override;
+
+                    /**
+                     * Returns the oracle sampler used by this planner.
+                     * This function is mostly here for debug purposes allowing a developer
+                     * to study the behaviour of the oracle sampler.
+                     * */
+                    mps::planner::pushing::oracle::OracleControlSamplerPtr getOracleSampler() const;
+
                 protected:
                     mps::planner::ompl::control::SimEnvStatePropagatorPtr _state_propagator;
-                    mps::planner::pushing::oracle::OracleControlSampler _oracle_sampler;
+                    mps::planner::pushing::oracle::OracleControlSamplerPtr _oracle_sampler;
                 };
 
                 class SliceBasedOracleRRT : public OracleRearrangementRRT {
