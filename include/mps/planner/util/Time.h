@@ -5,7 +5,7 @@
 #ifndef MANIPULATION_PLANNING_SUITE_TIME_H
 #define MANIPULATION_PLANNING_SUITE_TIME_H
 
-#include <ctime>
+#include <chrono>
 
 namespace mps {
     namespace planner {
@@ -20,8 +20,8 @@ namespace mps {
                     bool timeOutExceeded() const;
                 private:
                     bool _running;
-                    std::clock_t _start_time;
                     float _time_out;
+		    std::chrono::high_resolution_clock::time_point _start_time;
                 };
             }
         }
