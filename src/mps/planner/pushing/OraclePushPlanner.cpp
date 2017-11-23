@@ -322,7 +322,7 @@ mps::planner::ompl::planning::essentials::PathPtr OraclePushPlanner::testOracle(
     if (target_id == robot_id) {
         success = oracle_sampler->steerRobot(oracle_controls, start_motion->getState(), target_state);
     } else {
-        success = oracle_sampler->steerPushSimple(oracle_controls, start_motion->getState(), target_state, target_id);
+        success = oracle_sampler->steerPush(oracle_controls, dynamic_cast<ompl::state::SimEnvWorldState*>(start_motion->getState()), target_state, target_id);
     }
     // Done, cleanup
     _state_space->freeState(target_state);
