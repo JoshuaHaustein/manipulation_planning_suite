@@ -92,6 +92,8 @@ set(PLANNER_H
         include/mps/planner/util/Time.h
         include/mps/planner/util/Math.h
         include/mps/planner/util/yaml/OracleParsing.h
+        include/mps/sdf/Grid.h
+        include/mps/sdf/FMM.h
         )
 
 ## Define all source files
@@ -147,7 +149,6 @@ set(PLANNER_SRC
 ## Specify libraries to link a library or executable target against
  target_link_libraries(manual_test_node
    ${catkin_LIBRARIES}
-   ${CUDA_CUBLAS_LIBRARIES}
  )
 
 #############
