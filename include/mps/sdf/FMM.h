@@ -170,9 +170,8 @@ namespace mps {
 
             /**
              * Computes the minimal distance to the intial condition for the voxel with index idx.
-             * For the distance computation only the frozen neighbors are taken into account.
-             * Thus, if idx has no frozen neighbors, the distance is not updated. In any case
-             * the best guess of the minimal distance is returned.
+             * For the distance computation only the frozen neighbors are taken into account. Thus, if
+             * idx has no frozen neighbor, the returned distance if infinity.
              */
             template<typename ScalarType>
             ScalarType computeDistance(const grid::UnsignedIndex& idx, FMMData<ScalarType>& fmm_data) {
@@ -196,6 +195,9 @@ namespace mps {
                 return new_distance;
             }
 
+            /**
+             * Computes and updates the distance of the voxel at location idx.
+             */
             template<typename ScalarType>
             void updateDistance(const grid::UnsignedIndex& idx, FMMData<ScalarType>& fmm_data) {
                 if (fmm_data.grid(idx).state == VoxelState::Frozen) {
@@ -213,6 +215,12 @@ namespace mps {
                 }
             }
 
+            /**
+             * Initializes the provided fmm_data for FMM.
+             * @param fmm_data - FMMData structure to initialize
+             * @param frozen_states - the states that form the initial condition, i.e. boundary, are returned
+             *                      in this list.
+             */
             template<typename ScalarType>
             void initializeData(FMMData<ScalarType>& fmm_data, std::vector<grid::UnsignedIndex>& frozen_states) {
                 // Initialize data structure
@@ -242,7 +250,13 @@ namespace mps {
 
             /**
              * Computes a signed distance field using the fast marching method.
-             * @param input_grid - a grid of
+             * @param input_grid - a grid of integers filled with 1 and -1.
+             *                     1 for points outside and -1 for points inside of the boundary.
+             *                     The points x for which input_grid(x) == 1 and there is an immediate neighbor of
+             *                     x for which input_grid(x) == -1, constitute the boundary
+             * @param result_grid - a grid that will after temination of this algorithm
+             *                  contain the approximate signed closest distance to the boundary.
+             * @param scale - a factor translating voxel size to a desired untit (i.e. m)
              */
             template<typename ScalarType>
             void computeSDF(const grid::VoxelGrid<int>& input_grid,
