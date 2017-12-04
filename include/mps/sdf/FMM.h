@@ -13,6 +13,18 @@
 namespace mps {
     namespace sdf {
         namespace fmm {
+            // Returns true if both grids have same dimensions, else false
+            template<typename T_1, typename T_2>
+            bool compareGridSize(const grid::VoxelGrid<T_1>& grid_1, const grid::VoxelGrid<T_2>& grid_2) {
+                if (grid_1.x_size != grid_2.x_size ||
+                    grid_1.y_size != grid_2.y_size ||
+                    grid_1.z_size != grid_2.z_size)
+                {
+                    return false;
+                }
+                return true;
+            }
+
             // State of voxels in the fmm algorithm
             enum VoxelState {Frozen, Considered, Far};
             template<typename ScalarType>
@@ -32,37 +44,44 @@ namespace mps {
                     return a.value >= b.value;
                 }
             };
+
+            // Data stored for each voxel in fmm
+            template<typename ScalarType, typename HandleType>
+            struct FMMVoxelData {
+                ScalarType distance;
+                int sign;
+                VoxelState state;
+                HandleType pq_handle;
+            };
+
             /**
              * Black board data structure for fmm algorithm.
              */
             template<typename ScalarType>
             struct FMMData {
                 typedef boost::heap::binomial_heap<PriorityQueueElement<ScalarType> , boost::heap::stable<false>, boost::heap::compare<PriorityQueueElementComparator<ScalarType> > > PriorityQueue;
+                typedef FMMVoxelData<ScalarType, typename PriorityQueue::handle_type> TypedFMMVoxelData;
                 PriorityQueue considered_voxels;
                 const grid::VoxelGrid<int>& input_grid;
-                grid::VoxelGrid<ScalarType>& result_grid;
-                grid::VoxelGrid<VoxelState> voxel_states;
-                grid::VoxelGrid<typename PriorityQueue::handle_type> pq_handles;
-                FMMData(const grid::VoxelGrid<int>& grid_in, grid::VoxelGrid<ScalarType>& grid_out) :
-                    input_grid(grid_in),
-                    result_grid(grid_out),
-                    voxel_states(grid_out.x_size, grid_out.y_size, grid_out.z_size),
-                    pq_handles(grid_out.x_size, grid_out.y_size, grid_out.z_size) {}
+                grid::VoxelGrid<TypedFMMVoxelData> grid;
+                FMMData(const grid::VoxelGrid<int>& igrid) :
+                    input_grid(igrid),
+                    grid(igrid.x_size, igrid.y_size, igrid.z_size) {}
                 FMMData(const FMMData& other) = default;
                 ~FMMData() = default;
+
+                void copySignedDistances(grid::VoxelGrid<ScalarType>& output, ScalarType scale=1.0) {
+                    if (not compareGridSize<ScalarType, TypedFMMVoxelData>(output, grid)) {
+                        throw std::logic_error("Could not copy signed distance. Given output grid has invalid dimensions.");
+                    }
+                    auto idx_generator = grid.getIndexGenerator();
+                    while (idx_generator.hasNext()) {
+                        auto idx = idx_generator.next();
+                        output(idx) = scale * grid(idx).sign * grid(idx).distance;
+                    }
+                }
             };
 
-            // Returns true if both grids have same dimensions, else false
-            template<typename T_1, typename T_2>
-            bool compareGridSize(const grid::VoxelGrid<T_1>& grid_1, const grid::VoxelGrid<T_2>& grid_2) {
-                if (grid_1.x_size != grid_2.x_size ||
-                    grid_1.y_size != grid_2.y_size ||
-                    grid_1.z_size != grid_2.z_size)
-                {
-                    return false;
-                }
-                return true;
-            }
 
             /**
              * Compute the real roots of a polynomial of degree 2 (i.e. quadratic).
@@ -112,16 +131,17 @@ namespace mps {
                     ScalarType val_2(std::numeric_limits<ScalarType>::max());
                     for (unsigned int c = 0; c < 2; ++c) { // for forward and backward direction
                         auto d1_idx = center_idx + directions[r * 2 + c]; // idx - 1
-                        if (fmm_data.voxel_states.inBounds(d1_idx) and
-                            fmm_data.voxel_states(d1_idx.toUnsignedIndex()) == VoxelState::Frozen) {
-                            ScalarType tval_1 = fmm_data.result_grid(d1_idx.toUnsignedIndex()); // idx - 1 is valid, so store value
+                        if (fmm_data.grid.inBounds(d1_idx) and
+                            fmm_data.grid(d1_idx.toUnsignedIndex()).state == VoxelState::Frozen) {
+                            // idx - 1 is valid, so store value
+                            ScalarType tval_1 = fmm_data.grid(d1_idx.toUnsignedIndex()).distance;
                             if (tval_1 < val_1) { // if it is smaller than for the other direction
                                 val_1 = tval_1;
                                 // let's see whether we can get a second order derivative
                                 auto d2_idx = center_idx + directions[r * 2 + c] * 2;
-                                if (fmm_data.voxel_states.inBounds(d2_idx) and
-                                    fmm_data.voxel_states(d2_idx.toUnsignedIndex()) == VoxelState::Frozen) {
-                                    ScalarType tval_2 = fmm_data.result_grid(d2_idx.toUnsignedIndex());
+                                if (fmm_data.grid.inBounds(d2_idx) and
+                                    fmm_data.grid(d2_idx.toUnsignedIndex()).state == VoxelState::Frozen) {
+                                    ScalarType tval_2 = fmm_data.grid(d2_idx.toUnsignedIndex()).distance;
                                     if (tval_2 < tval_1) {
                                         val_2 = tval_2;
                                     } else {
@@ -148,31 +168,6 @@ namespace mps {
                 }
             }
 
-            // template<typename ScalarType>
-            // inline void add_coeffs(const grid::UnsignedIndex& idx, const std::array<size_t, 3>& dir,
-            //                        std::array<ScalarType, 3>& coeffs, FMMData<ScalarType>& fmm_data) {
-            //     auto nn_gen = fmm_data.result_grid.getBlindNeighborIndexGenerator(idx, dir[0], dir[1], dir[2]);
-            //     std::array<std::pair<bool, ScalarType>, 6> entry_info;
-            //     size_t array_idx = 0;
-            //     while (nn_gen.hasNext()) {
-            //         auto grid_idx = nn_gen.next();
-            //         if (fmm_data.voxel_states.inBounds(grid_idx)) {
-            //             entry_info[array_idx].get<bool>() = fmm_data.voxel_states(grid_idx) == VoxelState::Frozen;
-            //             entry_info[array_idx].get<ScalarType>() = fmm_data.result_grid(grid_idx);
-            //         } else {
-            //             entry_info[array_idx].get<bool>() = false;
-            //             entry_info[array_idx].get<ScalarType>() = 0.0;
-            //         }
-            //     }
-            //     if (entry_info[0].get<bool>()) {
-            //         entry_info[0].get<bool>() = entry_info[1].get<bool>() and
-            //                                     entry_info[0].get<ScalarType>() < entry_info[1].get<ScalarType>();
-            //     }
-            //     if (entry_info[5].get<bool>()) {
-            //         entry_info[5].get<bool>() = entry_info[4].get<bool>() and
-            //                                     entry_info[5].get<ScalarType>() < entry_info[4].get<ScalarType>();
-            //     }
-            // }
             /**
              * Computes the minimal distance to the intial condition for the voxel with index idx.
              * For the distance computation only the frozen neighbors are taken into account.
@@ -203,50 +198,71 @@ namespace mps {
 
             template<typename ScalarType>
             void updateDistance(const grid::UnsignedIndex& idx, FMMData<ScalarType>& fmm_data) {
-                if (fmm_data.voxel_states(idx) == VoxelState::Frozen) {
+                if (fmm_data.grid(idx).state == VoxelState::Frozen) {
                     return;
                 }
                 ScalarType dist = computeDistance<ScalarType>(idx, fmm_data);
-                if (fmm_data.voxel_states(idx) == VoxelState::Considered) {
-                    fmm_data.considered_voxels.decrease(fmm_data.pq_handles(idx), PriorityQueueElement<ScalarType>(dist, idx));
-                    fmm_data.result_grid(idx) = dist;
+                if (fmm_data.grid(idx).state == VoxelState::Considered) {
+                    fmm_data.considered_voxels.decrease(fmm_data.grid(idx).pq_handle, PriorityQueueElement<ScalarType>(dist, idx));
+                    fmm_data.grid(idx).distance = dist;
                 } else if (dist != std::numeric_limits<ScalarType>::max()) {
-                    assert(fmm_data.voxel_states(idx) == VoxelState::Far);
-                    fmm_data.voxel_states(idx) = VoxelState::Considered;
-                    fmm_data.pq_handles(idx) = fmm_data.considered_voxels.emplace(PriorityQueueElement<ScalarType>(dist, idx));
-                    fmm_data.result_grid(idx) = dist;
+                    assert(fmm_data.grid(idx).state == VoxelState::Far);
+                    fmm_data.grid(idx).state = VoxelState::Considered;
+                    fmm_data.grid(idx).pq_handle = fmm_data.considered_voxels.emplace(PriorityQueueElement<ScalarType>(dist, idx));
+                    fmm_data.grid(idx).distance = dist;
                 }
             }
 
             template<typename ScalarType>
-            void computeSDF(const grid::VoxelGrid<int>& binary_grid,
+            void initializeData(FMMData<ScalarType>& fmm_data, std::vector<grid::UnsignedIndex>& frozen_states) {
+                // Initialize data structure
+                auto idx_generator = fmm_data.input_grid.getIndexGenerator();
+                // Run over all voxels
+                while (idx_generator.hasNext()) {
+                    auto index = idx_generator.next();
+                    fmm_data.grid(index).sign = fmm_data.input_grid(index);
+                    fmm_data.grid(index).state = VoxelState::Far;
+                    // check if this index is on the boundary
+                    // it has to have positive sign for that and have at least one neigbor with negative sign
+                    if (fmm_data.input_grid(index) == 1) {
+                        auto neighbor_gen = fmm_data.input_grid.getNeighborIndexGenerator(index, 1, 1, 1);
+                        bool on_boundary = false;
+                        while (neighbor_gen.hasNext() and not on_boundary) {
+                            auto neighbor_idx = neighbor_gen.next();
+                            on_boundary = fmm_data.input_grid(neighbor_idx) == -1;
+                        }
+                        if (on_boundary) {
+                            fmm_data.grid(index).state = VoxelState::Frozen;
+                            fmm_data.grid(index).distance = 0.0;
+                            frozen_states.push_back(index);
+                        }
+                    }
+                }
+            }
+
+            /**
+             * Computes a signed distance field using the fast marching method.
+             * @param input_grid - a grid of
+             */
+            template<typename ScalarType>
+            void computeSDF(const grid::VoxelGrid<int>& input_grid,
                             grid::VoxelGrid<ScalarType>& result_grid,
                             ScalarType scale=ScalarType(1))
             {
-                if (not compareGridSize(binary_grid, result_grid)) {
+                if (not compareGridSize(input_grid, result_grid)) {
                     throw std::logic_error("Input and output grid do not have the same dimension.");
                 }
-                FMMData<ScalarType> fmm_data(binary_grid, result_grid);
-                // Initialize data structures
-                auto idx_generator = binary_grid.getIndexGenerator();
+                FMMData<ScalarType> fmm_data(input_grid);
                 std::vector<grid::UnsignedIndex> frozen_states;
-                while (idx_generator.hasNext()) {
-                    auto index = idx_generator.next();
-                    if (binary_grid(index)) {  // index is a boundary cell
-                        fmm_data.voxel_states(index) = VoxelState::Frozen;
-                        fmm_data.result_grid(index) = ScalarType(0);
-                        frozen_states.push_back(index);
-                    } else {
-                        fmm_data.voxel_states(index) = VoxelState::Far;
-                    }
-                }
+                initializeData(fmm_data, frozen_states);
                 // Ensure that we actually have an initial surface
                 if (frozen_states.empty()) {
+                    // TODO we could also just initialize all distances with infinity and just return in this case
                     throw std::runtime_error("There is no surface defined in the input. Can not compute signed distance field");
                 }
                 // Now do initialization step of algorithm
                 for (auto& index : frozen_states) {
-                    auto neighbor_gen = result_grid.getNeighborIndexGenerator(index, 1, 1, 1);
+                    auto neighbor_gen = fmm_data.grid.getNeighborIndexGenerator(index, 1, 1, 1);
                     while (neighbor_gen.hasNext()) {
                         auto neighbor = neighbor_gen.next();
                         updateDistance(neighbor, fmm_data);
@@ -254,17 +270,22 @@ namespace mps {
                 }
                 // We are ready to perform the main loop
                 while (not fmm_data.considered_voxels.empty()) {
+                    // get considered voxel with minimal distance
                     auto current_elem = fmm_data.considered_voxels.top();
                     fmm_data.considered_voxels.pop();
-                    fmm_data.voxel_states(current_elem.index) = VoxelState::Frozen;
-                    auto neighbor_gen = result_grid.getNeighborIndexGenerator(current_elem.index, 1, 1, 1);
+                    // freeze it
+                    fmm_data.grid(current_elem.index).state = VoxelState::Frozen;
+                    // run  over its neighbors and update distances
+                    auto neighbor_gen = fmm_data.grid.getNeighborIndexGenerator(current_elem.index, 1, 1, 1);
                     while(neighbor_gen.hasNext()) {
                         auto neighbor = neighbor_gen.next();
-                        if (fmm_data.voxel_states(neighbor) != VoxelState::Frozen) {
+                        if (fmm_data.grid(neighbor).state != VoxelState::Frozen) {
                             updateDistance(neighbor, fmm_data);
                         }
                     }
                 }
+                // we are done, copy signed distances into result grid
+                fmm_data.copySignedDistances(result_grid, scale);
             }
         }
     }

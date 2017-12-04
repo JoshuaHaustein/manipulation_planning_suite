@@ -70,22 +70,24 @@ int main(int argc, char **argv) {
     // for (auto& value : voxel_grid) {
     //     std::cout << value;
     // }
-    mps::sdf::grid::VoxelGrid<int> input_grid(8, 8, 1, 0);
+    mps::sdf::grid::VoxelGrid<int> input_grid(8, 8, 1, 1);
     mps::sdf::grid::VoxelGrid<float> output_grid(8, 8, 1);
-    input_grid(4, 4, 0) = 1;
-    input_grid(5, 4, 0) = 1;
-    input_grid(6, 4, 0) = 1;
-    input_grid(4, 5, 0) = 1;
-    input_grid(6, 5, 0) = 1;
-    input_grid(4, 6, 0) = 1;
-    input_grid(5, 6, 0) = 1;
-    input_grid(6, 6, 0) = 1;
+    input_grid(0, 0, 0) = -1;
+    input_grid(4, 4, 0) = -1;
+    input_grid(5, 4, 0) = -1;
+    input_grid(6, 4, 0) = -1;
+    input_grid(4, 5, 0) = -1;
+    input_grid(5, 5, 0) = -1;
+    input_grid(6, 5, 0) = -1;
+    input_grid(4, 6, 0) = -1;
+    input_grid(5, 6, 0) = -1;
+    input_grid(6, 6, 0) = -1;
     std::cout << "Input Grid:" << std::endl;
     printGrid(input_grid);
     // test_grid(idx, input_grid);
     // test_grid(idx2, input_grid);
     // test_grid(idx3, input_grid);
-    mps::sdf::fmm::computeSDF<float>(input_grid, output_grid, 1.0f);
+    mps::sdf::fmm::computeSDF<float>(input_grid, output_grid, 0.1f);
     std::cout << "Output Grid:" << std::endl;
     printGrid(output_grid);
 }
