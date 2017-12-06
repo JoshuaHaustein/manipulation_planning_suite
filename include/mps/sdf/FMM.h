@@ -15,10 +15,10 @@ namespace mps {
         namespace fmm {
             // Returns true if both grids have same dimensions, else false
             template<typename T_1, typename T_2>
-            bool compareGridSize(const grid::VoxelGrid<T_1>& grid_1, const grid::VoxelGrid<T_2>& grid_2) {
-                if (grid_1.x_size != grid_2.x_size ||
-                    grid_1.y_size != grid_2.y_size ||
-                    grid_1.z_size != grid_2.z_size)
+            bool compareGridSize(const grid::Grid3D<T_1>& grid_1, const grid::Grid3D<T_2>& grid_2) {
+                if (grid_1.getXSize() != grid_2.getXSize() ||
+                    grid_1.getYSize() != grid_2.getYSize() ||
+                    grid_1.getZSize() != grid_2.getZSize())
                 {
                     return false;
                 }
@@ -62,15 +62,15 @@ namespace mps {
                 typedef boost::heap::binomial_heap<PriorityQueueElement<ScalarType> , boost::heap::stable<false>, boost::heap::compare<PriorityQueueElementComparator<ScalarType> > > PriorityQueue;
                 typedef FMMVoxelData<ScalarType, typename PriorityQueue::handle_type> TypedFMMVoxelData;
                 PriorityQueue considered_voxels;
-                const grid::VoxelGrid<int>& input_grid;
-                grid::VoxelGrid<TypedFMMVoxelData> grid;
-                FMMData(const grid::VoxelGrid<int>& igrid) :
+                const grid::Grid3D<int>& input_grid;
+                grid::Grid3D<TypedFMMVoxelData> grid;
+                FMMData(const grid::Grid3D<int>& igrid) :
                     input_grid(igrid),
-                    grid(igrid.x_size, igrid.y_size, igrid.z_size) {}
+                    grid(igrid.getXSize(), igrid.getYSize(), igrid.getZSize()) {}
                 FMMData(const FMMData& other) = default;
                 ~FMMData() = default;
 
-                void copySignedDistances(grid::VoxelGrid<ScalarType>& output, ScalarType scale=1.0) {
+                void copySignedDistances(grid::Grid3D<ScalarType>& output, ScalarType scale=1.0) {
                     if (not compareGridSize<ScalarType, TypedFMMVoxelData>(output, grid)) {
                         throw std::logic_error("Could not copy signed distance. Given output grid has invalid dimensions.");
                     }
@@ -259,8 +259,8 @@ namespace mps {
              * @param scale - a factor translating voxel size to a desired untit (i.e. m)
              */
             template<typename ScalarType>
-            void computeSDF(const grid::VoxelGrid<int>& input_grid,
-                            grid::VoxelGrid<ScalarType>& result_grid,
+            void computeSDF(const grid::Grid3D<int>& input_grid,
+                            grid::Grid3D<ScalarType>& result_grid,
                             ScalarType scale=ScalarType(1))
             {
                 if (not compareGridSize(input_grid, result_grid)) {

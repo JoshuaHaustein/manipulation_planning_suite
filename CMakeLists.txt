@@ -122,6 +122,7 @@ set(PLANNER_SRC
         src/mps/planner/pushing/oracle/RampComputer.cpp
         src/mps/planner/pushing/oracle/DataGenerator.cpp
         src/mps/planner/pushing/algorithm/RRT.cpp
+        src/mps/sdf/SDF.cpp
 )
 
 ## Declare a C++ library
