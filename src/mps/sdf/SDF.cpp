@@ -101,7 +101,7 @@ void SDF::computeSCMRec(const grid::UnsignedIndex& min_idx, const grid::Unsigned
     }
     // else we need to split this cell up and see which child ranges are in collision
     std::array<std::array<size_t, 2>, 3> half_sizes;
-    half_sizes[0][0] = box_size.ix; // we split this box into 8 children by dividing each axis by 2
+    half_sizes[0][0] = box_size.ix / 2; // we split this box into 8 children by dividing each axis by 2
     half_sizes[0][1] = box_size.ix - half_sizes[0][0];
     half_sizes[1][0] = box_size.iy / 2;
     half_sizes[1][1] = box_size.iy - half_sizes[1][0];
@@ -241,6 +241,7 @@ void SceneSDF::computeSDF(const sim_env::BoundingBox& aabb, float static_cell_si
         } else {
             movable_objects.push_back(object->getName());
             _movables.push_back(object);
+            _movable_sdfs.push_back(SDF());
         }
     }
     // now, let's create the static sdf first
@@ -254,7 +255,10 @@ void SceneSDF::computeSDF(const sim_env::BoundingBox& aabb, float static_cell_si
     identity_tf.setIdentity();
     if (not movable_objects.empty()) { // if we have movable objects
         // create ignore list that always contains all object names except for the movable we create an sdf for
-        std::vector<std::string> ignore_list(static_obstacles.begin(), static_obstacles.end());
+        std::vector<std::string> ignore_list;
+        if (not static_obstacles.empty()) {
+            ignore_list.insert(ignore_list.begin(), static_obstacles.begin(), static_obstacles.end());
+        }
         size_t offset = ignore_list.size();
         for (auto movable_name : movable_objects) {
             ignore_list.push_back(movable_name);

@@ -37,6 +37,9 @@ namespace mps {
                  * which allows you to create object specific SDFs, i.e. you can create an sdf from
                  * an aabb that encopes an object which is placed at the origin. As a result
                  * you then get an sdf that is defined in the object frame and can be moved later on.
+                 * NOTE: If there are no collisions with any obstacle in the specified volume, an exception
+                 * is thrown. TODO: This behavior might be undesirable, instead we could set this SDF to
+                 * contain infinite distances.
                  *
                  * @param world - sim_env world to compute sdf for
                  * @param aabb - axis aligned bounding volume to create sdf for
