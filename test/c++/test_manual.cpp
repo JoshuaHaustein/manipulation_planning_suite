@@ -3,10 +3,10 @@
 //
 
 #include <iostream>
-#include <mps/sdf/Grid.h>
+#include <sim_env/Grid.h>
 #include <mps/sdf/FMM.h>
 
-void test_grid(const mps::sdf::grid::UnsignedIndex& idx, const mps::sdf::grid::VoxelGrid<int>& input_grid) {
+void test_grid(const sim_env::grid::UnsignedIndex& idx, const sim_env::grid::Grid3D<int>& input_grid) {
     {
         std::cout << "Block iterator with width 1 in each dimension around " << idx << std::endl;
         auto neighbor_gen = input_grid.getNeighborIndexGenerator(idx, 1, 1, 1);
@@ -52,10 +52,10 @@ void test_grid(const mps::sdf::grid::UnsignedIndex& idx, const mps::sdf::grid::V
 }
 
 template <typename T>
-void printGrid(const mps::sdf::grid::VoxelGrid<T>& grid) {
-    for (size_t z = 0; z < grid.z_size; ++z) {
-        for (size_t y = 0; y < grid.y_size; ++y) {
-            for (size_t x = 0; x < grid.x_size; ++x) {
+void printGrid(const sim_env::grid::Grid3D<T>& grid) {
+    for (size_t z = 0; z < grid.getZSize(); ++z) {
+        for (size_t y = 0; y < grid.getYSize(); ++y) {
+            for (size_t x = 0; x < grid.getXSize(); ++x) {
                 std::cout << grid.at(x, y, z) << ", ";
             }
             std::cout << "\n";
@@ -64,15 +64,12 @@ void printGrid(const mps::sdf::grid::VoxelGrid<T>& grid) {
     std::cout << std::endl;
 }
 
-int main(int argc, char **argv) {
-    // std::cout << "Testing voxel grid" << std::endl;
-    // mps::sdf::VoxelGrid<float> voxel_grid(10, 10, 1, 1.0f);
-    // for (auto& value : voxel_grid) {
-    //     std::cout << value;
-    // }
-    mps::sdf::grid::VoxelGrid<int> input_grid(8, 8, 1, 1);
-    mps::sdf::grid::VoxelGrid<float> output_grid(8, 8, 1);
-    input_grid(0, 0, 0) = -1;
+void testSDF() {
+    Eigen::Vector3f min_pos(-1.2, -1.2, 0.0);
+    Eigen::Vector3f max_pos(1.2, 1.2, 0.0);
+    sim_env::grid::VoxelGrid<float, int> input_grid(min_pos, max_pos, 0.2, 1);
+    sim_env::grid::VoxelGrid<float, float> output_grid(min_pos, max_pos, 0.2);
+    // input_grid(0, 0, 0) = -1;
     input_grid(4, 4, 0) = -1;
     input_grid(5, 4, 0) = -1;
     input_grid(6, 4, 0) = -1;
@@ -87,7 +84,11 @@ int main(int argc, char **argv) {
     // test_grid(idx, input_grid);
     // test_grid(idx2, input_grid);
     // test_grid(idx3, input_grid);
-    mps::sdf::fmm::computeSDF<float>(input_grid, output_grid, 0.1f);
+    mps::sdf::fmm::computeSDF<float>(input_grid, output_grid, input_grid.getCellSize());
     std::cout << "Output Grid:" << std::endl;
     printGrid(output_grid);
+}
+
+int main(int argc, char **argv) {
+    testSDF();
 }

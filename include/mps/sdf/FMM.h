@@ -6,6 +6,7 @@
 #include <stdexcept>
 #include <iostream>
 #include <math.h>
+#include <sim_env/Grid.h>
 
 // #include <boost/heap/fibonacci_heap.cpp>
 #include <boost/heap/binomial_heap.hpp>
@@ -15,7 +16,7 @@ namespace mps {
         namespace fmm {
             // Returns true if both grids have same dimensions, else false
             template<typename T_1, typename T_2>
-            bool compareGridSize(const grid::Grid3D<T_1>& grid_1, const grid::Grid3D<T_2>& grid_2) {
+            bool compareGridSize(const sim_env::grid::Grid3D<T_1>& grid_1, const sim_env::grid::Grid3D<T_2>& grid_2) {
                 if (grid_1.getXSize() != grid_2.getXSize() ||
                     grid_1.getYSize() != grid_2.getYSize() ||
                     grid_1.getZSize() != grid_2.getZSize())
@@ -30,8 +31,8 @@ namespace mps {
             template<typename ScalarType>
             struct PriorityQueueElement {
                 ScalarType value;
-                grid::UnsignedIndex index;
-                PriorityQueueElement(const ScalarType& val, const grid::UnsignedIndex& idx) : value(val), index(idx) {}
+                sim_env::grid::UnsignedIndex index;
+                PriorityQueueElement(const ScalarType& val, const sim_env::grid::UnsignedIndex& idx) : value(val), index(idx) {}
                 PriorityQueueElement() = default;
                 PriorityQueueElement(const PriorityQueueElement& other) = default;
                 PriorityQueueElement& operator=(const PriorityQueueElement& other) = default;
@@ -62,15 +63,15 @@ namespace mps {
                 typedef boost::heap::binomial_heap<PriorityQueueElement<ScalarType> , boost::heap::stable<false>, boost::heap::compare<PriorityQueueElementComparator<ScalarType> > > PriorityQueue;
                 typedef FMMVoxelData<ScalarType, typename PriorityQueue::handle_type> TypedFMMVoxelData;
                 PriorityQueue considered_voxels;
-                const grid::Grid3D<int>& input_grid;
-                grid::Grid3D<TypedFMMVoxelData> grid;
-                FMMData(const grid::Grid3D<int>& igrid) :
+                const sim_env::grid::Grid3D<int>& input_grid;
+                sim_env::grid::Grid3D<TypedFMMVoxelData> grid;
+                FMMData(const sim_env::grid::Grid3D<int>& igrid) :
                     input_grid(igrid),
                     grid(igrid.getXSize(), igrid.getYSize(), igrid.getZSize()) {}
                 FMMData(const FMMData& other) = default;
                 ~FMMData() = default;
 
-                void copySignedDistances(grid::Grid3D<ScalarType>& output, ScalarType scale=1.0) {
+                void copySignedDistances(sim_env::grid::Grid3D<ScalarType>& output, ScalarType scale=1.0) {
                     if (not compareGridSize<ScalarType, TypedFMMVoxelData>(output, grid)) {
                         throw std::logic_error("Could not copy signed distance. Given output grid has invalid dimensions.");
                     }
@@ -114,16 +115,16 @@ namespace mps {
             }
 
             template<typename ScalarType>
-            void computeCoefficients(const grid::UnsignedIndex& idx,
+            void computeCoefficients(const sim_env::grid::UnsignedIndex& idx,
                                      std::array<ScalarType, 3>& coeffs,
                                      FMMData<ScalarType>& fmm_data) {
-                std::array<grid::SignedIndex, 6> directions = {{grid::SignedIndex(-1, 0, 0),
-                                                               grid::SignedIndex(1, 0, 0),
-                                                               grid::SignedIndex(0, -1, 0),
-                                                               grid::SignedIndex(0, 1, 0),
-                                                               grid::SignedIndex(0, 0, -1),
-                                                               grid::SignedIndex(0, 0, 1)}};
-                grid::SignedIndex center_idx(idx.ix, idx.iy, idx.iz);
+                std::array<sim_env::grid::SignedIndex, 6> directions = {{sim_env::grid::SignedIndex(-1, 0, 0),
+                                                               sim_env::grid::SignedIndex(1, 0, 0),
+                                                               sim_env::grid::SignedIndex(0, -1, 0),
+                                                               sim_env::grid::SignedIndex(0, 1, 0),
+                                                               sim_env::grid::SignedIndex(0, 0, -1),
+                                                               sim_env::grid::SignedIndex(0, 0, 1)}};
+                sim_env::grid::SignedIndex center_idx(idx.ix, idx.iy, idx.iz);
                 for (unsigned int r = 0; r < 3; ++r) { // for each axis x, y, z
                     // we need to figure whether we take forward or backward gradient
                     // as well as whether to use first order or second order derivative
@@ -174,7 +175,7 @@ namespace mps {
              * idx has no frozen neighbor, the returned distance if infinity.
              */
             template<typename ScalarType>
-            ScalarType computeDistance(const grid::UnsignedIndex& idx, FMMData<ScalarType>& fmm_data) {
+            ScalarType computeDistance(const sim_env::grid::UnsignedIndex& idx, FMMData<ScalarType>& fmm_data) {
                 std::array<ScalarType, 3> coeffs = {{-1.0, 0.0, 0.0}};
                 std::array<ScalarType, 2> roots = {{0.0, 0.0}};
                 computeCoefficients<ScalarType>(idx, coeffs, fmm_data);
@@ -199,7 +200,7 @@ namespace mps {
              * Computes and updates the distance of the voxel at location idx.
              */
             template<typename ScalarType>
-            void updateDistance(const grid::UnsignedIndex& idx, FMMData<ScalarType>& fmm_data) {
+            void updateDistance(const sim_env::grid::UnsignedIndex& idx, FMMData<ScalarType>& fmm_data) {
                 if (fmm_data.grid(idx).state == VoxelState::Frozen) {
                     return;
                 }
@@ -222,7 +223,7 @@ namespace mps {
              *                      in this list.
              */
             template<typename ScalarType>
-            void initializeData(FMMData<ScalarType>& fmm_data, std::vector<grid::UnsignedIndex>& frozen_states) {
+            void initializeData(FMMData<ScalarType>& fmm_data, std::vector<sim_env::grid::UnsignedIndex>& frozen_states) {
                 // Initialize data structure
                 auto idx_generator = fmm_data.input_grid.getIndexGenerator();
                 // Run over all voxels
@@ -259,15 +260,15 @@ namespace mps {
              * @param scale - a factor translating voxel size to a desired untit (i.e. m)
              */
             template<typename ScalarType>
-            void computeSDF(const grid::Grid3D<int>& input_grid,
-                            grid::Grid3D<ScalarType>& result_grid,
+            void computeSDF(const sim_env::grid::Grid3D<int>& input_grid,
+                            sim_env::grid::Grid3D<ScalarType>& result_grid,
                             ScalarType scale=ScalarType(1))
             {
                 if (not compareGridSize(input_grid, result_grid)) {
                     throw std::logic_error("Input and output grid do not have the same dimension.");
                 }
                 FMMData<ScalarType> fmm_data(input_grid);
-                std::vector<grid::UnsignedIndex> frozen_states;
+                std::vector<sim_env::grid::UnsignedIndex> frozen_states;
                 initializeData(fmm_data, frozen_states);
                 // Ensure that we actually have an initial surface
                 if (frozen_states.empty()) {

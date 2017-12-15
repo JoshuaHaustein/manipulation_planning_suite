@@ -2,10 +2,12 @@
 #define MANIPULATION_PLANNING_SUITE_SDF_H
 
 #include <sim_env/SimEnv.h>
-#include <mps/sdf/Grid.h>
+#include <sim_env/Grid.h>
 #include <mps/sdf/FMM.h>
 #include <unordered_map>
+#include <unordered_set>
 #include <Eigen/Geometry>
+#include <Eigen/StdVector>
 
 namespace mps {
     namespace sdf {
@@ -75,7 +77,7 @@ namespace mps {
                  */
                 void setApproximationBox(const sim_env::BoundingBox& aabb);
             private:
-                grid::VoxelGrid<float, float> _grid;
+                sim_env::grid::VoxelGrid<float, float> _grid;
                 // used for heuristic distance for query points outside of grid
                 sim_env::BoundingBox _approximation_box;
                 /*
@@ -84,23 +86,12 @@ namespace mps {
                 */
                 float getLocalHeuristicDistance(const Eigen::Vector3f& pos) const;
 
-                void computeSCM(grid::VoxelGrid<float, int>& collision_map,
+                void computeSCM(sim_env::grid::VoxelGrid<float, int>& collision_map,
                                 sim_env::WorldPtr world,
                                 bool ignore_robots,
                                 const std::vector<std::string>& ignore_list);
-
-                /*
-                * Computes a signed collision map recursively.
-                * INVARIANT: This function is only called if there is a collision for a box ranging from min_idx to max_idx
-                * @param min_idx - numpy array [min_x, min_y, min_z] cell indices
-                * @param max_idx - numpy array [max_x, max_y, max_z] cell indices (the box excludes these)
-                * @param collision_map - the grid to operate on
-                */
-                void computeSCMRec(const grid::UnsignedIndex& min_idx, const grid::UnsignedIndex& max_idx,
-                                   grid::VoxelGrid<float, int>& collision_map,
-                                   sim_env::WorldPtr world,
-                                   bool ignore_robots,
-                                   const std::unordered_map<std::string, bool>& ignore_map);
+                void inline splitBox(const sim_env::grid::UnsignedIndex& box_size,
+                                     std::array<std::array<size_t, 2>, 3>& half_sizes) const;
         };
 
         typedef std::shared_ptr<SDF> SDFPtr;
@@ -119,6 +110,28 @@ namespace mps {
         */
         class SceneSDF {
             public:
+                /**
+                 *  This class stores essential information from a sim_env World that helps to decide whether
+                 *  relevant parts of the sim_env world have changed and a new scene sdf needs to be computed or whether
+                 *  there are no relevant changes.
+                 */
+                class SceneSDFConstructionState {
+                    private:
+                        std::unordered_map<std::string, Eigen::Affine3f, std::hash<std::string>, std::equal_to<std::string>, Eigen::aligned_allocator<Eigen::Affine3f> > _static_tfs;
+                        // TODO having the same object names doesn't really mean that the environments are identical
+                        std::unordered_set<std::string> _object_names;
+                        std::unordered_set<std::string> _robot_names;
+                        sim_env::BoundingBox _aabb;
+                    public:
+                        SceneSDFConstructionState();
+                        SceneSDFConstructionState(const SceneSDFConstructionState& other);
+                        SceneSDFConstructionState(sim_env::WorldPtr world, const sim_env::BoundingBox& aabb);
+                        SceneSDFConstructionState& operator=(const SceneSDFConstructionState& other);
+                        void set(sim_env::WorldPtr world, const sim_env::BoundingBox& aabb);
+                        bool isDifferent(const SceneSDFConstructionState& other,
+                                         const std::vector<std::string>& ignore_list=std::vector<std::string>());
+                };
+
                 typedef std::unordered_map<std::string, std::string> StrToStrMap;
                 typedef std::unordered_map<std::string, float> StrToFloatMap;
                 /**
@@ -154,10 +167,10 @@ namespace mps {
                  *               when transitioning from outside the sdf to inside
                  * @param movable_sdfs - a map providing sdf filenames for individual movable objects
                  */
-                void computeSDF(const sim_env::BoundingBox& aabb, float static_cell_size=0.02f,
-                                float movable_cell_size=0.02f, float max_approx_error=0.1f,
-                                const StrToFloatMap& radii=StrToFloatMap(),
-                                const StrToStrMap& movable_sdfs=StrToStrMap());
+                SceneSDFConstructionState computeSDF(const sim_env::BoundingBox& aabb, float static_cell_size=0.02f,
+                                                     float movable_cell_size=0.02f, float max_approx_error=0.1f,
+                                                     const StrToFloatMap& radii=StrToFloatMap(),
+                                                     const StrToStrMap& movable_sdfs=StrToStrMap());
 
                 /**
                  * Returns the (approximate) signed distance from the given position to the closest
@@ -170,12 +183,31 @@ namespace mps {
                  * obstacle surfaces.
                  */
                 void getDistances(const std::vector<Eigen::Vector3f>& positions, std::vector<float>& distances);
+
+                /**
+                 * Updates the transforms of all movable SDFs.
+                 */
+                void updateTransforms();
+                /**
+                 * Returns the (approximate signed distance from the given position to the closest
+                 * obstacle surfaces. In contrast to the other getDistance functions, this function
+                 * DOES NOT update the transforms of the SDFs. In other words, you can only expect
+                 * to receive correct distances if you call updateTransforms() before and the transforms
+                 * do not change before this function returned.
+                 */
+                float getDistanceDirty(const Eigen::Vector3f& position);
+
+                /**
+                 * Returns the bounding box provided during construction of this scene sdf.
+                 */
+                sim_env::BoundingBox getBoundingBox() const;
             private:
                 sim_env::WorldPtr _world;
                 std::vector<sim_env::ObjectWeakPtr> _movables;
                 std::vector<SDF> _movable_sdfs;
                 SDF _static_sdf;
                 bool _has_statics;
+                sim_env::BoundingBox _bounding_box;
 
                 /*
                  * Computes the required size of an sdf for a movable object such
