@@ -65,6 +65,7 @@ float SDF::getDistance(const Eigen::Vector3f& pos) const {
     grid::UnsignedIndex idx;
     bool valid_idx = _grid.mapToGrid(pos, local_pos, idx);
     if (valid_idx) {
+        // TODO do trilinear interpolation
         return _grid(idx);
     }
     return getLocalHeuristicDistance(local_pos);

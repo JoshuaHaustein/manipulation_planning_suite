@@ -54,6 +54,7 @@ set(CMAKE_CXX_FLAGS_RELEASE "-O3")
 ## Specify additional locations of header files
 ## Your package locations should be listed before other locations
  include_directories(include
+        #  /usr/include/valgrind/
          ${Eigen_INCLUDE_DIRS}
 #         ${CUDA_INCLUDE_DIRS}
          ${ompl_INCLUDE_DIRS}

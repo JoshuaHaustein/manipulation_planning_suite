@@ -70,7 +70,7 @@ PlanningProblem::PlanningProblem(sim_env::WorldPtr world, sim_env::RobotPtr robo
     oracle_type = OracleType::Human;
     algorithm_type = AlgorithmType::Naive;
     local_planner_type = LocalPlanner::Line;
-    sdf_resolution = 0.01f;
+    sdf_resolution = 0.002f;
     sdf_error_threshold = 0.1f;
     debug = false;
     num_control_samples = 10;
@@ -397,7 +397,8 @@ mps::planner::pushing::algorithm::RearrangementRRTPtr OraclePushPlanner::createA
                     _eb_computer = std::make_shared<oracle::ElasticBandRampComputer>();
                 }
                 _eb_computer->init(_planning_problem.world,
-                                   robot_configuration_space,
+                                   _planning_problem.robot,
+                                   _state_space,
                                    _control_space,
                                    _planning_problem.workspace_bounds,
                                    _planning_problem.sdf_resolution,
