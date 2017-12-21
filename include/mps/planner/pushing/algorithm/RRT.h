@@ -176,6 +176,7 @@ namespace mps {
                                                         const mps::planner::ompl::planning::essentials::MotionPtr& b) const;
 
                     void setDebugDrawer(DebugDrawerPtr debug_drawer);
+                    mps::planner::util::time::Timer timer;
                 protected:
                     virtual void setup(const PlanningQuery& pq, PlanningBlackboard& blackboard);
                     virtual void addToTree(mps::planner::ompl::planning::essentials::MotionPtr new_motion,
@@ -196,7 +197,6 @@ namespace mps {
 
                 private:
                     void setupBlackboard(PlanningBlackboard& pb);
-                    mps::planner::util::time::Timer _timer;
 
                     std::string _log_prefix;
                     std::shared_ptr<::ompl::NearestNeighbors< mps::planner::ompl::planning::essentials::MotionPtr > > _tree;

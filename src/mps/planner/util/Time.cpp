@@ -30,3 +30,7 @@ float Timer::stopTimer() {
     _running = false;
     return (float)(std::clock() - _start_time) / CLOCKS_PER_SEC;
 }
+
+void Timer::addExternalElapsedTime(float seconds) {
+    _external_elapsed_time += seconds;
+}
