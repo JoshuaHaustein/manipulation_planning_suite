@@ -94,7 +94,9 @@ float mps::planner::pushing::oracle::LearnedPipeOracle::predictPushability(const
     response.ParseFromIstream(&fd_in);
     fd_in.close();
 
-    timer->addExternalElapsedTime(response.cpu_time());
+    if (timer) {
+        timer->addExternalElapsedTime(response.cpu_time());
+    }
 
     return 1.0 / response.mahalanobis();
 }
@@ -144,7 +146,9 @@ void mps::planner::pushing::oracle::LearnedPipeOracle::projectToPushability(cons
     output[1] = response.projected_object_y();
     output[2] = response.projected_object_radians();
 
-    timer->addExternalElapsedTime(response.cpu_time());
+    if (timer) {
+        timer->addExternalElapsedTime(response.cpu_time());
+    }
 
     return;
 }
@@ -190,7 +194,9 @@ float mps::planner::pushing::oracle::LearnedPipeOracle::predictFeasibility(const
     response.ParseFromIstream(&fd_in);
     fd_in.close();
 
-    timer->addExternalElapsedTime(response.cpu_time());
+    if (timer) {
+        timer->addExternalElapsedTime(response.cpu_time());
+    }
 
     return 1.0 / response.mahalanobis();
 }
@@ -241,7 +247,9 @@ void mps::planner::pushing::oracle::LearnedPipeOracle::sampleFeasibleState(const
     new_robot_state[1] = response.robot_y();
     new_robot_state[2] = response.robot_radians();
 
-    timer->addExternalElapsedTime(response.cpu_time());
+    if (timer) {
+        timer->addExternalElapsedTime(response.cpu_time());
+    }
 
     return;
 }
@@ -295,7 +303,9 @@ void mps::planner::pushing::oracle::LearnedPipeOracle::predictAction(const Eigen
     control[3] = response.t();
     control[4] = 0.0f;
 
-    timer->addExternalElapsedTime(response.cpu_time());
+    if (timer) {
+        timer->addExternalElapsedTime(response.cpu_time());
+    }
 
     return;
 }

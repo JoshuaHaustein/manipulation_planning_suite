@@ -59,8 +59,6 @@ RearrangementRRT::RearrangementRRT(::ompl::control::SpaceInformationPtr si) :
         _si(si),
         _log_prefix("[mps::planner::pushing::algorithm::RearrangementRRT::")
 {
-    auto timer = mps::planner::util::time::Timer();
-    timer_ptr = std::make_shared<mps::planner::util::time::Timer>(timer);
     _state_space = std::dynamic_pointer_cast<mps_state::SimEnvWorldStateSpace>(_si->getStateSpace());
     if (!_state_space) {
         throw std::logic_error(_log_prefix + "setup] Could not cast state space to SimEnvWorldStateSpace");
