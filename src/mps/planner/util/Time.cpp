@@ -31,5 +31,5 @@ float Timer::stopTimer() {
     _running = false;
     auto t_end = std::chrono::high_resolution_clock::now();
     auto time_running = std::chrono::duration<float, std::milli>(t_end - _start_time).count();
-    return time_running;
+    return time_running / 1000.0;
 }
