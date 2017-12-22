@@ -22,12 +22,14 @@ void HumanOracle::Parameters::computeInverses() {
 }
 
 HumanOracle::HumanOracle(RobotOraclePtr robot_oracle,
+                         const std::vector<ObjectData>& object_data,
                          const Parameters& params) :
         _params(params),
         _robot_steerer(robot_oracle)
 {
     _params.computeInverses();
     _rng = mps::planner::util::random::getDefaultRandomGenerator();
+    _object_data = object_data;
 }
 
 HumanOracle::~HumanOracle() = default;

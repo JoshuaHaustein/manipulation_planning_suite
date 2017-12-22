@@ -423,7 +423,7 @@ mps::planner::pushing::algorithm::RearrangementRRTPtr OraclePushPlanner::createA
         switch (_planning_problem.oracle_type) {
             case PlanningProblem::OracleType::Human:
             {
-                pushing_oracle = std::make_shared<oracle::HumanOracle>(robot_oracle);
+                pushing_oracle = std::make_shared<oracle::HumanOracle>(robot_oracle, object_data);
                 util::logging::logDebug("Using human made oracle!", log_prefix);
                 break;
             }

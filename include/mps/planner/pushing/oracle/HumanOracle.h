@@ -33,6 +33,7 @@ namespace mps {
                     };
 
                     explicit HumanOracle(RobotOraclePtr robot_oracle,
+                                         const std::vector<ObjectData>& object_data,
                                          const Parameters& params=Parameters());
                     ~HumanOracle() override;
 
