@@ -21,10 +21,10 @@ void HumanOracle::Parameters::computeInverses() {
     _inv_pushability_covariance = pushability_covariance.inverse();
 }
 
-HumanOracle::HumanOracle(RampComputerPtr ramp_computer,
+HumanOracle::HumanOracle(RobotOraclePtr robot_oracle,
                          const Parameters& params) :
         _params(params),
-        _ramp_computer(ramp_computer)
+        _robot_steerer(robot_oracle)
 {
     _params.computeInverses();
     _rng = mps::planner::util::random::getDefaultRandomGenerator();
@@ -118,7 +118,7 @@ void HumanOracle::predictAction(const Eigen::VectorXf &current_robot_state,
     // since the current robot state must be with some offset to the object, we will not overshoot
     next_robot_state.head(2) += rel_obj.head(2);
     std::vector<Eigen::VectorXf> controls;
-    _ramp_computer->steer(current_robot_state, next_robot_state, controls);
+    _robot_steerer->steer(current_robot_state, next_robot_state, controls);
     assert(not controls.empty());
     control = controls.at(0);
 }

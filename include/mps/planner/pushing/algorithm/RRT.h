@@ -18,6 +18,7 @@
 #include <mps/planner/ompl/state/goal/ObjectsRelocationGoal.h>
 #include <mps/planner/util/Random.h>
 #include <mps/planner/util/Time.h>
+#include <mps/sdf/SDF.h>
 // stl
 #include <stack>
 #include <mps/planner/ompl/control/NaiveControlSampler.h>

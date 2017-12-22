@@ -54,6 +54,7 @@ set(CMAKE_CXX_FLAGS_RELEASE "-O3")
 ## Specify additional locations of header files
 ## Your package locations should be listed before other locations
  include_directories(include
+        #  /usr/include/valgrind/
          ${Eigen_INCLUDE_DIRS}
 #         ${CUDA_INCLUDE_DIRS}
          ${ompl_INCLUDE_DIRS}
@@ -82,6 +83,7 @@ set(PLANNER_H
         include/mps/planner/pushing/oracle/Oracle.h
         include/mps/planner/pushing/oracle/LearnedOracle.h
         include/mps/planner/pushing/oracle/HumanOracle.h
+        include/mps/planner/pushing/oracle/ElasticBandRampComputer.h
         include/mps/planner/pushing/oracle/RampComputer.h
         include/mps/planner/pushing/oracle/DataGenerator.h
         include/mps/planner/pushing/algorithm/RRT.h
@@ -92,6 +94,8 @@ set(PLANNER_H
         include/mps/planner/util/Time.h
         include/mps/planner/util/Math.h
         include/mps/planner/util/yaml/OracleParsing.h
+        include/mps/sdf/SDF.h
+        include/mps/sdf/FMM.h
         )
 
 ## Define all source files
@@ -117,9 +121,11 @@ set(PLANNER_SRC
         src/mps/planner/pushing/oracle/Oracle.cpp
         src/mps/planner/pushing/oracle/LearnedOracle.cpp
         src/mps/planner/pushing/oracle/HumanOracle.cpp
+        src/mps/planner/pushing/oracle/ElasticBandRampComputer.cpp
         src/mps/planner/pushing/oracle/RampComputer.cpp
         src/mps/planner/pushing/oracle/DataGenerator.cpp
         src/mps/planner/pushing/algorithm/RRT.cpp
+        src/mps/sdf/SDF.cpp
 )
 
 ## Declare a C++ library
@@ -147,7 +153,6 @@ set(PLANNER_SRC
 ## Specify libraries to link a library or executable target against
  target_link_libraries(manual_test_node
    ${catkin_LIBRARIES}
-   ${CUDA_CUBLAS_LIBRARIES}
  )
 
 #############

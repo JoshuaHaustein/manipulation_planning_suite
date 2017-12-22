@@ -69,6 +69,9 @@ PlanningProblem::PlanningProblem(sim_env::WorldPtr world, sim_env::RobotPtr robo
     }
     oracle_type = OracleType::Human;
     algorithm_type = AlgorithmType::Naive;
+    local_planner_type = LocalPlanner::Line;
+    sdf_resolution = 0.002f;
+    sdf_error_threshold = 0.1f;
     debug = false;
     num_control_samples = 10;
     stopping_condition = [](){return false;};
@@ -89,9 +92,9 @@ OraclePushPlanner::~OraclePushPlanner() = default;
 bool OraclePushPlanner::setup(PlanningProblem& problem) {
     // TODO this is ugly to have. In principle, I think this slice visualizer should maybe not be there or
     // TODO have it's copies of everything
-    if (_debug_drawer) {
+    if (_rrt_debug_drawer) {
         // clearing the slice drawer here, allows it to delete slices before we reset the state space these slices belong to
-        auto slice_drawer = _debug_drawer->getSliceDrawer();
+        auto slice_drawer = _rrt_debug_drawer->getSliceDrawer();
         if (slice_drawer) slice_drawer->clear();
     }
     static const std::string log_prefix("[mps::planner::pushing::OraclePushPlanner::setup]");
@@ -129,7 +132,7 @@ bool OraclePushPlanner::setup(PlanningProblem& problem) {
     prepareDistanceWeights();
     _space_information->setStatePropagator(_state_propagator);
     _space_information->setup();
-    _algorithm = createAlgorithm(_planning_problem);
+    _algorithm = createAlgorithm();
     _data_generator = std::make_shared<oracle::DataGenerator>(_space_information, _state_propagator,
                                                               _planning_problem.world, _planning_problem.robot->getName(),
                                                               _planning_problem.relocation_goals.at(0).object_name);
@@ -139,15 +142,15 @@ bool OraclePushPlanner::setup(PlanningProblem& problem) {
         for (auto& goal : _planning_problem.relocation_goals) {
             target_object_ids.emplace_back(_state_space->getObjectIndex(goal.object_name));
         }
-        if (!_debug_drawer) {
-            _debug_drawer = std::make_shared<algorithm::DebugDrawer>(_planning_problem.world->getViewer(),
+        if (!_rrt_debug_drawer) {
+            _rrt_debug_drawer = std::make_shared<algorithm::DebugDrawer>(_planning_problem.world->getViewer(),
                                                                      _state_space->getObjectIndex(_planning_problem.robot->getName()),
                                                                      target_object_ids);
         } else {
-            _debug_drawer->setRobotId(_state_space->getObjectIndex(_planning_problem.robot->getName()));
-            _debug_drawer->setTargetIds(target_object_ids);
+            _rrt_debug_drawer->setRobotId(_state_space->getObjectIndex(_planning_problem.robot->getName()));
+            _rrt_debug_drawer->setTargetIds(target_object_ids);
         }
-        _algorithm->setDebugDrawer(_debug_drawer);
+        _algorithm->setDebugDrawer(_rrt_debug_drawer);
     }
     // TODO we probably don't need to reconstruct everything all the time
     _is_initialized = true;
@@ -156,9 +159,9 @@ bool OraclePushPlanner::setup(PlanningProblem& problem) {
 
 bool OraclePushPlanner::solve(PlanningSolution& solution) {
     // TODO run planning algorithm, extract solution and return it
-    if (_debug_drawer) {
+    if (_rrt_debug_drawer) {
         // TODO this is ugly to do like this
-        auto slice_drawer = _debug_drawer->getSliceDrawer();
+        auto slice_drawer = _rrt_debug_drawer->getSliceDrawer();
         if (slice_drawer) slice_drawer->setStateSpace(_state_space);
     }
     // start state
@@ -203,14 +206,24 @@ void OraclePushPlanner::playback(const PlanningSolution& solution,
 }
 
 void OraclePushPlanner::setSliceDrawer(algorithm::SliceDrawerInterfacePtr slice_drawer) {
-    _debug_drawer->setSliceDrawer(slice_drawer);
+    _rrt_debug_drawer->setSliceDrawer(slice_drawer);
+}
+
+void OraclePushPlanner::renderSDF(float resolution) {
+    if (_eb_computer) {
+        _eb_debug_drawer = _eb_computer->getDebugDrawer();
+        _eb_computer->renderSDF(resolution);
+    }
 }
 
 void OraclePushPlanner::clearVisualizations() {
-    if (_debug_drawer) {
-        _debug_drawer->clear();
-        auto slice_drawer = _debug_drawer->getSliceDrawer();
+    if (_rrt_debug_drawer) {
+        _rrt_debug_drawer->clear();
+        auto slice_drawer = _rrt_debug_drawer->getSliceDrawer();
         if (slice_drawer) slice_drawer->clear();
+    }
+    if (_eb_debug_drawer) {
+        _eb_debug_drawer->clear();
     }
 }
 
@@ -356,10 +369,10 @@ void OraclePushPlanner::prepareDistanceWeights() {
     }
 }
 
-mps::planner::pushing::algorithm::RearrangementRRTPtr OraclePushPlanner::createAlgorithm(const PlanningProblem& pp) const {
+mps::planner::pushing::algorithm::RearrangementRRTPtr OraclePushPlanner::createAlgorithm() {
     static const std::string log_prefix("[mps::planner::pushing::OraclePushPlanner::createAlgorithm]");
     mps::planner::pushing::algorithm::RearrangementRRTPtr algo;
-    if (pp.algorithm_type == PlanningProblem::AlgorithmType::Naive)
+    if (_planning_problem.algorithm_type == PlanningProblem::AlgorithmType::Naive)
     {
         algo = std::make_shared<algorithm::NaiveRearrangementRRT>(_space_information,
                                                                   _planning_problem.num_control_samples);
@@ -369,9 +382,31 @@ mps::planner::pushing::algorithm::RearrangementRRTPtr OraclePushPlanner::createA
         auto robot_state_space = _state_space->getObjectStateSpace(_planning_problem.robot->getName());
         auto robot_configuration_space = robot_state_space->getConfigurationSpace();
         oracle::PushingOraclePtr pushing_oracle;
-        auto ramp_computer =
-                std::make_shared<oracle::RampComputer>(robot_configuration_space, _control_space);
-        oracle::RobotOraclePtr robot_oracle = ramp_computer;
+        oracle::RobotOraclePtr robot_oracle;
+        switch (_planning_problem.local_planner_type) {
+            case PlanningProblem::LocalPlanner::Line:
+            {
+                auto ramp_computer =
+                    std::make_shared<oracle::RampComputer>(robot_configuration_space, _control_space);
+                robot_oracle = ramp_computer;
+                break;
+            }
+            case PlanningProblem::LocalPlanner::ElasticBand:
+            {
+                if (!_eb_computer) {
+                    _eb_computer = std::make_shared<oracle::ElasticBandRampComputer>();
+                }
+                _eb_computer->init(_planning_problem.world,
+                                   _planning_problem.robot,
+                                   _state_space,
+                                   _control_space,
+                                   _planning_problem.workspace_bounds,
+                                   _planning_problem.sdf_resolution,
+                                   _planning_problem.sdf_error_threshold);
+                robot_oracle = _eb_computer;
+                break;
+            }
+        }
         // create object data
         std::vector<mps::planner::pushing::oracle::PushingOracle::ObjectData> object_data;
         for (unsigned int i = 0; i < _state_space->getNumObjects(); ++i) {
@@ -388,7 +423,7 @@ mps::planner::pushing::algorithm::RearrangementRRTPtr OraclePushPlanner::createA
         switch (_planning_problem.oracle_type) {
             case PlanningProblem::OracleType::Human:
             {
-                pushing_oracle = std::make_shared<oracle::HumanOracle>(ramp_computer);
+                pushing_oracle = std::make_shared<oracle::HumanOracle>(robot_oracle);
                 util::logging::logDebug("Using human made oracle!", log_prefix);
                 break;
             }
@@ -399,7 +434,7 @@ mps::planner::pushing::algorithm::RearrangementRRTPtr OraclePushPlanner::createA
                 break;
             }
         }
-        switch (pp.algorithm_type) {
+        switch (_planning_problem.algorithm_type) {
             case PlanningProblem::AlgorithmType::OracleRRT:
             {
                 algo = std::make_shared<algorithm::OracleRearrangementRRT>(_space_information,

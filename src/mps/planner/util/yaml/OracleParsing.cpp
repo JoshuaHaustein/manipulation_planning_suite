@@ -11,6 +11,17 @@ std::string mps::planner::util::yaml::oracleTypeToString(mps::planner::pushing::
         case mps::planner::pushing::PlanningProblem::OracleType::Learned:
             return "Learned";
     }
+    return "UNDEFINED";
+}
+
+std::string mps::planner::util::yaml::localPlannerTypeToString(mps::planner::pushing::PlanningProblem::LocalPlanner planner_type) {
+    switch(planner_type) {
+        case mps::planner::pushing::PlanningProblem::LocalPlanner::Line:
+            return "Line";
+        case mps::planner::pushing::PlanningProblem::LocalPlanner::ElasticBand:
+            return "ElasticBand";
+    }
+    return "UNDEFINED";
 }
 
 std::string mps::planner::util::yaml::algorithmTypeToString(mps::planner::pushing::PlanningProblem::AlgorithmType algo_type) {
@@ -28,6 +39,7 @@ std::string mps::planner::util::yaml::algorithmTypeToString(mps::planner::pushin
         case mps::planner::pushing::PlanningProblem::AlgorithmType::SemanticGNATSamplingSliceOracleRRT:
             return "SemanticGNATSamplingSliceOracleRRT";
     }
+    return "UNDEFINED";
 }
 
 mps::planner::pushing::PlanningProblem::OracleType mps::planner::util::yaml::stringToOracleType(const std::string& str) {
@@ -58,6 +70,16 @@ mps::planner::pushing::PlanningProblem::AlgorithmType mps::planner::util::yaml::
     }
 }
 
+mps::planner::pushing::PlanningProblem::LocalPlanner mps::planner::util::yaml::stringToLocalPlannerType(const std::string& str) {
+    if (str.compare("Line") == 0) {
+        return mps::planner::pushing::PlanningProblem::LocalPlanner::Line;
+    } else if (str.compare("ElasticBand") == 0) {
+        return mps::planner::pushing::PlanningProblem::LocalPlanner::ElasticBand;
+    } else {
+        throw std::runtime_error("Unknown local planner type encountered: " + str);
+    }
+}
+
 void mps::planner::util::yaml::configurePlanningProblem(mps::planner::pushing::PlanningProblem &problem,
                                                         const OraclePlanningProblemDesc &problem_desc) {
     // load control limits
@@ -83,6 +105,7 @@ void mps::planner::util::yaml::configurePlanningProblem(mps::planner::pushing::P
     problem.num_control_samples = problem_desc.num_control_samples;
     problem.algorithm_type = problem_desc.algorithm_type;
     problem.oracle_type = problem_desc.oracle_type;
+    problem.local_planner_type = problem_desc.local_planner_type;
     problem.goal_bias = problem_desc.goal_bias;
     problem.robot_bias = problem_desc.robot_bias;
     problem.target_bias = problem_desc.target_bias;

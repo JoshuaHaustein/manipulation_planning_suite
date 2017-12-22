@@ -8,6 +8,7 @@
 #include <mps/planner/pushing/oracle/Oracle.h>
 #include <mps/planner/ompl/control/RampVelocityControl.h>
 #include <mps/planner/ompl/state/SimEnvState.h>
+#include <memory>
 
 namespace mps {
     namespace planner {
@@ -17,11 +18,17 @@ namespace mps {
                     public:
                         RampComputer(ompl::state::SimEnvObjectConfigurationSpacePtr robot_space,
                                      ompl::control::RampVelocityControlSpacePtr control_space);
+                        RampComputer(const RampComputer& other);
                         ~RampComputer() override;
+                        RampComputer& operator=(const RampComputer& other);
 
                         void steer(const Eigen::VectorXf &current_robot_state,
                                    const Eigen::VectorXf &desired_robot_state,
                                    std::vector<Eigen::VectorXf> &control_params) const override;
+                        void steer(const ompl::state::SimEnvObjectState* current_robot_state,
+                                   const ompl::state::SimEnvObjectState* desired_robot_state,
+                                   const ompl::state::SimEnvWorldState* current_world_state,
+                                   std::vector<Eigen::VectorXf>& control_params) const override;
 
                     private:
                         ompl::control::RampVelocityControlSpacePtr _control_space;
