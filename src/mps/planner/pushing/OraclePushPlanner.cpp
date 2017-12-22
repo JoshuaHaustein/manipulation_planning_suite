@@ -461,10 +461,12 @@ mps::planner::pushing::algorithm::RearrangementRRTPtr OraclePushPlanner::createA
             }
             case PlanningProblem::AlgorithmType::GNATSamplingSliceOracleRRT:
             {
-                algo = std::make_shared<algorithm::GNATSamplingSliceBasedOracleRRT>(_space_information,
-                                                                                pushing_oracle,
-                                                                                robot_oracle,
-                                                                                _planning_problem.robot->getName());
+                // TODO this is future work
+                throw std::logic_error("Sorry, disabled GNATSamplingSliceBasedOracleRRT. This is future work!");
+                // algo = std::make_shared<algorithm::GNATSamplingSliceBasedOracleRRT>(_space_information,
+                //                                                                 pushing_oracle,
+                //                                                                 robot_oracle,
+                //                                                                 _planning_problem.robot->getName());
                 break;
             }
             default:

@@ -72,7 +72,8 @@ RearrangementRRT::RearrangementRRT(::ompl::control::SpaceInformationPtr si) :
         using namespace std::placeholders;
         _tree->setDistanceFunction(std::bind(&RearrangementRRT::treeDistanceFunction, this, _1, _2));
     }
-    _state_sampler = _si->allocStateSampler();
+    // _state_sampler = _si->allocStateSampler();
+    _state_sampler = _si->allocValidStateSampler();
     assert(_state_space->getNumObjects() > 1);
     _rng = mps::planner::util::random::getDefaultRandomGenerator();
 }
@@ -167,7 +168,8 @@ bool RearrangementRRT::sample(mps::planner::ompl::planning::essentials::MotionPt
         is_goal = true;
     }else{
         logging::logDebug("Sampling a state uniformly", log_prefix);
-        _state_sampler->sampleUniform(motion->getState());
+        // _state_sampler->sampleUniform(motion->getState());
+        _state_sampler->sample(motion->getState());
         target_obj_id = 0;
     }
     pb.stats.num_samples++;
@@ -506,7 +508,7 @@ bool SliceBasedOracleRRT::sample(mps::planner::ompl::planning::essentials::Motio
         target_obj_id = pb.pq.goal_region->sampleTargetObjectIndex();
         sampled_goal = true;
     } else {
-        _state_sampler->sampleUniform(motion->getState()); // TODO might need valid state sampler
+        _state_sampler->sample(motion->getState());
         target_obj_id = sampleActiveObject(pb);
     }
     pb.stats.num_samples++;
@@ -756,7 +758,7 @@ bool CompleteSliceBasedOracleRRT::extend(mps::planner::ompl::planning::essential
     // next, if the active object is not the robot, try a push
     if (extension_success and active_obj_id != pb.robot_id and not b_goal) {
         controls.clear();
-        _oracle_sampler->steerPushSimple(controls, last_motion->getState(), dest, active_obj_id);
+        _oracle_sampler->steerPush(controls, last_motion->getState(), dest, active_obj_id);
         extendStep(controls, last_motion, last_motion, pb, extension_success, b_goal);
     }
     return b_goal;
@@ -837,42 +839,42 @@ CompleteSliceBasedOracleRRT::ExtensionCandidateTuple CompleteSliceBasedOracleRRT
 }
 
 //////////////////////////////////////// GNATSamplingSliceBasedOracleRRT ////////////////////////////////////////////////
-GNATSamplingSliceBasedOracleRRT::GNATSamplingSliceBasedOracleRRT(::ompl::control::SpaceInformationPtr si,
-                                                         mps::planner::pushing::oracle::PushingOraclePtr pushing_oracle,
-                                                         mps::planner::pushing::oracle::RobotOraclePtr robot_oracle,
-                                                         const std::string &robot_name,
-                                                         const oracle::OracleControlSampler::Parameters &params) :
-    CompleteSliceBasedOracleRRT(si, pushing_oracle, robot_oracle, robot_name, params)
-{
-}
+// GNATSamplingSliceBasedOracleRRT::GNATSamplingSliceBasedOracleRRT(::ompl::control::SpaceInformationPtr si,
+//                                                          mps::planner::pushing::oracle::PushingOraclePtr pushing_oracle,
+//                                                          mps::planner::pushing::oracle::RobotOraclePtr robot_oracle,
+//                                                          const std::string &robot_name,
+//                                                          const oracle::OracleControlSampler::Parameters &params) :
+//     CompleteSliceBasedOracleRRT(si, pushing_oracle, robot_oracle, robot_name, params)
+// {
+// }
 
-GNATSamplingSliceBasedOracleRRT::~GNATSamplingSliceBasedOracleRRT() = default;
+// GNATSamplingSliceBasedOracleRRT::~GNATSamplingSliceBasedOracleRRT() = default;
 
-bool GNATSamplingSliceBasedOracleRRT::sample(mps::planner::ompl::planning::essentials::MotionPtr motion,
-                              unsigned int& target_obj_id,
-                              PlanningBlackboard& pb)
-{
-    static const std::string log_prefix("mps::planner::pushing::algorithm::GNATSamplingSliceBasedOracleRRT::sample]");
-    bool is_goal = false;
-    // sample random state with goal biasing
-    if( _rng->uniform01() < pb.pq.goal_bias && pb.pq.goal_region->canSample()){
-        logging::logDebug("Sampling a goal state", log_prefix);
-        pb.pq.goal_region->sampleGoal(motion->getState());
-        target_obj_id = pb.pq.goal_region->sampleTargetObjectIndex();
-        is_goal = true;
-    }else{
-        logging::logDebug("Sampling from GNAT sampler", log_prefix);
-        target_obj_id = 0;
-        auto gnat_tree = std::static_pointer_cast<::ompl::NearestNeighborsGNAT<SlicePtr> >(_slices_nn);
-        ::ompl::RNG rng(_rng->getLocalSeed());
-        auto sampled_slice = gnat_tree->sample(rng);
-        // TODO this variance is completely arbitrary
-        _state_sampler->sampleGaussian(motion->getState(), sampled_slice->repr->getState(), 0.9);
-        target_obj_id = sampleActiveObject(pb);
-    }
-    pb.stats.num_samples++;
-    return is_goal;
-}
+// bool GNATSamplingSliceBasedOracleRRT::sample(mps::planner::ompl::planning::essentials::MotionPtr motion,
+//                               unsigned int& target_obj_id,
+//                               PlanningBlackboard& pb)
+// {
+//     static const std::string log_prefix("mps::planner::pushing::algorithm::GNATSamplingSliceBasedOracleRRT::sample]");
+//     bool is_goal = false;
+//     // sample random state with goal biasing
+//     if( _rng->uniform01() < pb.pq.goal_bias && pb.pq.goal_region->canSample()){
+//         logging::logDebug("Sampling a goal state", log_prefix);
+//         pb.pq.goal_region->sampleGoal(motion->getState());
+//         target_obj_id = pb.pq.goal_region->sampleTargetObjectIndex();
+//         is_goal = true;
+//     }else{
+//         logging::logDebug("Sampling from GNAT sampler", log_prefix);
+//         target_obj_id = 0;
+//         auto gnat_tree = std::static_pointer_cast<::ompl::NearestNeighborsGNAT<SlicePtr> >(_slices_nn);
+//         ::ompl::RNG rng(_rng->getLocalSeed());
+//         auto sampled_slice = gnat_tree->sample(rng);
+//         // TODO this variance is completely arbitrary
+//         _state_sampler->sampleGaussian(motion->getState(), sampled_slice->repr->getState(), 0.9);
+//         target_obj_id = sampleActiveObject(pb);
+//     }
+//     pb.stats.num_samples++;
+//     return is_goal;
+// }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////// DebugDrawer ///////////////////////////////////////////////

@@ -64,6 +64,9 @@ namespace mps {
                                          unsigned int active_obj_id) const;
                     void setParameters(const Parameters& params);
 
+                    /**
+                     * Steers the robot to a given goal state.
+                     */
                     bool steerRobot(std::vector<::ompl::control::Control const*>& controls,
                                     const ::ompl::base::State* source,
                                     const ::ompl::base::State* dest);
@@ -73,18 +76,27 @@ namespace mps {
                     bool steerRobot(std::vector<::ompl::control::Control const*>& controls,
                                     const mps::planner::ompl::state::SimEnvWorldState* source,
                                     const mps::planner::ompl::state::SimEnvObjectState* dest);
+                    /**
+                     * Steers the system to the given state by trying to reduce the distance
+                     * for object obj_id. This method essentially just calls the pushing oracle
+                     * and asks for a pushing action.
+                     */
+                    bool steerPush(std::vector<::ompl::control::Control const*>& controls,
+                                   const ::ompl::base::State* source,
+                                   const ::ompl::base::State* dest,
+                                   unsigned int obj_id);
                     bool steerPush(std::vector<::ompl::control::Control const*>& controls,
                                    const mps::planner::ompl::state::SimEnvWorldState* source,
                                    const mps::planner::ompl::state::SimEnvWorldState* dest,
                                    unsigned int obj_id);
-                    bool steerPushSimple(std::vector<::ompl::control::Control const*>& controls,
-                                         const ::ompl::base::State* source,
-                                         const ::ompl::base::State* dest,
-                                         unsigned int obj_id);
-                    bool steerPushSimple(std::vector<::ompl::control::Control const*>& controls,
-                                   const mps::planner::ompl::state::SimEnvWorldState* source,
-                                   const mps::planner::ompl::state::SimEnvWorldState* dest,
-                                   unsigned int obj_id);
+                    // bool steerPushSimple(std::vector<::ompl::control::Control const*>& controls,
+                    //                      const ::ompl::base::State* source,
+                    //                      const ::ompl::base::State* dest,
+                    //                      unsigned int obj_id);
+                    // bool steerPushSimple(std::vector<::ompl::control::Control const*>& controls,
+                    //                const mps::planner::ompl::state::SimEnvWorldState* source,
+                    //                const mps::planner::ompl::state::SimEnvWorldState* dest,
+                    //                unsigned int obj_id);
                     void randomControl(std::vector<::ompl::control::Control const*>& controls,
                                        const mps::planner::ompl::state::SimEnvWorldState* source,
                                        const mps::planner::ompl::state::SimEnvWorldState* dest,
