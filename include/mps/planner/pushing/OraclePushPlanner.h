@@ -30,7 +30,7 @@ namespace mps {
                 };
 
                 enum LocalPlanner {
-                    Line = 0, ElasticBand = 2
+                    Line = 0, PotentialField = 1
                 };
 
                 enum AlgorithmType {

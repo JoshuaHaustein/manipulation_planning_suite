@@ -183,7 +183,11 @@ namespace YAML {
             }
             problem_desc.oracle_type = mps::planner::util::yaml::stringToOracleType(node["oracle_type"].as<std::string>());
             problem_desc.algorithm_type = mps::planner::util::yaml::stringToAlgorithmType(node["algorithm_type"].as<std::string>());
-            problem_desc.local_planner_type = mps::planner::util::yaml::stringToLocalPlannerType(node["local_planner_type"].as<std::string>());
+            if (node["local_planner_type"]) {
+                problem_desc.local_planner_type = mps::planner::util::yaml::stringToLocalPlannerType(node["local_planner_type"].as<std::string>());
+            } else {
+                problem_desc.local_planner_type = mps::planner::pushing::PlanningProblem::LocalPlanner::Line;
+            }
             problem_desc.num_control_samples = node["num_control_samples"].as<unsigned int>();
             problem_desc.robot_bias = node["robot_bias"].as<float>();
             problem_desc.target_bias = node["target_bias"].as<float>();

@@ -21,6 +21,7 @@ namespace mps {
                         float mu;
                     };
                     virtual ~PushingOracle() = 0;
+                    void setObjectData(const std::vector<ObjectData>& object_data);
                     // TODO can we make all this functions const?
                     // TODO it would make more sense if these function take SimEnvObjectState* as input rather than Eigen::VectorXf
                     // TODO similarly, it would make sense to pass VelocityControl* as controls
@@ -98,10 +99,12 @@ namespace mps {
 
                     virtual float getMaximalPushingDistance() const = 0;
 
-		    /**
-		     * Optional timer for adding external cpu time to clock
-		     */
-		    std::shared_ptr<mps::planner::util::time::Timer> timer;
+                    /**
+                     * Optional timer for adding external cpu time to clock
+                     */
+                    std::shared_ptr<mps::planner::util::time::Timer> timer;
+                protected:
+                        std::vector<ObjectData> _object_data;
                 };
 
                 typedef std::shared_ptr<PushingOracle> PushingOraclePtr;

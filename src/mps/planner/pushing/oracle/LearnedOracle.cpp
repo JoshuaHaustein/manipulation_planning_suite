@@ -50,10 +50,6 @@ mps::planner::pushing::oracle::LearnedPipeOracle::~LearnedPipeOracle() {
     /* No members allocated within the class at the moment */
 }
 
-void mps::planner::pushing::oracle::LearnedPipeOracle::setObjectData(const std::vector<ObjectData>& object_data) {
-    _object_data = object_data;
-    return;
-}
 
 float mps::planner::pushing::oracle::LearnedPipeOracle::predictPushability(const Eigen::VectorXf &current_obj_state,
                          const Eigen::VectorXf &next_obj_state,
@@ -326,12 +322,12 @@ float mps::planner::pushing::oracle::LearnedPipeOracle::getMaximalPushingDistanc
 //         0.120, /* height  */
 //         0.190  /* mu      */
 //     };
-// 
+//
 //     Eigen::VectorXf result (4);
-// 
+//
 //     object_data.push_back(obj1);
 //     float res_f;
-// 
+//
 //     auto l  = mps::planner::pushing::oracle::LearnedPipeOracle(object_data);
 //     for (int i = 0; i < 16; i++) {
 //         Eigen::Vector3f current_robot_state (10.5, 10.5, 0.0);

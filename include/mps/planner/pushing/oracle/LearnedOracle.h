@@ -17,7 +17,6 @@ namespace mps {
                     LearnedPipeOracle(const std::vector<ObjectData>& object_data);
                     ~LearnedPipeOracle() override;
 
-                    void setObjectData(const std::vector<ObjectData>& object_data);
 
                     float predictPushability(const Eigen::VectorXf &current_obj_state,
                                              const Eigen::VectorXf &next_obj_state,
@@ -59,7 +58,6 @@ namespace mps {
                     const char *_feasibility_sample_request_path;
                     const char *_feasibility_sample_response_path;
 
-                    std::vector<ObjectData> _object_data;
                 };
             }
         }
