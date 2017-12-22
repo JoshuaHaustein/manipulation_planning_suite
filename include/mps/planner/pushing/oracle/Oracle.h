@@ -5,6 +5,7 @@
 #include <memory>
 #include <vector>
 #include <mps/planner/util/Time.h>
+#include <mps/planner/ompl/state/SimEnvState.h>
 
 namespace mps {
     namespace planner {
@@ -114,6 +115,15 @@ namespace mps {
                     // TODO same as for the pushing oracle, it would make sense to use SimEnvObjectState* here
                     virtual void steer(const Eigen::VectorXf& current_robot_state,
                                        const Eigen::VectorXf& desired_robot_state,
+                                       std::vector<Eigen::VectorXf>& control_params) const = 0;
+                    /**
+                     * Computes a sequence of controls that attempt to move the robot from
+                     * the current state to the desired state given the current state of the world.
+                     * The control sequences is parameterized and returned in the vector control_params.
+                     */
+                    virtual void steer(const ompl::state::SimEnvObjectState* current_robot_state,
+                                       const ompl::state::SimEnvObjectState* desired_robot_state,
+                                       const ompl::state::SimEnvWorldState* current_world_state,
                                        std::vector<Eigen::VectorXf>& control_params) const = 0;
                 };
 

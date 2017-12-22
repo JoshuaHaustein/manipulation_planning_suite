@@ -151,18 +151,14 @@ bool OracleControlSampler::steerRobot(std::vector<::ompl::control::Control const
                 const mps::planner::ompl::state::SimEnvObjectState* dest) {
     const auto* current_robot_state = source->getObjectState(_robot_id);
     // TODO do we wanna enable this also for dynamic search spaces?
-    Eigen::VectorXf current_config;
-    Eigen::VectorXf dest_config;
     std::vector<Eigen::VectorXf> control_params;
-    current_robot_state->getConfiguration(current_config);
-    dest->getConfiguration(dest_config);
-    _robot_oracle->steer(current_config, dest_config, control_params);
+    _robot_oracle->steer(current_robot_state, dest, source, control_params);
     for (auto& control_param : control_params) {
         auto* control = getControl();
         control->setParameters(control_param);
         controls.push_back((::ompl::control::Control const*)control);
     }
-    return true;
+    return not controls.empty();
 }
 
 bool OracleControlSampler::steerPush(std::vector<::ompl::control::Control const *> &controls,
