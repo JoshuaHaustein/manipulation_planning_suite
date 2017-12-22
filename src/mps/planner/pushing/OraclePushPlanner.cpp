@@ -391,7 +391,7 @@ mps::planner::pushing::algorithm::RearrangementRRTPtr OraclePushPlanner::createA
                 robot_oracle = ramp_computer;
                 break;
             }
-            case PlanningProblem::LocalPlanner::ElasticBand:
+            case PlanningProblem::LocalPlanner::PotentialField:
             {
                 if (!_eb_computer) {
                     _eb_computer = std::make_shared<oracle::ElasticBandRampComputer>();

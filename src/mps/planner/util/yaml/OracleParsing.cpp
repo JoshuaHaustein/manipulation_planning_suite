@@ -18,8 +18,8 @@ std::string mps::planner::util::yaml::localPlannerTypeToString(mps::planner::pus
     switch(planner_type) {
         case mps::planner::pushing::PlanningProblem::LocalPlanner::Line:
             return "Line";
-        case mps::planner::pushing::PlanningProblem::LocalPlanner::ElasticBand:
-            return "ElasticBand";
+        case mps::planner::pushing::PlanningProblem::LocalPlanner::PotentialField:
+            return "PotentialField";
     }
     return "UNDEFINED";
 }
@@ -73,8 +73,8 @@ mps::planner::pushing::PlanningProblem::AlgorithmType mps::planner::util::yaml::
 mps::planner::pushing::PlanningProblem::LocalPlanner mps::planner::util::yaml::stringToLocalPlannerType(const std::string& str) {
     if (str.compare("Line") == 0) {
         return mps::planner::pushing::PlanningProblem::LocalPlanner::Line;
-    } else if (str.compare("ElasticBand") == 0) {
-        return mps::planner::pushing::PlanningProblem::LocalPlanner::ElasticBand;
+    } else if (str.compare("PotentialField") == 0) {
+        return mps::planner::pushing::PlanningProblem::LocalPlanner::PotentialField;
     } else {
         throw std::runtime_error("Unknown local planner type encountered: " + str);
     }
