@@ -23,22 +23,20 @@ namespace mps {
                     /**
                      * This class provides a robot oracle of the special case where the robot is
                      * a planar holonomic robot. For this type of robot this class implements
-                     * an elastic band method that is intialized from a straigt line path and then locally
-                     * moved out of collision using a signed distance field. This oracle assumes a
-                     * semi-dynamic world, the elastic band is used to compute a path. Thereafter,
+                     * a potential field method using a signed distance field. This oracle assumes a
+                     * semi-dynamic world, the potential field method is used to compute a path. Thereafter,
                      * each waypoint on this path is connected by computing a ramp control.
+                     * TODO WE NEED TO RENAME THIS CLASS
                      */
                     class ElasticBandRampComputer : public RobotOracle {
                     public:
                         struct Parameters {
                             float step_size; // determines distance between individual waypoints
+                            float multiplier_rot_gradient;
                             float min_euclidean_dist; // determines minimal required distance between a pre-predecessor and waypoint need to be
                             float min_radian_dist; // determines minimal required distance for angle between pre-predecessor and waypoint
                             float safety_margin; // determines minimal distance to obstacles
-                            // float min_delta_movement; // determines minimal distance between to successive waypoints
                             float gamma; // weight of obstacle potential
-                            // float collision_step_size; // determines step size in gradient descent for collision avoidance
-                            // float smoothness_step_size; // determines step size in gradient descent for smoothness
                             float iterations_multiplier; // determines maximal ratio between length of collision avoidance path and straight line path
                             float oscillation_threshold; // determines maximum allowed dot product between grad and -prev_grad
                             float look_ahead_weight; // determines mixture between current gradient and look-ahead-gradient
@@ -127,6 +125,9 @@ namespace mps {
                         // computes the gradient of the distance to closest obstacle w.r.t to robot configuration
                         void computeObstacleDistanceGradient(const Eigen::VectorXf& config,
                                                               Eigen::VectorXf& gradient) const;
+                        void removeRepetitions(std::list<Eigen::VectorXf>& waypoints) const;
+                        void simplifyPath(std::list<Eigen::VectorXf>& waypoints) const;
+                        void computeNormal(const Eigen::Vector2f& dir, Eigen::Vector2f& normal) const;
                     };
 
                     typedef std::shared_ptr<ElasticBandRampComputer> ElasticBandRampComputerPtr;

@@ -10,19 +10,12 @@ using namespace mps::planner::pushing::oracle;
 /////////////////////////////////////// ElasticBandRampComputer::Parameters ////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ElasticBandRampComputer::Parameters::Parameters() {
-    step_size = 0.04f;
-    min_euclidean_dist = 0.02f;
+    step_size = 0.02f;
+    multiplier_rot_gradient = 1.0f;
+    min_euclidean_dist = 0.025f;
     min_radian_dist = 0.08f;
-    // max_distance_multiplier = 2.0f;
-    // min_distance_multiplier = 0.5f;
-    // max_num_iterations = 50;
-    // step_size = 0.05f;
-    // refill_mod = 5;
-    safety_margin = 0.09f;
-    // min_delta_movement = 0.004f;
-    // collision_step_size = 0.01f;
-    // smoothness_step_size = 0.01f;
-    gamma = 0.8f;
+    safety_margin = 0.1f;
+    gamma = 1.5f;
     oscillation_threshold = 0.9f;
     iterations_multiplier = 3.0f;
     look_ahead_weight = 0.5f;
@@ -96,12 +89,12 @@ void ElasticBandRampComputer::init(sim_env::WorldPtr world,
     bool b_update_sdf = force_new_sdf;
     sim_env::BoundingBox world_bounds;
     float robot_padding = robot->getLocalAABB().extents().norm();
-    world_bounds.min_corner[0] = bounds.x_limits[0] - robot_padding;
-    world_bounds.min_corner[1] = bounds.y_limits[0] - robot_padding;
+    world_bounds.min_corner[0] = bounds.x_limits[0] - 2 * robot_padding;
+    world_bounds.min_corner[1] = bounds.y_limits[0] - 2 * robot_padding;
     // TODO what to do about this? we certainly don't wanna make this larger in the 2d case
     world_bounds.min_corner[2] = bounds.z_limits[0];
-    world_bounds.max_corner[0] = bounds.x_limits[1] + robot_padding;
-    world_bounds.max_corner[1] = bounds.y_limits[1] + robot_padding;
+    world_bounds.max_corner[0] = bounds.x_limits[1] + 2 * robot_padding;
+    world_bounds.max_corner[1] = bounds.y_limits[1] + 2 * robot_padding;
     // TODO what to do about this? we certainly don't wanna make this larger in the 2d case
     world_bounds.max_corner[2] = bounds.z_limits[1];
     if (!_world) { // first intialization
@@ -126,6 +119,9 @@ void ElasticBandRampComputer::init(sim_env::WorldPtr world,
         // check whether the sim_env world is different and we need to create a new sdf
         sdf::SceneSDF::SceneSDFConstructionState would_be_state(world, world_bounds);
         b_update_sdf |= would_be_state.isDifferent(_sdf_construction_state);
+    }
+    if (_robot->getNumActiveDOFs() != 3) {
+        throw std::logic_error("[ElasticBandRampComputer] This class can only operate on planar holonomic robots with 3 DOFs x,y,theta");
     }
 
     if (b_update_sdf) { // finally create sdf if need to
@@ -217,7 +213,7 @@ void ElasticBandRampComputer::computePath(const ompl::state::SimEnvObjectState* 
         }
         // compute Nesterov accelerated gradient
         look_ahead_point.head<2>() = current_point.head<2>() - _parameters.step_size * 1.0f / gradient_norm * gradient.head<2>();
-        look_ahead_point[2] = current_point[2] - gradient[2];
+        look_ahead_point[2] = current_point[2] - _parameters.multiplier_rot_gradient * gradient[2];
         computeGradient(look_ahead_point, end_point, look_ahead_gradient);
         logger->logDebug(boost::format("Gradient is %1% and look-ahead-gradient is %2%") % gradient.transpose() % look_ahead_gradient.transpose(), log_prefix);
         gradient = (1.0f - _parameters.look_ahead_weight) * gradient + _parameters.look_ahead_weight * look_ahead_gradient;
@@ -231,43 +227,17 @@ void ElasticBandRampComputer::computePath(const ompl::state::SimEnvObjectState* 
         }
         // now we are not in a local optima (or at least we do not know)
         current_point.head<2>() -= _parameters.step_size * 1.0f / gradient_norm * gradient.head<2>();
-        current_point[2] -= gradient[2];
+        current_point[2] -= _parameters.multiplier_rot_gradient * gradient[2];
         prev_gradient = gradient;
         ++num_iterations;
         // debug_drawer->clear();
         // debug_drawer->drawPath(waypoints);
     }
     // before we return this path, let's try to simplify the path a little bit more
-    std::vector<Eigen::VectorXf> prev_waypoints;
-    if (waypoints.size() >= 3)
-    {
-        auto wp_iter = waypoints.begin();
-        prev_waypoints.push_back(*wp_iter);
-        ++wp_iter;
-        prev_waypoints.push_back(*wp_iter);
-        ++wp_iter;
-        while (wp_iter != waypoints.end()) {
-            bool delete_wp = false;
-            Eigen::VectorXf& wp = *wp_iter;
-            // check whether we've been at this configuration before
-            for (auto& prev_wp : prev_waypoints) {
-                if (((wp.head<2>() - prev_wp.head<2>()).norm() < _parameters.min_euclidean_dist)
-                    and (std::abs(wp[2] - prev_wp[2]) < _parameters.min_radian_dist)) {
-                    // if yes, remove this waypoint because this just means we are oscillating here
-                    delete_wp = true;
-                    break;
-                }
-            }
-            if (delete_wp) {
-                wp_iter = waypoints.erase(wp_iter);
-            } else {
-                prev_waypoints.push_back(wp);
-                ++wp_iter;
-            }
-        }
-    }
+    removeRepetitions(waypoints); // removes waypoints that are too similiar to previously visited waypoints (oscillation reduction)
     // in any case push back the end point, the higher level logic wil figure out that the last action might be invalid
     waypoints.push_back(end_point);
+    simplifyPath(waypoints); // removes waypoints that lie on a straight line
     _world->restoreState();
     debug_drawer->drawPath(waypoints);
 }
@@ -323,6 +293,9 @@ float ElasticBandRampComputer::computeGradient(const Eigen::VectorXf& config,
     Eigen::VectorXf obstacle_gradient(config.size());
     computeGoalGradient(config, goal, goal_gradient);
     float distance = computeObstacleGradient(config, obstacle_gradient);
+    // we don't want our attraction force to scale with the distance to our goal, we prefer constant speed as this allows us
+    // to balance between obstacle_gradient and goal approach better
+    goal_gradient.normalize();
     gradient = goal_gradient + obstacle_gradient;
     auto logger = _world->getLogger();
     logger->logDebug(boost::format("For configurations %1%") % config.transpose(), "computeGradient");
@@ -362,6 +335,108 @@ void ElasticBandRampComputer::computeObstacleDistanceGradient(const Eigen::Vecto
         float fn_delta_minus = computeObstacleDistance(query_config);
         gradient[dof] = (fn_delta_plus - fn_delta_minus) / (2.0f * _gradient_deltas[dof]);
         query_config[dof] = robot_config[dof];
+    }
+}
+
+void ElasticBandRampComputer::removeRepetitions(std::list<Eigen::VectorXf>& waypoints) const {
+    static const std::string log_prefix("[ElasticBandRampComputer::removeRepetitions]");
+    auto logger = _world->getLogger();
+    // first check whether it makes sense to remove anything
+    if (waypoints.size() < 2) return; // if we have at least 2 points, then we might be able to remove something
+    std::vector<Eigen::VectorXf> prev_waypoints;
+    auto wp_iter = waypoints.begin();
+    prev_waypoints.push_back(*wp_iter);
+    ++wp_iter;
+    prev_waypoints.push_back(*wp_iter);
+    ++wp_iter;
+    while (wp_iter != waypoints.end()) {
+        bool delete_wp = false;
+        Eigen::VectorXf& wp = *wp_iter;
+        // check whether we've been at this configuration before
+        for (auto& prev_wp : prev_waypoints) {
+            if (((wp.head<2>() - prev_wp.head<2>()).norm() < _parameters.min_euclidean_dist)
+                and (std::abs(wp[2] - prev_wp[2]) < _parameters.min_radian_dist)) {
+                // if yes, remove this waypoint because this just means we are oscillating here
+                delete_wp = true;
+                break;
+            }
+        }
+        if (delete_wp) {
+            logger->logDebug(boost::format("We seem to be oscillating at waypoint %1%, removing it.") % wp.transpose(),
+                            log_prefix);
+            wp_iter = waypoints.erase(wp_iter);
+        } else {
+            prev_waypoints.push_back(wp);
+            ++wp_iter;
+        }
+    }
+}
+
+void ElasticBandRampComputer::simplifyPath(std::list<Eigen::VectorXf>& waypoints) const {
+    static const std::string log_prefix("[ElasticBandRampComputer::simplifyPath]");
+    auto logger = _world->getLogger();
+    // first check whether it makes sense to remove anything
+    if (waypoints.size() < 3) return; // we need at least 3 points for this
+    Eigen::Vector2f travel_dir;
+    Eigen::Vector2f local_dir;
+    Eigen::Vector2f normal;
+    Eigen::VectorXf pre_prev_wp;
+    Eigen::VectorXf prev_wp;
+    auto wp_iter = waypoints.begin();
+    pre_prev_wp = *wp_iter;
+    ++wp_iter;
+    auto prev_wp_iter = wp_iter;
+    prev_wp = *wp_iter;
+    ++wp_iter;
+    while (wp_iter != waypoints.end()) {
+        bool remove_waypoint = false;
+        Eigen::VectorXf& current_wp = *wp_iter;
+        travel_dir = current_wp.head<2>() - pre_prev_wp.head<2>();
+        local_dir = prev_wp.head<2>() - pre_prev_wp.head<2>();
+        float travel_distance = travel_dir.norm();
+        // there is the posibility that we did not travel in position but only in orientation
+        if (travel_distance > NUMERICAL_EPSILON) { // if pre_prev_wp and current_wp are at different locations
+            travel_dir *= 1.0f / travel_distance;
+            computeNormal(travel_dir, normal); // compute the normal of the travel direction
+            float distance = std::abs(local_dir.dot(normal)); // how far is prev_wp away from that straight line movement?
+            // decide whether this is close enough to remove
+            if (distance <= _parameters.min_euclidean_dist) {
+                // if yes, we need to check whether this waypoint actually lies within the line segment pre_prev_wp -> current_wp
+                Eigen::Vector2f projected_wp = prev_wp.head<2>() - distance * normal;
+                float t = travel_dir.dot(projected_wp - pre_prev_wp.head<2>());
+                if (t > 0 and t < travel_distance) { // if lies on the line segment
+                    // we need to check whether the angle is similar to what it would be if we remove the waypoint
+                    float normalized_t = t / travel_distance;
+                    float would_be_angle = normalized_t * current_wp[2] + (1.0f - normalized_t) * pre_prev_wp[2];
+                    remove_waypoint = std::abs(would_be_angle - prev_wp[2]) <= _parameters.min_radian_dist;
+                }
+            }
+        } else { // we are at the same location in pre_pre_wp and current_wp, make the decision on how far away prev_wp is
+            remove_waypoint = local_dir.norm() <= _parameters.min_euclidean_dist and
+                              std::abs(prev_wp[2] - current_wp[2]) <= _parameters.min_radian_dist;
+        }
+        if (remove_waypoint) {
+            // erase previous waypoint
+            prev_wp_iter = waypoints.erase(prev_wp_iter); // prev_wp_iter = wp_iter
+            prev_wp = current_wp; // update previous waypoint to be current_wp
+            ++wp_iter; // proceed with wp_iter
+        } else { // no removal
+            pre_prev_wp = prev_wp; // everything moves one step further
+            prev_wp = current_wp;
+            ++prev_wp_iter;
+            ++wp_iter;
+        }
+    }
+}
+
+void ElasticBandRampComputer::computeNormal(const Eigen::Vector2f& dir, Eigen::Vector2f& normal) const {
+    if (std::abs(dir[0]) <= NUMERICAL_EPSILON) {
+        normal[0] = 1.0f;
+        normal[1] = 0.0f;
+    } else {
+        normal[0] = -dir[1] / dir[0];
+        normal[1] = 1.0f;
+        normal.normalize();
     }
 }
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////
