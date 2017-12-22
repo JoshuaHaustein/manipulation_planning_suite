@@ -189,7 +189,7 @@ namespace mps {
 
 
                     ::ompl::control::SpaceInformationPtr _si;
-                    ::ompl::base::StateSamplerPtr _state_sampler;
+                    ::ompl::base::ValidStateSamplerPtr _state_sampler;
                     mps::planner::ompl::state::SimEnvWorldStateSpacePtr _state_space;
                     mps::planner::ompl::state::SimEnvWorldStateDistanceMeasurePtr _distance_measure;
                     ::ompl::RNGPtr _rng;
@@ -374,21 +374,22 @@ namespace mps {
                     ExtensionCandidateTuple selectStateTuple(const std::vector<ExtensionCandidateTuple>& candidates) const;
                 };
 
-                class GNATSamplingSliceBasedOracleRRT : public CompleteSliceBasedOracleRRT {
-                public:
-                    GNATSamplingSliceBasedOracleRRT(::ompl::control::SpaceInformationPtr si,
-                                                mps::planner::pushing::oracle::PushingOraclePtr pushing_oracle,
-                                                mps::planner::pushing::oracle::RobotOraclePtr robot_oracle,
-                                                const std::string& robot_name,
-                                                const oracle::OracleControlSampler::Parameters& params=
-                                                oracle::OracleControlSampler::Parameters());
-                    ~GNATSamplingSliceBasedOracleRRT() override;
-                    bool sample(mps::planner::ompl::planning::essentials::MotionPtr motion,
-                                unsigned int& target_obj_id,
-                                PlanningBlackboard& pb) override;
-                protected:
-                private:
-                };
+                // TODO this is future work
+                // class GNATSamplingSliceBasedOracleRRT : public CompleteSliceBasedOracleRRT {
+                // public:
+                //     GNATSamplingSliceBasedOracleRRT(::ompl::control::SpaceInformationPtr si,
+                //                                 mps::planner::pushing::oracle::PushingOraclePtr pushing_oracle,
+                //                                 mps::planner::pushing::oracle::RobotOraclePtr robot_oracle,
+                //                                 const std::string& robot_name,
+                //                                 const oracle::OracleControlSampler::Parameters& params=
+                //                                 oracle::OracleControlSampler::Parameters());
+                //     ~GNATSamplingSliceBasedOracleRRT() override;
+                //     bool sample(mps::planner::ompl::planning::essentials::MotionPtr motion,
+                //                 unsigned int& target_obj_id,
+                //                 PlanningBlackboard& pb) override;
+                // protected:
+                // private:
+                // };
 
                 class DebugDrawer : public std::enable_shared_from_this<DebugDrawer> {
                     // TODO this class may be overfit to a 2d planning case.
