@@ -166,8 +166,8 @@ void ElasticBandRampComputer::computePath(const ompl::state::SimEnvObjectState* 
 {
     static const std::string log_prefix("[mps::planner::pushing::oracle::ElasticBandRampComputer::computePath]");
     auto logger = _world->getLogger();
-    auto debug_drawer = getDebugDrawer();
-    debug_drawer->clear();
+    // auto debug_drawer = getDebugDrawer();
+    // debug_drawer->clear();
     // try something really simple, but fast: potential field approach
     // first set the world to the start state and update sdf
     _world->saveState();
@@ -239,7 +239,7 @@ void ElasticBandRampComputer::computePath(const ompl::state::SimEnvObjectState* 
     waypoints.push_back(end_point);
     simplifyPath(waypoints); // removes waypoints that lie on a straight line
     _world->restoreState();
-    debug_drawer->drawPath(waypoints);
+    // debug_drawer->drawPath(waypoints);
 }
 
 float ElasticBandRampComputer::computeGoalPotential(const Eigen::VectorXf& robot_config, const Eigen::VectorXf& goal_config) const {
