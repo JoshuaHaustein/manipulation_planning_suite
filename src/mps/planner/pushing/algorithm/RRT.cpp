@@ -757,7 +757,7 @@ bool CompleteSliceBasedOracleRRT::extend(mps::planner::ompl::planning::essential
     // next, if the active object is not the robot, try a push
     if (extension_success and active_obj_id != pb.robot_id and not b_goal) {
         controls.clear();
-        _oracle_sampler->steerPushSimple(controls, last_motion->getState(), dest, active_obj_id);
+        _oracle_sampler->steerPush(controls, last_motion->getState(), dest, active_obj_id);
         extendStep(controls, last_motion, last_motion, pb, extension_success, b_goal);
     }
     return b_goal;
