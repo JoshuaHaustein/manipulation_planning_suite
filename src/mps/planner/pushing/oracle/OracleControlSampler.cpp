@@ -9,23 +9,15 @@ namespace mps_state = mps::planner::ompl::state;
 namespace mps_control = mps::planner::ompl::control;
 namespace mps_logging = mps::planner::util::logging;
 
-OracleControlSampler::Parameters::Parameters() {
-    // TODO what are reasonable values here? Should these values be inside of the oracles instead?
-    min_feasibility = 0.05;
-    min_pushability = 1.0;
-}
-
 OracleControlSampler::OracleControlSampler(::ompl::control::SpaceInformationPtr si,
                                            PushingOraclePtr oracle,
                                            RobotOraclePtr robot_orcale,
-                                           const std::string& robot_name,
-                                           const Parameters& params) :
+                                           const std::string& robot_name) :
 //    ::ompl::control::DirectedControlSampler(si),
     _si(si),
     _robot_oracle(robot_orcale),
     _pushing_oracle(oracle),
-    _control_idx(0),
-    _params(params)
+    _control_idx(0)
 {
     auto state_space = std::dynamic_pointer_cast<mps_state::SimEnvWorldStateSpace>(_si->getStateSpace());
     if (!state_space) {
@@ -76,7 +68,7 @@ void OracleControlSampler::sampleTo(std::vector<::ompl::control::Control const*>
         has_control = steerPush(controls, current_world_state, dest_world_state, local_target_obj);
     }
     if (not has_control) {
-        randomControl(controls, current_world_state, dest_world_state, local_target_obj);
+        randomControl(controls);
     }
 }
 
@@ -123,10 +115,6 @@ float OracleControlSampler::getFeasibility(const ::ompl::base::State* x_state_om
     Eigen::VectorXf target_obj_state;
     x_prime_t->getConfiguration(target_obj_state);
     return _pushing_oracle->predictFeasibility(new_robot_dest, current_obj_state, target_obj_state, active_obj_id);
-}
-
-void OracleControlSampler::setParameters(const OracleControlSampler::Parameters &params) {
-    _params = params;
 }
 
 bool OracleControlSampler::steerRobot(std::vector<::ompl::control::Control const *> &controls,
@@ -255,10 +243,7 @@ bool OracleControlSampler::steerPush(std::vector<::ompl::control::Control const 
 //     return true;
 // }
 
-void OracleControlSampler::randomControl(std::vector<::ompl::control::Control const *> &controls,
-                                         const mps::planner::ompl::state::SimEnvWorldState *source,
-                                         const mps::planner::ompl::state::SimEnvWorldState *dest,
-                                         unsigned int obj_id)
+void OracleControlSampler::randomControl(std::vector<::ompl::control::Control const *> &controls)
 {
     mps_logging::logDebug("Sampling random control", "[mps::planner::pushing::oracle::OracleControlSampler::randomControl]");
     auto* control = getControl();

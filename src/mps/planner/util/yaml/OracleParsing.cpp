@@ -34,6 +34,8 @@ std::string mps::planner::util::yaml::algorithmTypeToString(mps::planner::pushin
             return "SliceOracleRRT";
         case mps::planner::pushing::PlanningProblem::AlgorithmType::CompleteSliceOracleRRT:
             return "CompleteSliceOracleRRT";
+        case mps::planner::pushing::PlanningProblem::AlgorithmType::HybridActionRRT:
+            return "HybridActionRRT";
         case mps::planner::pushing::PlanningProblem::AlgorithmType::GNATSamplingSliceOracleRRT:
             return "GNATSamplingSliceOracleRRT";
         case mps::planner::pushing::PlanningProblem::AlgorithmType::SemanticGNATSamplingSliceOracleRRT:
@@ -61,6 +63,8 @@ mps::planner::pushing::PlanningProblem::AlgorithmType mps::planner::util::yaml::
         return mps::planner::pushing::PlanningProblem::AlgorithmType::SliceOracleRRT;
     } else if (str.compare("CompleteSliceOracleRRT") == 0) {
         return mps::planner::pushing::PlanningProblem::AlgorithmType::CompleteSliceOracleRRT;
+    } else if (str.compare("HybridActionRRT") == 0) {
+        return mps::planner::pushing::PlanningProblem::AlgorithmType::HybridActionRRT;
     } else if (str.compare("GNATSamplingSliceOracleRRT") == 0) {
         return  mps::planner::pushing::PlanningProblem::AlgorithmType::GNATSamplingSliceOracleRRT;
     } else if (str.compare("SemanticGNATSamplingSliceOracleRRT") == 0) {

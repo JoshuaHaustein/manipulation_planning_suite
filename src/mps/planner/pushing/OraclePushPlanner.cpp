@@ -47,6 +47,7 @@ PlanningProblem::PlanningProblem(sim_env::WorldPtr world, sim_env::RobotPtr robo
     robot_bias = 0.1f;
     target_bias = 0.1f;
     num_slice_neighbors = 8;
+    p_rand = 0.5f;
     // create default workspace limits
     workspace_bounds.x_limits[0] = std::numeric_limits<float>::lowest();
     workspace_bounds.x_limits[1] = std::numeric_limits<float>::max();
@@ -457,6 +458,13 @@ mps::planner::pushing::algorithm::RearrangementRRTPtr OraclePushPlanner::createA
                                                                                 pushing_oracle,
                                                                                 robot_oracle,
                                                                                 _planning_problem.robot->getName());
+                break;
+            }
+            case PlanningProblem::AlgorithmType::HybridActionRRT:
+            {
+                algo = std::make_shared<algorithm::HybridActionRRT>(_space_information, _planning_problem.num_control_samples,
+                                                                    _planning_problem.p_rand, pushing_oracle,
+                                                                    robot_oracle, _planning_problem.robot->getName());
                 break;
             }
             case PlanningProblem::AlgorithmType::GNATSamplingSliceOracleRRT:
