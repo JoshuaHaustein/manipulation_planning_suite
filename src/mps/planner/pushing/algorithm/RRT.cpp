@@ -834,20 +834,45 @@ void CompleteSliceBasedOracleRRT::selectTreeNode(const ompl::planning::essential
         assert(not candidate_slices.empty());
         // due to the projection, there is at least one slice we can extend the search from
         for (auto& candidate_slice : candidate_slices) {
+            //////////////// VARIANT 1: select slice using feasibility ////////////////////
             // run over all and select good robot states for pushing
+            // auto new_motion = getNewMotion();
+            // _state_space->copyState(new_motion->getState(), candidate_slice->repr->getState());
+            // we do this by sampling a feasible state
+            // _oracle_sampler->sampleFeasibleState(new_motion->getState(),
+            //                                     sample_slice->repr->getState(),
+            //                                     active_obj_id);
+            // // and selecting the nearest one
+            // auto nearest_state = candidate_slice->slice_samples_nn->nearest(new_motion);
+            // float feasibility = _oracle_sampler->getFeasibility(nearest_state->getState(),
+            //                                                    sample_slice->repr->getState(),
+            //                                                    active_obj_id);
+            // save what we found
+            // candidate_states.emplace_back(std::make_tuple(nearest_state, feasibility, new_motion));
+            ///////////////// Variant 2: select slice using distance ///////////////////////
+            // auto new_motion = getNewMotion();
+            // _state_space->copyState(new_motion->getState(), candidate_slice->repr->getState());
+            // auto distance = _slice_distance_fn.distance(candidate_slice, sample_slice);
+            // auto probability = distance != 0.0 ? 1.0 / distance : std::numeric_limits<double>::max();
+            // _oracle_sampler->sampleFeasibleState(new_motion->getState(),
+            //                                     sample_slice->repr->getState(),
+            //                                     active_obj_id);
+            // auto nearest_state = candidate_slice->slice_samples_nn->nearest(new_motion);
+            // // save what we found
+            // candidate_states.emplace_back(std::make_tuple(nearest_state, probability, new_motion));
+            ///////////////// Variant 3: select slice using distance, but select state uniformly ///////////////////
+            auto distance = _slice_distance_fn.distance(candidate_slice, sample_slice);
+            auto probability = distance != 0.0 ? 1.0 / distance : std::numeric_limits<double>::max();
+            auto uniform_sample = getNewMotion();
+            // TODO we should sample a robot state for the given candidate slice that is guaranteed to be valid
+            _state_sampler->sample(uniform_sample->getState()); // samples a random slice, with random robot state
             auto new_motion = getNewMotion();
             _state_space->copyState(new_motion->getState(), candidate_slice->repr->getState());
-            // we do this by sampling a feasible state
-            _oracle_sampler->sampleFeasibleState(new_motion->getState(),
-                                                sample_slice->repr->getState(),
-                                                active_obj_id);
-            // and selecting the nearest one
+            _state_space->copySubState(new_motion->getState(), uniform_sample->getState(), pb.robot_id); // copy the random robot state
+            cacheMotion(uniform_sample);
             auto nearest_state = candidate_slice->slice_samples_nn->nearest(new_motion);
-            float feasibility = _oracle_sampler->getFeasibility(nearest_state->getState(),
-                                                               sample_slice->repr->getState(),
-                                                               active_obj_id);
             // save what we found
-            candidate_states.emplace_back(std::make_tuple(nearest_state, feasibility, new_motion));
+            candidate_states.emplace_back(std::make_tuple(nearest_state, probability, new_motion));
         }
         // from all the slices we took a look at, pick one state
         auto selected_state_tuple = selectStateTuple(candidate_states);
