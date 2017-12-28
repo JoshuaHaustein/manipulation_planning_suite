@@ -398,8 +398,8 @@ namespace mps {
                                             SliceConstPtr center_slice,
                                             float radius,
                                             PlanningBlackboard& pb);
-                    typedef std::tuple<mps::planner::ompl::planning::essentials::MotionPtr, float, mps::planner::ompl::planning::essentials::MotionPtr> ExtensionCandidateTuple;
-                    ExtensionCandidateTuple selectStateTuple(const std::vector<ExtensionCandidateTuple>& candidates) const;
+                    typedef std::tuple<SlicePtr, float> ExtensionCandidateTuple;
+                    ExtensionCandidateTuple selectCandidateSlice(const std::vector<ExtensionCandidateTuple>& candidates) const;
                 };
 
                 // TODO this is future work
