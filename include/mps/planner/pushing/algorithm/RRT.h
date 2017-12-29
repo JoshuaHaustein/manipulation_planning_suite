@@ -18,6 +18,7 @@
 #include <mps/planner/ompl/state/goal/ObjectsRelocationGoal.h>
 #include <mps/planner/util/Random.h>
 #include <mps/planner/util/Time.h>
+#include <mps/sdf/SDF.h>
 // stl
 #include <stack>
 #include <mps/planner/ompl/control/NaiveControlSampler.h>
@@ -189,7 +190,7 @@ namespace mps {
 
 
                     ::ompl::control::SpaceInformationPtr _si;
-                    ::ompl::base::StateSamplerPtr _state_sampler;
+                    ::ompl::base::ValidStateSamplerPtr _state_sampler;
                     mps::planner::ompl::state::SimEnvWorldStateSpacePtr _state_space;
                     mps::planner::ompl::state::SimEnvWorldStateDistanceMeasurePtr _distance_measure;
                     ::ompl::RNGPtr _rng;
@@ -227,16 +228,48 @@ namespace mps {
                 typedef std::weak_ptr<NaiveRearrangementRRT> NaiveRearrangementRRTWeakPtr;
                 typedef std::weak_ptr<const NaiveRearrangementRRT> NaiveRearrangementRRTWeakConstPtr;
 
+                class HybridActionRRT : public RearrangementRRT {
+                    public:
+                        HybridActionRRT(::ompl::control::SpaceInformationPtr si,
+                                        unsigned int k, float p_rand,
+                                        mps::planner::pushing::oracle::PushingOraclePtr pushing_oracle,
+                                        mps::planner::pushing::oracle::RobotOraclePtr robot_oracle,
+                                        const std::string& robot_name);
+                        ~HybridActionRRT();
+                        bool extend(mps::planner::ompl::planning::essentials::MotionPtr start,
+                                    ::ompl::base::State* dest,
+                                    unsigned int active_obj_id,
+                                    mps::planner::ompl::planning::essentials::MotionPtr& last_motion,
+                                    PlanningBlackboard& pb) override;
+                    private:
+                        void sampleActionSequence(std::vector<::ompl::control::Control const*>& controls,
+                                                  mps::planner::ompl::planning::essentials::MotionPtr start,
+                                                  ::ompl::base::State* dest,
+                                                  PlanningBlackboard& pb);
+                        void forwardPropagateActionSequence(const std::vector<::ompl::control::Control const*>& controls,
+                                                            mps::planner::ompl::planning::essentials::MotionPtr start,
+                                                            std::vector<mps::planner::ompl::planning::essentials::MotionPtr>& state_action_seq,
+                                                            PlanningBlackboard& pb);
+                        void freeMotionList(std::vector<mps::planner::ompl::planning::essentials::MotionPtr>& motions);
+                        mps::planner::ompl::control::SimEnvStatePropagatorPtr _state_propagator;
+                        mps::planner::pushing::oracle::OracleControlSamplerPtr _oracle_sampler;
+                        unsigned int _k;
+                        float _p_rand;
+
+                };
+                typedef std::shared_ptr<HybridActionRRT> HybridActionRRTPtr;
+                typedef std::shared_ptr<const HybridActionRRT> HybridActionRRTConstPtr;
+                typedef std::weak_ptr<HybridActionRRT> HybridActionRRTWeakPtr;
+                typedef std::weak_ptr<const HybridActionRRT> HybridActionRRTWeakConstPtr;
+
+
                 class OracleRearrangementRRT : public RearrangementRRT {
                 public:
                     OracleRearrangementRRT(::ompl::control::SpaceInformationPtr si,
                                           mps::planner::pushing::oracle::PushingOraclePtr pushing_oracle,
                                           mps::planner::pushing::oracle::RobotOraclePtr robot_oracle,
-                                          const std::string& robot_name,
-                                          const oracle::OracleControlSampler::Parameters& params=
-                                            oracle::OracleControlSampler::Parameters());
+                                          const std::string& robot_name);
                     ~OracleRearrangementRRT() override;
-                    void setOracleSamplerParameters(const oracle::OracleControlSampler::Parameters& params);
 
                     bool extend(mps::planner::ompl::planning::essentials::MotionPtr start,
                                 ::ompl::base::State* dest,
@@ -261,9 +294,7 @@ namespace mps {
                     SliceBasedOracleRRT(::ompl::control::SpaceInformationPtr si,
                                         mps::planner::pushing::oracle::PushingOraclePtr pushing_oracle,
                                         mps::planner::pushing::oracle::RobotOraclePtr robot_oracle,
-                                        const std::string& robot_name,
-                                        const oracle::OracleControlSampler::Parameters& params=
-                                        oracle::OracleControlSampler::Parameters());
+                                        const std::string& robot_name);
                     ~SliceBasedOracleRRT() override;
                     void setup(const PlanningQuery& pq, PlanningBlackboard& blackboard) override;
                     bool sample(mps::planner::ompl::planning::essentials::MotionPtr motion,
@@ -342,9 +373,7 @@ namespace mps {
                     CompleteSliceBasedOracleRRT(::ompl::control::SpaceInformationPtr si,
                                                 mps::planner::pushing::oracle::PushingOraclePtr pushing_oracle,
                                                 mps::planner::pushing::oracle::RobotOraclePtr robot_oracle,
-                                                const std::string& robot_name,
-                                                const oracle::OracleControlSampler::Parameters& params=
-                                                oracle::OracleControlSampler::Parameters());
+                                                const std::string& robot_name);
                     ~CompleteSliceBasedOracleRRT() override;
                     void setup(const PlanningQuery& pq, PlanningBlackboard& blackboard) override;
                     void selectTreeNode(const ompl::planning::essentials::MotionPtr& sample,
@@ -373,21 +402,22 @@ namespace mps {
                     ExtensionCandidateTuple selectStateTuple(const std::vector<ExtensionCandidateTuple>& candidates) const;
                 };
 
-                class GNATSamplingSliceBasedOracleRRT : public CompleteSliceBasedOracleRRT {
-                public:
-                    GNATSamplingSliceBasedOracleRRT(::ompl::control::SpaceInformationPtr si,
-                                                mps::planner::pushing::oracle::PushingOraclePtr pushing_oracle,
-                                                mps::planner::pushing::oracle::RobotOraclePtr robot_oracle,
-                                                const std::string& robot_name,
-                                                const oracle::OracleControlSampler::Parameters& params=
-                                                oracle::OracleControlSampler::Parameters());
-                    ~GNATSamplingSliceBasedOracleRRT() override;
-                    bool sample(mps::planner::ompl::planning::essentials::MotionPtr motion,
-                                unsigned int& target_obj_id,
-                                PlanningBlackboard& pb) override;
-                protected:
-                private:
-                };
+                // TODO this is future work
+                // class GNATSamplingSliceBasedOracleRRT : public CompleteSliceBasedOracleRRT {
+                // public:
+                //     GNATSamplingSliceBasedOracleRRT(::ompl::control::SpaceInformationPtr si,
+                //                                 mps::planner::pushing::oracle::PushingOraclePtr pushing_oracle,
+                //                                 mps::planner::pushing::oracle::RobotOraclePtr robot_oracle,
+                //                                 const std::string& robot_name,
+                //                                 const oracle::OracleControlSampler::Parameters& params=
+                //                                 oracle::OracleControlSampler::Parameters());
+                //     ~GNATSamplingSliceBasedOracleRRT() override;
+                //     bool sample(mps::planner::ompl::planning::essentials::MotionPtr motion,
+                //                 unsigned int& target_obj_id,
+                //                 PlanningBlackboard& pb) override;
+                // protected:
+                // private:
+                // };
 
                 class DebugDrawer : public std::enable_shared_from_this<DebugDrawer> {
                     // TODO this class may be overfit to a 2d planning case.

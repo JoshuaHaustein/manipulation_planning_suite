@@ -15,6 +15,7 @@
 #include <mps/planner/ompl/control/RampVelocityControl.h>
 #include <mps/planner/pushing/algorithm/RRT.h>
 #include <mps/planner/pushing/oracle/DataGenerator.h>
+#include <mps/planner/pushing/oracle/ElasticBandRampComputer.h>
 
 namespace mps {
     namespace planner {
@@ -27,9 +28,15 @@ namespace mps {
                 enum OracleType {
                     Human = 0, Learned = 1
                 };
+
+                enum LocalPlanner {
+                    Line = 0, PotentialField = 1
+                };
+
                 enum AlgorithmType {
                     Naive = 0, OracleRRT = 1, SliceOracleRRT = 2, CompleteSliceOracleRRT = 3,
-                    GNATSamplingSliceOracleRRT = 4, SemanticGNATSamplingSliceOracleRRT = 5
+                    GNATSamplingSliceOracleRRT = 4, SemanticGNATSamplingSliceOracleRRT = 5,
+                    HybridActionRRT = 6
                 };
                 // world related parameters
                 sim_env::WorldPtr world;
@@ -56,14 +63,18 @@ namespace mps {
                 // settings for control sampler
                 OracleType oracle_type;
                 AlgorithmType algorithm_type;
+                LocalPlanner local_planner_type;
                 unsigned int num_control_samples;
                 float goal_bias;
                 float robot_bias;
                 float target_bias;
                 unsigned int num_slice_neighbors;
+                float p_rand;
                 // flag whether to enable debug info
                 bool debug;
-                // TODO more parameters, like distance weights, workspace bounds, goal region
+                float sdf_resolution;
+                float sdf_error_threshold;
+                // TODO more parameters, like distance weights, goal region
 
                 /**
                  *  Constructor of a planning problem.
@@ -111,6 +122,7 @@ namespace mps {
                 // TODO should we move this playback function somewhere else?
                 void playback(const PlanningSolution& solution, const std::function<bool()>& interrupt_callback=[](){return false;});
                 void setSliceDrawer(algorithm::SliceDrawerInterfacePtr slice_drawer);
+                void renderSDF(float resolution);
                 void clearVisualizations();
                 void generateData(const std::string& file_name,
                                   unsigned int num_samples,
@@ -141,10 +153,12 @@ namespace mps {
                 mps::planner::ompl::control::SimEnvStatePropagatorPtr _state_propagator;
                 PlanningProblem _planning_problem;
                 mps::planner::pushing::algorithm::RearrangementRRTPtr _algorithm;
-                mps::planner::pushing::algorithm::DebugDrawerPtr _debug_drawer;
+                mps::planner::pushing::oracle::ElasticBandRampComputerPtr _eb_computer;
+                mps::planner::pushing::algorithm::DebugDrawerPtr _rrt_debug_drawer;
+                mps::planner::pushing::oracle::EBDebugDrawerPtr _eb_debug_drawer;
                 std::vector<float> _distance_weights;
                 void prepareDistanceWeights();
-                mps::planner::pushing::algorithm::RearrangementRRTPtr createAlgorithm(const PlanningProblem& pp) const;
+                mps::planner::pushing::algorithm::RearrangementRRTPtr createAlgorithm();
 //                ::ompl::control::DirectedControlSamplerPtr allocateDirectedControlSampler(const ::ompl::control::SpaceInformation* si);
                 mps::planner::pushing::oracle::DataGeneratorPtr _data_generator;
             };

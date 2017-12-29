@@ -32,7 +32,8 @@ namespace mps {
                         Eigen::Matrix3f _inv_pushability_covariance;
                     };
 
-                    explicit HumanOracle(RampComputerPtr ramp_computer,
+                    explicit HumanOracle(RobotOraclePtr robot_oracle,
+                                         const std::vector<ObjectData>& object_data,
                                          const Parameters& params=Parameters());
                     ~HumanOracle() override;
 
@@ -66,7 +67,7 @@ namespace mps {
 
                 private:
                     Parameters _params;
-                    RampComputerPtr _ramp_computer;
+                    RobotOraclePtr _robot_steerer;
                     ::ompl::RNGPtr _rng;
                     // Takes the first three components of state and ref and computes state - ref
                     // The third component is assumed to be an angle in range [-pi, pi], hence the shortest

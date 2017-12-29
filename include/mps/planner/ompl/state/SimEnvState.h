@@ -111,11 +111,17 @@ namespace mps {
                     void computeDirection(StateType const* state_1, StateType const* state_2, Eigen::VectorXf& dir) const;
                     void computeDirection(const Eigen::VectorXf& config_1, const Eigen::VectorXf& config_2,
                                           Eigen::VectorXf& dir ) const;
+                    /**
+                     * Returns a vector of size dof, where vec[i] is a reasonable step
+                     * size for numerical gradient computation along that dof.
+                     */
+                    Eigen::VectorXf getGradientDeltas() const;
 
                 private:
                     sim_env::ObjectConstWeakPtr _object;
                     std::vector<internal::SubstateTypeDescription> _state_descriptions;
                     const Eigen::VectorXi _active_dofs;
+                    Eigen::VectorXf _gradient_deltas;
                     Eigen::MatrixX2f _limits;
                     double _position_weight;
                     double _orientation_weight;
@@ -276,6 +282,7 @@ namespace mps {
                     /** Overrides from CompoundStateSpace */
                     ::ompl::base::State* allocState() const override;
                     void freeState(::ompl::base::State* state) const override;
+                    sim_env::ObjectConstPtr getObject() const;
 
                 private:
                     sim_env::ObjectConstWeakPtr _object;

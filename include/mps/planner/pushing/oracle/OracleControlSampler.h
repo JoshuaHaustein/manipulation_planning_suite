@@ -18,17 +18,10 @@ namespace mps {
                 // pushing rearrangement problem.
                 class OracleControlSampler {
                 public:
-                    struct Parameters {
-                        float min_pushability;
-                        float min_feasibility;
-                        Parameters();
-                    };
-
                     OracleControlSampler(::ompl::control::SpaceInformationPtr si,
                                         mps::planner::pushing::oracle::PushingOraclePtr oracle,
                                         mps::planner::pushing::oracle::RobotOraclePtr robot_oracle,
-                                        const std::string& robot_name,
-                                        const Parameters& params);
+                                        const std::string& robot_name);
                     OracleControlSampler(const OracleControlSampler& other) = delete;
                     OracleControlSampler& operator=(const OracleControlSampler& other) = delete;
                     ~OracleControlSampler();
@@ -62,8 +55,10 @@ namespace mps {
                     float getFeasibility(const ::ompl::base::State* x_state,
                                          const ::ompl::base::State* x_prime_state,
                                          unsigned int active_obj_id) const;
-                    void setParameters(const Parameters& params);
 
+                    /**
+                     * Steers the robot to a given goal state.
+                     */
                     bool steerRobot(std::vector<::ompl::control::Control const*>& controls,
                                     const ::ompl::base::State* source,
                                     const ::ompl::base::State* dest);
@@ -73,22 +68,28 @@ namespace mps {
                     bool steerRobot(std::vector<::ompl::control::Control const*>& controls,
                                     const mps::planner::ompl::state::SimEnvWorldState* source,
                                     const mps::planner::ompl::state::SimEnvObjectState* dest);
+                    /**
+                     * Steers the system to the given state by trying to reduce the distance
+                     * for object obj_id. This method essentially just calls the pushing oracle
+                     * and asks for a pushing action.
+                     */
+                    bool steerPush(std::vector<::ompl::control::Control const*>& controls,
+                                   const ::ompl::base::State* source,
+                                   const ::ompl::base::State* dest,
+                                   unsigned int obj_id);
                     bool steerPush(std::vector<::ompl::control::Control const*>& controls,
                                    const mps::planner::ompl::state::SimEnvWorldState* source,
                                    const mps::planner::ompl::state::SimEnvWorldState* dest,
                                    unsigned int obj_id);
-                    bool steerPushSimple(std::vector<::ompl::control::Control const*>& controls,
-                                         const ::ompl::base::State* source,
-                                         const ::ompl::base::State* dest,
-                                         unsigned int obj_id);
-                    bool steerPushSimple(std::vector<::ompl::control::Control const*>& controls,
-                                   const mps::planner::ompl::state::SimEnvWorldState* source,
-                                   const mps::planner::ompl::state::SimEnvWorldState* dest,
-                                   unsigned int obj_id);
-                    void randomControl(std::vector<::ompl::control::Control const*>& controls,
-                                       const mps::planner::ompl::state::SimEnvWorldState* source,
-                                       const mps::planner::ompl::state::SimEnvWorldState* dest,
-                                       unsigned int obj_id);
+                    // bool steerPushSimple(std::vector<::ompl::control::Control const*>& controls,
+                    //                      const ::ompl::base::State* source,
+                    //                      const ::ompl::base::State* dest,
+                    //                      unsigned int obj_id);
+                    // bool steerPushSimple(std::vector<::ompl::control::Control const*>& controls,
+                    //                const mps::planner::ompl::state::SimEnvWorldState* source,
+                    //                const mps::planner::ompl::state::SimEnvWorldState* dest,
+                    //                unsigned int obj_id);
+                    void randomControl(std::vector<::ompl::control::Control const*>& controls);
 
                 private:
                     ::ompl::control::SpaceInformationPtr _si;
@@ -100,7 +101,6 @@ namespace mps {
                     std::size_t _control_idx;
                     std::vector<mps::planner::ompl::control::RealValueParameterizedControl*> _controls;
                     unsigned int _robot_id;
-                    Parameters _params;
 
                     inline mps::planner::ompl::control::RealValueParameterizedControl* getControl();
                     inline void resetControlIdx();

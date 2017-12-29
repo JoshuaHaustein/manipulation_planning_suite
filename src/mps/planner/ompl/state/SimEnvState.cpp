@@ -14,6 +14,9 @@
 #include <string>
 #include <boost/math/constants/constants.hpp>
 
+#define CARTESIAN_GRADIENT_DELTA 0.01f
+#define RADIANS_GRADIENT_DELTA 0.1f
+
 namespace mps {
     namespace planner {
         namespace ompl {
@@ -169,6 +172,7 @@ SimEnvObjectConfigurationSpace::SimEnvObjectConfigurationSpace(sim_env::ObjectCo
 {
     static const std::string log_prefix(_log_prefix + "SimEnvObjectConfigurationSpace]");
     assert(_active_dofs.size() > 0);
+    _gradient_deltas.resize(_active_dofs.size());
     setName("sim_env::Object(" + object->getName() + ")-ConfigurationSpace");
     _limits = position_limits;
     if (_limits.rows() == 0) {
@@ -246,6 +250,10 @@ void SimEnvObjectConfigurationSpace::computeDirection(const Eigen::VectorXf& con
     mps_logging::logDebug(boost::format("Computed direction is %1%") % dir.transpose(), log_prefix);
 }
 
+Eigen::VectorXf SimEnvObjectConfigurationSpace::getGradientDeltas() const {
+    return _gradient_deltas;
+}
+
 void SimEnvObjectConfigurationSpace::addPoseSubspace(sim_env::ObjectConstPtr object) {
     if (object->isStatic()) { // no pose subspace to add
         return;
@@ -274,6 +282,8 @@ void SimEnvObjectConfigurationSpace::addPoseSubspace2D(sim_env::ObjectConstPtr o
         pos_state_space->setBounds(makeBounds({0, 1}));
         pos_state_space->setName(internal::createSpaceName({0,1}, "ConfigurationSpace"));
         addSubspace(pos_state_space, _position_weight);
+        _gradient_deltas[0] = CARTESIAN_GRADIENT_DELTA;
+        _gradient_deltas[1] = CARTESIAN_GRADIENT_DELTA;
         internal::SubstateTypeDescription desc(internal::SubspaceType::RealVector, 2);
         _state_descriptions.push_back(desc);
         addSingleBasePoseSpace2D(idx_helper[2], 2); // and maybe also SO
@@ -301,6 +311,9 @@ void SimEnvObjectConfigurationSpace::addPoseSubspace3D(sim_env::ObjectConstPtr o
         pos_state_space->setName(internal::createSpaceName({0,1,2}, "ConfigurationSpace"));
         pos_state_space->setBounds(makeBounds({0,1,2}));
         addSubspace(pos_state_space, _position_weight);
+        _gradient_deltas[0] = CARTESIAN_GRADIENT_DELTA;
+        _gradient_deltas[1] = CARTESIAN_GRADIENT_DELTA;
+        _gradient_deltas[2] = CARTESIAN_GRADIENT_DELTA;
         internal::SubstateTypeDescription desc(internal::SubspaceType::RealVector, 3);
         _state_descriptions.push_back(desc);
         rdio = 3;
@@ -311,6 +324,8 @@ void SimEnvObjectConfigurationSpace::addPoseSubspace3D(sim_env::ObjectConstPtr o
         auto pos_state_space = std::make_shared<::ompl::base::RealVectorStateSpace>(2);
         pos_state_space->setName(internal::createSpaceName({idx_helper[0], idx_helper[1]}, "ConfigurationSpace"));
         pos_state_space->setBounds(makeBounds({0, 1}));
+        _gradient_deltas[0] = CARTESIAN_GRADIENT_DELTA;
+        _gradient_deltas[1] = CARTESIAN_GRADIENT_DELTA;
         addSubspace(pos_state_space, _position_weight);
         internal::SubstateTypeDescription desc(internal::SubspaceType::RealVector, 2);
         _state_descriptions.push_back(desc);
@@ -325,6 +340,9 @@ void SimEnvObjectConfigurationSpace::addPoseSubspace3D(sim_env::ObjectConstPtr o
         // we have all rotational degrees of freedom
         ::ompl::base::StateSpacePtr orientation_state_space = std::make_shared<::ompl::base::SO3StateSpace>();
         orientation_state_space->setName(internal::createSpaceName({3,4,5}, "ConfigurationSpace"));
+        _gradient_deltas[rdio] = RADIANS_GRADIENT_DELTA;
+        _gradient_deltas[rdio + 1] = RADIANS_GRADIENT_DELTA;
+        _gradient_deltas[rdio + 2] = RADIANS_GRADIENT_DELTA;
         addSubspace(orientation_state_space, _orientation_weight);
         internal::SubstateTypeDescription desc(internal::SubspaceType::SO3, 3);
         _state_descriptions.push_back(desc);
@@ -345,6 +363,7 @@ void SimEnvObjectConfigurationSpace::addJointsSubspace(sim_env::ObjectConstPtr o
         if (dof >= object->getNumBaseDOFs()) {
             joint_idx.push_back(dof);
             indices.push_back(i);
+            _gradient_deltas[i] = RADIANS_GRADIENT_DELTA;
         }
     }
     if (joint_idx.empty()) return;
@@ -369,11 +388,13 @@ void SimEnvObjectConfigurationSpace::addSingleBasePoseSpace2D(int dof, unsigned 
         space = real_space;
         type_desc.type = internal::SubspaceType::RealVector;
         weight = _position_weight;
+        _gradient_deltas[idx] = CARTESIAN_GRADIENT_DELTA;
     } else if (dof == 2) { // or base orientation
         assert(_active_dofs[idx] == dof);
         space = std::make_shared<::ompl::base::SO2StateSpace>();
         weight = _orientation_weight;
         type_desc.type = internal::SubspaceType::SO2;
+        _gradient_deltas[idx] = RADIANS_GRADIENT_DELTA;
     } else {
         return; // or some other odf, then we don't need to add it
     }
@@ -395,11 +416,13 @@ void SimEnvObjectConfigurationSpace::addSingleBasePoseSpace3D(int dof, unsigned 
         space = real_space;
         weight = _position_weight;
         type_desc.type = internal::SubspaceType::RealVector;
+        _gradient_deltas[idx] = CARTESIAN_GRADIENT_DELTA;
     } else if (dof == 3 or dof == 4 or dof == 5) { // else it's a base orientation
         assert(_active_dofs[idx] == dof);
         space = std::make_shared<::ompl::base::SO2StateSpace>();
         weight = _orientation_weight;
         type_desc.type = internal::SubspaceType::SO2;
+        _gradient_deltas[idx] = RADIANS_GRADIENT_DELTA;
     } else {
         return; // do not proceed further
     }
@@ -827,6 +850,10 @@ void SimEnvObjectStateSpace::freeState(::ompl::base::State* state) const {
     }
     delete[] object_state->components;
     delete object_state;
+}
+
+sim_env::ObjectConstPtr SimEnvObjectStateSpace::getObject() const {
+    return _object.lock();
 }
 
 ////////////////////////////////////////////////////////////////////////////////

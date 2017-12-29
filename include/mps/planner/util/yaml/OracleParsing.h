@@ -56,14 +56,17 @@ namespace mps {
                     float robot_bias;
                     mps::planner::pushing::PlanningProblem::OracleType oracle_type;
                     mps::planner::pushing::PlanningProblem::AlgorithmType algorithm_type;
+                    mps::planner::pushing::PlanningProblem::LocalPlanner local_planner_type;
                     unsigned int num_control_samples;
                 };
 
                 std::string oracleTypeToString(mps::planner::pushing::PlanningProblem::OracleType oracle_type);
+                std::string localPlannerTypeToString(mps::planner::pushing::PlanningProblem::LocalPlanner local_type);
                 std::string algorithmTypeToString(mps::planner::pushing::PlanningProblem::AlgorithmType oracle_type);
 
                 mps::planner::pushing::PlanningProblem::AlgorithmType stringToAlgorithmType(const std::string& str);
                 mps::planner::pushing::PlanningProblem::OracleType stringToOracleType(const std::string& str);
+                mps::planner::pushing::PlanningProblem::LocalPlanner stringToLocalPlannerType(const std::string& str);
 
                 void configurePlanningProblem(mps::planner::pushing::PlanningProblem& problem,
                                               const OraclePlanningProblemDesc& problem_desc);
@@ -155,6 +158,7 @@ namespace YAML {
             node["goals"] = problem_desc.goals;
             node["oracle_type"] = mps::planner::util::yaml::oracleTypeToString(problem_desc.oracle_type);
             node["algorithm_type"] = mps::planner::util::yaml::algorithmTypeToString(problem_desc.algorithm_type);
+            node["local_planner_type"] = mps::planner::util::yaml::localPlannerTypeToString(problem_desc.local_planner_type);
             node["num_control_samples"] = problem_desc.num_control_samples;
             return node;
         }
@@ -179,6 +183,11 @@ namespace YAML {
             }
             problem_desc.oracle_type = mps::planner::util::yaml::stringToOracleType(node["oracle_type"].as<std::string>());
             problem_desc.algorithm_type = mps::planner::util::yaml::stringToAlgorithmType(node["algorithm_type"].as<std::string>());
+            if (node["local_planner_type"]) {
+                problem_desc.local_planner_type = mps::planner::util::yaml::stringToLocalPlannerType(node["local_planner_type"].as<std::string>());
+            } else {
+                problem_desc.local_planner_type = mps::planner::pushing::PlanningProblem::LocalPlanner::Line;
+            }
             problem_desc.num_control_samples = node["num_control_samples"].as<unsigned int>();
             problem_desc.robot_bias = node["robot_bias"].as<float>();
             problem_desc.target_bias = node["target_bias"].as<float>();

@@ -19,8 +19,22 @@ RampComputer::RampComputer(
     _ramp_control = dynamic_cast<ompl::control::RampVelocityControl*>(_control_space->allocControl());
 }
 
+RampComputer::RampComputer(const RampComputer& other) :
+    _control_space(other._control_space),
+    _robot_space(other._robot_space) {
+    _ramp_control = dynamic_cast<ompl::control::RampVelocityControl*>(_control_space->allocControl());
+}
+
 mps::planner::pushing::oracle::RampComputer::~RampComputer() {
     _control_space->freeControl(_ramp_control);
+}
+
+RampComputer& RampComputer::operator=(const RampComputer& other) {
+    _control_space->freeControl(_ramp_control);
+    _control_space = other._control_space;
+    _robot_space = other._robot_space;
+    _ramp_control = dynamic_cast<ompl::control::RampVelocityControl*>(_control_space->allocControl());
+    return *this;
 }
 
 void mps::planner::pushing::oracle::RampComputer::steer(const Eigen::VectorXf &current_robot_state,
@@ -75,5 +89,15 @@ void mps::planner::pushing::oracle::RampComputer::steer(const Eigen::VectorXf &c
         control_params.push_back(_ramp_control->getParameters());
         distance = distance - max_plateau_dist;
     }
+}
+
+void mps::planner::pushing::oracle::RampComputer::steer(
+                                    const ompl::state::SimEnvObjectState* current_robot_state,
+                                    const ompl::state::SimEnvObjectState* desired_robot_state,
+                                    const ompl::state::SimEnvWorldState* current_world_state,
+                                    std::vector<Eigen::VectorXf>& control_params) const
+{
+    // we do not take the world state into account, so just forward it to the normal method
+    steer(current_robot_state->getConfiguration(), desired_robot_state->getConfiguration(), control_params);
 }
 
