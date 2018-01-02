@@ -13,6 +13,7 @@ Timer::Timer() {
 Timer::~Timer() = default;
 
 void Timer::startTimer(float time_out) {
+    _external_elapsed_time = 0.0;
     _time_out = time_out;
     _running = true;
     _start_time = std::clock();
