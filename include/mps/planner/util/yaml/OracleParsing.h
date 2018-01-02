@@ -38,7 +38,7 @@ namespace mps {
                 struct OraclePlanningProblemDesc {
                     std::string world_file;
                     std::string robot_name;
-                    std::string target_name;
+                    std::string training_object_name;
                     Eigen::Array2f x_limits;
                     Eigen::Array2f y_limits;
                     Eigen::Array2f z_limits;
@@ -54,6 +54,7 @@ namespace mps {
                     float goal_bias;
                     float target_bias;
                     float robot_bias;
+                    float p_rand;
                     mps::planner::pushing::PlanningProblem::OracleType oracle_type;
                     mps::planner::pushing::PlanningProblem::AlgorithmType algorithm_type;
                     mps::planner::pushing::PlanningProblem::LocalPlanner local_planner_type;
@@ -140,7 +141,7 @@ namespace YAML {
             Node node;
             node["world_file"] = problem_desc.world_file;
             node["robot_name"] = problem_desc.robot_name;
-            node["target_name"] = problem_desc.target_name;
+            if (not problem_desc.training_object_name.empty()) node["training_object_name"] = problem_desc.training_object_name;
             node["collision_policy"] = problem_desc.collision_policy;
             node["x_limits"] = problem_desc.x_limits;
             node["y_limits"] = problem_desc.y_limits;
@@ -160,12 +161,14 @@ namespace YAML {
             node["algorithm_type"] = mps::planner::util::yaml::algorithmTypeToString(problem_desc.algorithm_type);
             node["local_planner_type"] = mps::planner::util::yaml::localPlannerTypeToString(problem_desc.local_planner_type);
             node["num_control_samples"] = problem_desc.num_control_samples;
+            node["p_rand"] = problem_desc.p_rand;
             return node;
         }
 
         static bool decode(const Node &node, mps::planner::util::yaml::OraclePlanningProblemDesc &problem_desc) {
             problem_desc.world_file = node["world_file"].as<std::string>();
             problem_desc.robot_name = node["robot_name"].as<std::string>();
+            if (node["training_object_name"]) problem_desc.training_object_name = node["training_object_name"].as<std::string>();
             problem_desc.collision_policy = node["collision_policy"].as<mps::planner::util::yaml::CollisionPolicyDesc>();
             problem_desc.x_limits = node["x_limits"].as<Eigen::Array2f>();
             problem_desc.y_limits = node["y_limits"].as<Eigen::Array2f>();
@@ -192,6 +195,11 @@ namespace YAML {
             problem_desc.robot_bias = node["robot_bias"].as<float>();
             problem_desc.target_bias = node["target_bias"].as<float>();
             problem_desc.goal_bias = node["goal_bias"].as<float>();
+            if (node["p_rand"]) {
+                problem_desc.p_rand = node["p_rand"].as<float>();
+            } else {
+                problem_desc.p_rand = 0.5f;
+            }
             return true;
         }
     };

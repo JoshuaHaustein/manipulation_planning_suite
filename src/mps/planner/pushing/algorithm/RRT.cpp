@@ -835,26 +835,19 @@ void CompleteSliceBasedOracleRRT::selectTreeNode(const ompl::planning::essential
         assert(not candidate_slices.empty());
         // due to the projection, there is at least one slice we can extend the search from
         for (auto& candidate_slice : candidate_slices) {
-            // run over all and select good robot states for pushing
-            auto new_motion = getNewMotion();
-            _state_space->copyState(new_motion->getState(), candidate_slice->repr->getState());
-            // we do this by sampling a feasible state
-            _oracle_sampler->sampleFeasibleState(new_motion->getState(),
-                                                sample_slice->repr->getState(),
-                                                active_obj_id);
-            // and selecting the nearest one
-            auto nearest_state = candidate_slice->slice_samples_nn->nearest(new_motion);
-            float feasibility = _oracle_sampler->getFeasibility(nearest_state->getState(),
-                                                               sample_slice->repr->getState(),
-                                                               active_obj_id);
+            auto distance = _slice_distance_fn.distance(candidate_slice, sample_slice);
+            // TODO in case of distance == 0.0 (which should almost never happen), we should actually pick this slice
+            auto probability = distance != 0.0 ? 1.0 / distance : std::numeric_limits<double>::max();
             // save what we found
-            candidate_states.emplace_back(std::make_tuple(nearest_state, feasibility, new_motion));
+            candidate_states.emplace_back(std::make_tuple(candidate_slice, probability));
         }
         // from all the slices we took a look at, pick one state
-        auto selected_state_tuple = selectStateTuple(candidate_states);
-        selected_node = std::get<0>(selected_state_tuple); // we selected a state for extension
-        // finally, we also want to save the robot state that we sampled, so adjust the sample state
-        _state_space->copySubState(sample->getState(), std::get<2>(selected_state_tuple)->getState(), pb.robot_id);
+        auto selected_state_tuple = selectCandidateSlice(candidate_states);
+        auto selected_slice = std::get<0>(selected_state_tuple);
+        // sample a feasible robot state for the desired push
+        _oracle_sampler->sampleFeasibleState(sample->getState(), selected_slice->repr->getState(), active_obj_id);
+        // sample the node that is closest to a feasible state in this slice
+        selected_node = selected_slice->slice_samples_nn->nearest(sample);
     }
 }
 
@@ -938,7 +931,7 @@ void CompleteSliceBasedOracleRRT::projectSliceOnBall(SlicePtr sample_slice,
     _state_space->shiftState(sim_env_state_sample, radius / prev_distance * dir);
 }
 
-CompleteSliceBasedOracleRRT::ExtensionCandidateTuple CompleteSliceBasedOracleRRT::selectStateTuple(
+CompleteSliceBasedOracleRRT::ExtensionCandidateTuple CompleteSliceBasedOracleRRT::selectCandidateSlice(
         const std::vector<CompleteSliceBasedOracleRRT::ExtensionCandidateTuple> &candidates) const {
     float normalizer = 0.0f;
     for (const auto& candidate : candidates) {
