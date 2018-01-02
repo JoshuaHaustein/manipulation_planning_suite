@@ -113,6 +113,7 @@ void mps::planner::util::yaml::configurePlanningProblem(mps::planner::pushing::P
     problem.goal_bias = problem_desc.goal_bias;
     problem.robot_bias = problem_desc.robot_bias;
     problem.target_bias = problem_desc.target_bias;
+    problem.p_rand = problem_desc.p_rand;
     // TODO b_semi_dynamic
     // Collisions policy
     problem.collision_policy.setStaticCollisions(problem_desc.collision_policy.static_collisions_allowed);
