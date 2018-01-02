@@ -119,9 +119,9 @@ bool RearrangementRRT::plan(const PlanningQuery& pq,
     pq.goal_region->print(ss);
     logging::logDebug("Planning towards goal " + ss.str(), log_prefix);
     logging::logDebug("Entering main loop", log_prefix);
-    _timer.startTimer(pq.time_out);
+    timer_ptr->startTimer(pq.time_out);
     // Do the actual planning
-    while(not _timer.timeOutExceeded() and not pq.stopping_condition() && !solved) {
+    while(not timer_ptr->timeOutExceeded() and not pq.stopping_condition() && !solved) {
         blackboard.stats.num_iterations++;
         // sample a new state
         unsigned int active_obj_id = 0;
@@ -136,7 +136,7 @@ bool RearrangementRRT::plan(const PlanningQuery& pq,
         printState("Tree extended to ", final_motion->getState()); // TODO remove
     }
 
-    blackboard.stats.runtime = _timer.stopTimer();
+    blackboard.stats.runtime = timer_ptr->stopTimer();
     blackboard.stats.success = solved;
     ss.str("");
     blackboard.stats.print(ss);
@@ -612,6 +612,7 @@ void SliceBasedOracleRRT::setup(const PlanningQuery& pq, PlanningBlackboard& pb)
     _within_slice_distance_fn.setRobotId(pb.robot_id);
     _slices_nn->clear();
     _slices_list.clear();
+    _pushing_oracle->timer = timer_ptr;
 }
 
 bool SliceBasedOracleRRT::sample(mps::planner::ompl::planning::essentials::MotionPtr motion,

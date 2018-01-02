@@ -4,6 +4,7 @@
 #include <Eigen/Core>
 #include <memory>
 #include <vector>
+#include <mps/planner/util/Time.h>
 #include <mps/planner/ompl/state/SimEnvState.h>
 
 namespace mps {
@@ -97,9 +98,13 @@ namespace mps {
                                                      Eigen::VectorXf& new_robot_state) = 0;
 
                     virtual float getMaximalPushingDistance() const = 0;
-                    protected:
-                        std::vector<ObjectData> _object_data;
 
+                    /**
+                     * Optional timer for adding external cpu time to clock
+                     */
+                    std::shared_ptr<mps::planner::util::time::Timer> timer;
+                protected:
+                        std::vector<ObjectData> _object_data;
                 };
 
                 typedef std::shared_ptr<PushingOracle> PushingOraclePtr;

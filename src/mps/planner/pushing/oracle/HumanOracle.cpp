@@ -115,10 +115,14 @@ void HumanOracle::predictAction(const Eigen::VectorXf &current_robot_state,
                                 Eigen::VectorXf &control)
 {
     Eigen::Vector3f rel_obj(relativeSE2(next_obj_state, current_obj_state));
-    Eigen::Vector3f next_robot_state(current_robot_state[0], current_robot_state[1], current_robot_state[2]);
+    Eigen::Vector3f next_robot_state(next_obj_state[0], next_obj_state[1], current_robot_state[2]);
+    Eigen::Vector2f heading = rel_obj.head(2) / rel_obj.head(2).norm();
     // we essentially move the robot as far as the next object state is away from the current object state.
     // since the current robot state must be with some offset to the object, we will not overshoot
-    next_robot_state.head(2) += rel_obj.head(2);
+
+    // Move robot to object goal state, but subtract half of object size
+    float obj_size = fmax(_object_data[obj_id].width, _object_data[obj_id].height);
+    next_robot_state.head(2) -= heading * obj_size / 2.0;
     std::vector<Eigen::VectorXf> controls;
     _robot_steerer->steer(current_robot_state, next_robot_state, controls);
     assert(not controls.empty());

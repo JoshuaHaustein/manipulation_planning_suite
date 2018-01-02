@@ -29,6 +29,7 @@ message ActionResponse {
     required float dy = 2;
     required float dr = 3;
     required float t = 4;
+    required float cpu_time = 5;
 }
 
 message FeasibilityRequest {
@@ -58,6 +59,7 @@ message FeasibilityResponse {
     required float robot_x = 2;
     required float robot_y = 3;
     required float robot_radians = 4;
+    required float cpu_time = 5;
 }
 
 message PushabilityRequest {
@@ -84,7 +86,8 @@ message PushabilityRequest {
 
 message PushabilityResponse {
     required float mahalanobis = 1;
-    required float projected_object_x = 4;
-    required float projected_object_y = 5;
-    required float projected_object_radians = 6;
+    required float projected_object_x = 2;
+    required float projected_object_y = 3;
+    required float projected_object_radians = 4;
+    required float cpu_time = 5;
 }
