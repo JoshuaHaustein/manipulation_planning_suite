@@ -99,12 +99,12 @@ namespace mps {
 
                     virtual float getMaximalPushingDistance() const = 0;
 
-                    /**
-                     * Optional timer for adding external cpu time to clock
-                     */
-                    std::shared_ptr<mps::planner::util::time::Timer> timer;
-                protected:
-                        std::vector<ObjectData> _object_data;
+                   /**
+                    * Optional timer for adding external cpu time to clock
+                    */
+                   std::shared_ptr<mps::planner::util::time::Timer> timer;
+               protected:
+                   std::vector<ObjectData> _object_data;
                 };
 
                 typedef std::shared_ptr<PushingOracle> PushingOraclePtr;
