@@ -38,7 +38,7 @@ namespace mps {
                 struct OraclePlanningProblemDesc {
                     std::string world_file;
                     std::string robot_name;
-                    std::string target_name;
+                    std::string training_object_name;
                     Eigen::Array2f x_limits;
                     Eigen::Array2f y_limits;
                     Eigen::Array2f z_limits;
@@ -141,7 +141,7 @@ namespace YAML {
             Node node;
             node["world_file"] = problem_desc.world_file;
             node["robot_name"] = problem_desc.robot_name;
-            node["target_name"] = problem_desc.target_name;
+            if (not problem_desc.training_object_name.empty()) node["training_object_name"] = problem_desc.training_object_name;
             node["collision_policy"] = problem_desc.collision_policy;
             node["x_limits"] = problem_desc.x_limits;
             node["y_limits"] = problem_desc.y_limits;
@@ -168,6 +168,7 @@ namespace YAML {
         static bool decode(const Node &node, mps::planner::util::yaml::OraclePlanningProblemDesc &problem_desc) {
             problem_desc.world_file = node["world_file"].as<std::string>();
             problem_desc.robot_name = node["robot_name"].as<std::string>();
+            if (node["training_object_name"]) problem_desc.training_object_name = node["training_object_name"].as<std::string>();
             problem_desc.collision_policy = node["collision_policy"].as<mps::planner::util::yaml::CollisionPolicyDesc>();
             problem_desc.x_limits = node["x_limits"].as<Eigen::Array2f>();
             problem_desc.y_limits = node["y_limits"].as<Eigen::Array2f>();
