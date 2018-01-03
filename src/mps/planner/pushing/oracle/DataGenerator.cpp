@@ -1,8 +1,11 @@
 //
 // Created by joshua on 9/29/17.
 //
+#include <iostream>
 #include <mps/planner/pushing/oracle/DataGenerator.h>
 #include <mps/planner/util/Random.h>
+#include <mps/planner/pushing/OraclePushPlanner.h>
+#include <mps/planner/util/yaml/OracleParsing.h>
 #include <ompl/base/samplers/UniformValidStateSampler.h>
 #include <boost/math/constants/constants.hpp>
 
@@ -101,6 +104,71 @@ void DataGenerator::generateData(const std::string& file_name,
     _space_information->freeState(mean_state);
     _space_information->freeState(new_state);
     _space_information->freeState(noisy_state);
+    _space_information->freeControl(control);
+}
+
+void DataGenerator::evaluateOracle(mps::planner::ompl::state::goal::RelocationGoalSpecification goal,
+                                   mps::planner::pushing::oracle::OracleControlSamplerPtr oracle_sampler,
+                                   mps::planner::ompl::state::SimEnvWorldStateSpacePtr state_space,
+                                   const std::string& file_name,
+                                   unsigned int num_samples,
+                                   const std::string& annotation)
+{
+    ::ompl::control::ControlSamplerPtr control_sampler = _space_information->allocControlSampler();
+    auto state_sampler = _space_information->getStateSpace()->allocStateSampler();
+    auto validity_checker = _space_information->getStateValidityChecker();
+    ::ompl::base::State* start_state = _space_information->allocState();
+    ::ompl::base::State* feasible_state = _space_information->allocState();
+    ::ompl::base::State* goal_state = _space_information->allocState();
+    ::ompl::base::State* final_state = _space_information->allocState();
+    ::ompl::control::Control* control = _space_information->allocControl();
+    mps::planner::util::serialize::OracleDataDumper data_dumper;
+    data_dumper.setFile(file_name);
+    data_dumper.openFile();
+    unsigned int i = 0;
+    while (i < num_samples) {
+        _world->getLogger()->logInfo(boost::format("Sampling sample %i") % i, "[OracleEvaluation]");
+        bool has_states;
+        has_states = sampleValidState(start_state, state_sampler, validity_checker);
+        if (not has_states) {
+            _world->getLogger()->logWarn("Failed to sample a valid state, we might end up in a infinite loop here!");
+            continue;
+        }
+        has_states = sampleValidState(goal_state, state_sampler, validity_checker);
+        if (not has_states) {
+            _world->getLogger()->logWarn("Failed to sample a valid state, we might end up in a infinite loop here!");
+            continue;
+        }
+
+        std::vector<::ompl::control::Control const*> oracle_controls;
+        bool success = false;
+
+        int target_id = state_space->getObjectIndex(goal.object_name);
+
+        success = oracle_sampler->steerRobot(oracle_controls, start_state, goal_state);
+        if (not success) {
+            _world->getLogger()->logWarn("State propagation to feasible state failed, skipping");
+            continue;
+        }
+        // TODO change to steer from achieved feasible state
+        success = oracle_sampler->steerPush(oracle_controls, feasible_state, goal_state, target_id);
+
+        control_sampler->sample(control);
+        _world->getLogger()->logDebug("Sampled state");
+        success = _state_propagator->propagate(start_state, control, final_state);
+        _world->getLogger()->logDebug("Propagated state");
+        if (not success) {
+            _world->getLogger()->logWarn("State propagation to goal state failed, skipping");
+            continue;
+        }
+        data_dumper.saveData(goal_state, final_state, control, annotation);
+        std::cout << "Finished one trial" << std::endl;
+        ++i;
+    }
+    _space_information->freeState(start_state);
+    _space_information->freeState(feasible_state);
+    _space_information->freeState(goal_state);
+    _space_information->freeState(final_state);
     _space_information->freeControl(control);
 }
 

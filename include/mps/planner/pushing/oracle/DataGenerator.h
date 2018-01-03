@@ -5,7 +5,9 @@
 #ifndef MANIPULATION_PLANNING_SUITE_DATAGENERATOR_H
 #define MANIPULATION_PLANNING_SUITE_DATAGENERATOR_H
 
+#include <mps/planner/pushing/oracle/OracleControlSampler.h>
 #include <mps/planner/ompl/state/SimEnvState.h>
+#include <mps/planner/ompl/state/goal/ObjectsRelocationGoal.h>
 #include <mps/planner/ompl/control/RampVelocityControl.h>
 #include <mps/planner/ompl/control/SimEnvStatePropagator.h>
 
@@ -34,6 +36,12 @@ namespace mps {
                                       const std::string& annotation,
                                       bool deterministic=false,
                                       unsigned int num_noise_samples=10);
+                    void evaluateOracle(mps::planner::ompl::state::goal::RelocationGoalSpecification goal,
+                                        mps::planner::pushing::oracle::OracleControlSamplerPtr oracle_sampler,
+                                        mps::planner::ompl::state::SimEnvWorldStateSpacePtr state_space,
+                                        const std::string& file_name,
+                                        unsigned int num_samples,
+                                        const std::string& annotation);
                 private:
                     struct ObjectDynamics {
                         float mass;
