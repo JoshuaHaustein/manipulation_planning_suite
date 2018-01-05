@@ -127,7 +127,6 @@ void DataGenerator::evaluateOracle(mps::planner::ompl::state::goal::RelocationGo
     data_dumper.openFile();
     unsigned int i = 0;
     while (i < num_samples) {
-        _world->getLogger()->logInfo(boost::format("Sampling sample %i") % i, "[OracleEvaluation]");
         bool has_states;
         has_states = sampleValidState(start_state, state_sampler, validity_checker);
         if (not has_states) {
@@ -140,6 +139,8 @@ void DataGenerator::evaluateOracle(mps::planner::ompl::state::goal::RelocationGo
             continue;
         }
 
+        std::cout << start_state << goal_state << std::endl;
+
         std::vector<::ompl::control::Control const*> oracle_controls;
         bool success = false;
 
@@ -150,8 +151,13 @@ void DataGenerator::evaluateOracle(mps::planner::ompl::state::goal::RelocationGo
             _world->getLogger()->logWarn("State propagation to feasible state failed, skipping");
             continue;
         }
+
         // TODO change to steer from achieved feasible state
-        success = oracle_sampler->steerPush(oracle_controls, feasible_state, goal_state, target_id);
+        success = oracle_sampler->steerPush(oracle_controls, start_state, goal_state, target_id);
+        if (not success) {
+            _world->getLogger()->logWarn("State propagation for pushing failed, skipping");
+            continue;
+        }
 
         control_sampler->sample(control);
         _world->getLogger()->logDebug("Sampled state");
