@@ -122,6 +122,7 @@ namespace mps {
                                       float time_out,
                                       const std::string& robot_name);
                         PlanningQuery(const PlanningQuery& other);
+                        std::string toString() const;
                     };
 
 

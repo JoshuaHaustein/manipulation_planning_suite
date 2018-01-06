@@ -44,6 +44,27 @@ RearrangementRRT::PlanningQuery::PlanningQuery(ompl::state::goal::ObjectsRelocat
 
 RearrangementRRT::PlanningQuery::PlanningQuery(const PlanningQuery &other) = default;
 
+std::string RearrangementRRT::PlanningQuery::toString() const {
+    std::stringstream ss;
+    // TODO for completeness should also print target and start state
+    ss << "Robot name: " << robot_name << "\n";
+    ss << "timeout: " << time_out << "\n";
+    ss << "goal_bias: " << goal_bias << "\n";
+    ss << "target_bias: " << target_bias << "\n";
+    ss << "robot_bias: " << robot_bias << "\n";
+    ss << "slice_volume: " << slice_volume << "\n";
+    ss << "do_slice_ball_projection: " << do_slice_ball_projection << "\n";
+    ss << "max_slice_distance: " << max_slice_distance << "\n";
+    ss << "action_randomness: " << action_randomness << "\n";
+    ss << "num_control_samples: " << num_control_samples << "\n";
+    ss << "distance weights: ";
+    for (auto& weight : weights) {
+        ss << weight << ", ";
+    }
+    ss << "\n";
+    return ss.str();
+}
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////// PlanningBlackboard ////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -83,6 +104,7 @@ RearrangementRRT::RearrangementRRT(::ompl::control::SpaceInformationPtr si) :
 RearrangementRRT::~RearrangementRRT() = default;
 
 void RearrangementRRT::setup(const PlanningQuery& pq, PlanningBlackboard& blackboard) {
+    static const std::string log_prefix(_log_prefix + "setup]");
     setupBlackboard(blackboard);
     _distance_measure->setAll(true);
     _distance_measure->setWeights(pq.weights);
@@ -90,6 +112,7 @@ void RearrangementRRT::setup(const PlanningQuery& pq, PlanningBlackboard& blackb
         _debug_drawer->clear();
     }
     _tree->clear();
+    logging::logDebug("Planner setup for the following query:\n " + blackboard.pq.toString(), log_prefix);
 }
 
 bool RearrangementRRT::plan(const PlanningQuery& pq, mps::planner::ompl::planning::essentials::PathPtr path) {
