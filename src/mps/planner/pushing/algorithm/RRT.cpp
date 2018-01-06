@@ -463,6 +463,7 @@ bool OracleRearrangementRRT::extend(mps::planner::ompl::planning::essentials::Mo
                                  PlanningBlackboard &pb)
 {
     static const std::string log_prefix("[mps::planner::pushing::algorithm::OracleRearrangementRRT::extend]");
+    logging::logDebug("Attempting to extend search tree", log_prefix);
     std::vector<const ::ompl::control::Control*> controls;
     // first only move the robot TODO: This often pushes the object away from us
     _oracle_sampler->steerRobot(controls, start->getState(), dest);
@@ -475,6 +476,7 @@ bool OracleRearrangementRRT::extend(mps::planner::ompl::planning::essentials::Mo
     extendStep(controls, start, last_motion, pb, extension_success, b_goal);
     // next, if the active object is not the robot, try a push
     if (extension_success and active_obj_id != pb.robot_id and not b_goal) {
+        logging::logDebug("Steering robot to feasible state successful, attempting push", log_prefix);
         controls.clear();
         _oracle_sampler->steerPush(controls, last_motion->getState(), dest, active_obj_id);
         extendStep(controls, last_motion, last_motion, pb, extension_success, b_goal);
@@ -655,11 +657,13 @@ void SliceBasedOracleRRT::selectTreeNode(const ompl::planning::essentials::Motio
             // check whether the sample slice is within a radius of max_slice_distance to the nearest slice
             if (pb.pq.do_slice_ball_projection and slice_distance > pb.pq.max_slice_distance) {
                 // if not, project it
+                logging::logDebug("Projecting slice to reachable slice ball", log_prefix);
                 projectSliceOnBall(sample_slice, nearest_slice, pb.pq.max_slice_distance, pb);
             }
             _slices_nn->nearestR(sample_slice, 1.00001f * pb.pq.max_slice_distance, candidate_slices);
             if (not pb.pq.do_slice_ball_projection and candidate_slices.empty()) {
                 // in case we didn't project, there may be no neighbor within radius max_slice_distance
+                logging::logDebug("Projection disabled, adding nearest slice to candidates", log_prefix);
                 candidate_slices.push_back(nearest_slice);
             }
             assert(not candidate_slices.empty());
@@ -681,7 +685,6 @@ void SliceBasedOracleRRT::selectTreeNode(const ompl::planning::essentials::Motio
         }
     }
 }
-
 
 void SliceBasedOracleRRT::addToTree(MotionPtr new_motion, MotionPtr parent, PlanningBlackboard& pb) {
     RearrangementRRT::addToTree(new_motion, parent, pb);

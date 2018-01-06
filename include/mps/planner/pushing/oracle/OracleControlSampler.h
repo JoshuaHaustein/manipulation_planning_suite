@@ -47,9 +47,8 @@ namespace mps {
                      * @param sample_state - contains x_t and as a result will contain the sampled x_r. WARNING: Must be an instance of SimEnvState
                      * @param target_state - contains x'_t. WARNING: Must be an instance of SimEnvState
                      * @param local_target_obj - object identifier t
-                     * @return feasibility of sampled state
                      */
-                    float sampleFeasibleState(::ompl::base::State* x_state,
+                    void sampleFeasibleState(::ompl::base::State* x_state,
                                               const ::ompl::base::State* x_prime_state,
                                               unsigned int local_target_obj);
                     float getFeasibility(const ::ompl::base::State* x_state,

@@ -72,7 +72,7 @@ void OracleControlSampler::sampleTo(std::vector<::ompl::control::Control const*>
     }
 }
 
-float OracleControlSampler::sampleFeasibleState(::ompl::base::State* x_state_ompl,
+void OracleControlSampler::sampleFeasibleState(::ompl::base::State* x_state_ompl,
                                                const ::ompl::base::State* x_prime_state_ompl,
                                                unsigned int local_target_obj)
 {
@@ -94,7 +94,6 @@ float OracleControlSampler::sampleFeasibleState(::ompl::base::State* x_state_omp
     // mps_logging::logDebug(boost::format("Sampled robot state %1% based on feasibility") % new_robot_dest.transpose(), log_prefix);
     // the oracle gave us a new robot state we should move to instead
     x_r->setConfiguration(new_robot_dest);
-    return _pushing_oracle->predictFeasibility(new_robot_dest, current_obj_state, target_obj_state, local_target_obj);
 }
 
 float OracleControlSampler::getFeasibility(const ::ompl::base::State* x_state_ompl,
