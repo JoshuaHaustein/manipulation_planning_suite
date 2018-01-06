@@ -34,9 +34,8 @@ namespace mps {
                 };
 
                 enum AlgorithmType {
-                    Naive = 0, OracleRRT = 1, SliceOracleRRT = 2, CompleteSliceOracleRRT = 3,
-                    GNATSamplingSliceOracleRRT = 4, SemanticGNATSamplingSliceOracleRRT = 5,
-                    HybridActionRRT = 6
+                    Naive = 0, OracleRRT = 1, SliceOracleRRT = 2, GNATSamplingSliceOracleRRT = 3,
+                    SemanticGNATSamplingSliceOracleRRT = 4, HybridActionRRT = 5
                 };
                 // world related parameters
                 sim_env::WorldPtr world;
@@ -70,6 +69,7 @@ namespace mps {
                 float target_bias;
                 unsigned int num_slice_neighbors;
                 float p_rand;
+                bool do_slice_ball_projection;
                 // flag whether to enable debug info
                 bool debug;
                 float sdf_resolution;

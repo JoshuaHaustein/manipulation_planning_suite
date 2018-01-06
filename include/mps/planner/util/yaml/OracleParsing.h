@@ -55,6 +55,7 @@ namespace mps {
                     float target_bias;
                     float robot_bias;
                     float p_rand;
+                    bool do_slice_ball_projection;
                     mps::planner::pushing::PlanningProblem::OracleType oracle_type;
                     mps::planner::pushing::PlanningProblem::AlgorithmType algorithm_type;
                     mps::planner::pushing::PlanningProblem::LocalPlanner local_planner_type;
@@ -162,6 +163,7 @@ namespace YAML {
             node["local_planner_type"] = mps::planner::util::yaml::localPlannerTypeToString(problem_desc.local_planner_type);
             node["num_control_samples"] = problem_desc.num_control_samples;
             node["p_rand"] = problem_desc.p_rand;
+            node["do_slice_ball_projection"] = problem_desc.do_slice_ball_projection;
             return node;
         }
 
@@ -199,6 +201,11 @@ namespace YAML {
                 problem_desc.p_rand = node["p_rand"].as<float>();
             } else {
                 problem_desc.p_rand = 0.5f;
+            }
+            if (node["do_slice_ball_projection"]) {
+                problem_desc.do_slice_ball_projection = node["do_slice_ball_projection"].as<bool>();
+            } else {
+                problem_desc.do_slice_ball_projection = true;
             }
             return true;
         }

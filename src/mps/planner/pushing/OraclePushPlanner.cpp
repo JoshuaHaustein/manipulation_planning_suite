@@ -48,6 +48,7 @@ PlanningProblem::PlanningProblem(sim_env::WorldPtr world, sim_env::RobotPtr robo
     target_bias = 0.1f;
     num_slice_neighbors = 8;
     p_rand = 0.5f;
+    do_slice_ball_projection = true;
     // create default workspace limits
     workspace_bounds.x_limits[0] = std::numeric_limits<float>::lowest();
     workspace_bounds.x_limits[1] = std::numeric_limits<float>::max();
@@ -180,10 +181,13 @@ bool OraclePushPlanner::solve(PlanningSolution& solution) {
                                                   _planning_problem.robot->getName());
     pq.stopping_condition = _planning_problem.stopping_condition;
     pq.weights = _distance_weights;
-    pq.num_slice_neighbors = _planning_problem.num_slice_neighbors;
+    pq.action_randomness = _planning_problem.p_rand;
+    pq.goal_bias = _planning_problem.goal_bias;
+    pq.num_control_samples = _planning_problem.num_control_samples;
     pq.goal_bias = _planning_problem.goal_bias;
     pq.robot_bias = _planning_problem.robot_bias;
     pq.target_bias = _planning_problem.target_bias;
+    pq.do_slice_ball_projection = _planning_problem.do_slice_ball_projection;
     solution.path = std::make_shared<mps::planner::ompl::planning::essentials::Path>(_space_information);
     // before planning. let's save the state of the world
     auto world_state = _planning_problem.world->getWorldState();
@@ -375,8 +379,7 @@ mps::planner::pushing::algorithm::RearrangementRRTPtr OraclePushPlanner::createA
     mps::planner::pushing::algorithm::RearrangementRRTPtr algo;
     if (_planning_problem.algorithm_type == PlanningProblem::AlgorithmType::Naive)
     {
-        algo = std::make_shared<algorithm::NaiveRearrangementRRT>(_space_information,
-                                                                  _planning_problem.num_control_samples);
+        algo = std::make_shared<algorithm::NaiveRearrangementRRT>(_space_information);
         util::logging::logDebug("Using naive algorithm, i.e. no oracle at all", log_prefix);
     } else {
         // all other algorithms need an oracle
@@ -452,18 +455,10 @@ mps::planner::pushing::algorithm::RearrangementRRTPtr OraclePushPlanner::createA
                                                                         _planning_problem.robot->getName());
                 break;
             }
-            case PlanningProblem::AlgorithmType::CompleteSliceOracleRRT:
-            {
-                algo = std::make_shared<algorithm::CompleteSliceBasedOracleRRT>(_space_information,
-                                                                                pushing_oracle,
-                                                                                robot_oracle,
-                                                                                _planning_problem.robot->getName());
-                break;
-            }
             case PlanningProblem::AlgorithmType::HybridActionRRT:
             {
-                algo = std::make_shared<algorithm::HybridActionRRT>(_space_information, _planning_problem.num_control_samples,
-                                                                    _planning_problem.p_rand, pushing_oracle,
+                algo = std::make_shared<algorithm::HybridActionRRT>(_space_information,
+                                                                    pushing_oracle,
                                                                     robot_oracle, _planning_problem.robot->getName());
                 break;
             }

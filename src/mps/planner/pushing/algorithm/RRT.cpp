@@ -35,9 +35,11 @@ RearrangementRRT::PlanningQuery::PlanningQuery(ompl::state::goal::ObjectsRelocat
     goal_bias = 0.2f;
     robot_bias = 0.0f;
     target_bias = 0.25f;
-    num_slice_neighbors = 8;
     slice_volume = 0.01;
+    do_slice_ball_projection = true;
     max_slice_distance = 0.0;
+    action_randomness = 0.5f;
+    num_control_samples = 10;
 }
 
 RearrangementRRT::PlanningQuery::PlanningQuery(const PlanningQuery &other) = default;
@@ -184,26 +186,10 @@ void RearrangementRRT::selectTreeNode(const ompl::planning::essentials::MotionPt
 {
     static const std::string log_prefix("[mps::planner::pushing::algorithm::RearrangementRRT::selectTreeNode]");
     logging::logDebug("Searching for nearest neighbor.", log_prefix);
-
-    ///////////////////////////////////////////////////////////////////////////
-    /////////////// VARIANT 1: Whole state space in distance //////////////////
-    ////////////// CAN USE ANY NEAREST NEIGHBOR STRUCTURE /////////////////////
+    // select nearest state using full state space distance function
    _distance_measure->setAll(true); // we take the full state into account here
    selected_node = _tree->nearest(sample_motion);
-   if (not sample_is_goal) {
-       active_obj_id = sampleActiveObject(pb);
-   }
-
-    ///////////////////////////////////////////////////////////////////////////
-    /////////////// VARIANT 2: We pick an active object first /////////////////
-    ////////////// NEEDS LINEAR OR SQRT NEAREST NEIGHBOR //////////////////////
-    // _distance_measure->setAll(false); // we take only the active object into account here
-    // if (not sample_is_goal) {
-    //     active_obj_id = sampleActiveObject(pb);
-    // }
-    // _distance_measure->setActive(active_obj_id, true);
-    // selected_node = _tree->nearest(sample_motion);
-    pb.stats.num_nearest_neighbor_queries++;
+   pb.stats.num_nearest_neighbor_queries++;
 }
 
 void RearrangementRRT::addToTree(mps::planner::ompl::planning::essentials::MotionPtr new_motion,
@@ -289,6 +275,11 @@ NaiveRearrangementRRT::NaiveRearrangementRRT(::ompl::control::SpaceInformationPt
 
 NaiveRearrangementRRT::~NaiveRearrangementRRT() = default;
 
+void NaiveRearrangementRRT::setup(const PlanningQuery& pq, PlanningBlackboard& blackboard) {
+    _control_sampler.setK(pq.num_control_samples);
+    RearrangementRRT::setup(pq, blackboard);
+}
+
 bool NaiveRearrangementRRT::extend(mps::planner::ompl::planning::essentials::MotionPtr start,
                                    ::ompl::base::State* dest,
                                    unsigned int active_obj_id,
@@ -324,7 +315,7 @@ bool NaiveRearrangementRRT::extend(mps::planner::ompl::planning::essentials::Mot
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 /////////////////////////////////// HybridActionRRT ////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-HybridActionRRT::HybridActionRRT(::ompl::control::SpaceInformationPtr si, unsigned int k, float p_rand,
+HybridActionRRT::HybridActionRRT(::ompl::control::SpaceInformationPtr si,
                                  mps::planner::pushing::oracle::PushingOraclePtr pushing_oracle,
                                  mps::planner::pushing::oracle::RobotOraclePtr robot_oracle,
                                  const std::string& robot_name) :
@@ -333,8 +324,6 @@ HybridActionRRT::HybridActionRRT(::ompl::control::SpaceInformationPtr si, unsign
     _oracle_sampler = std::make_shared<mps::planner::pushing::oracle::OracleControlSampler>(si, pushing_oracle, robot_oracle, robot_name);
     _state_propagator = std::dynamic_pointer_cast<mps_control::SimEnvStatePropagator>(si->getStatePropagator());
     assert(_state_propagator);
-    _k = k;
-    _p_rand = p_rand;
 }
 
 HybridActionRRT::~HybridActionRRT() = default;
@@ -348,7 +337,7 @@ bool HybridActionRRT::extend(mps::planner::ompl::planning::essentials::MotionPtr
     static const std::string log_prefix("[HybridActionRRT::extend]");
     float best_distance = std::numeric_limits<float>::max();
     std::vector<MotionPtr> best_state_action_sequence;
-    for (unsigned int i = 0; i < _k; ++i) {
+    for (unsigned int i = 0; i < pb.pq.num_control_samples; ++i) {
         std::vector<::ompl::control::Control const*> controls;
         sampleActionSequence(controls, start, dest, pb);
         std::vector<MotionPtr> new_motion_sequence;
@@ -389,7 +378,7 @@ void HybridActionRRT::sampleActionSequence(std::vector<::ompl::control::Control 
     static const std::string log_prefix("[HybridActionRRT::sampleActionSequence]");
     float random_die = _rng->uniform01();
     printState(log_prefix + "Sampling action sequence given state ", start->getState());
-    if (random_die < _p_rand) {
+    if (random_die < pb.pq.action_randomness) {
         logging::logDebug("Sampling random action sequence", log_prefix);
         // sample random action
         _oracle_sampler->randomControl(controls);
@@ -451,6 +440,7 @@ void HybridActionRRT::freeMotionList(std::vector<MotionPtr>& motions) {
     }
     motions.clear();
 }
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 /////////////////////////////////// OracleRearrangementRRT /////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -467,47 +457,66 @@ OracleRearrangementRRT::OracleRearrangementRRT(::ompl::control::SpaceInformation
 
 OracleRearrangementRRT::~OracleRearrangementRRT() = default;
 
-bool OracleRearrangementRRT::extend(MotionPtr start,
-                                   ::ompl::base::State *dest,
-                                   unsigned int active_obj_id,
-                                   MotionPtr &last_motion,
-                                   RearrangementRRT::PlanningBlackboard &pb) {
-    static const std::string log_prefix("[mps::planner::pushing::algorithm::OracleRearrangementRRT]");
+bool OracleRearrangementRRT::extend(mps::planner::ompl::planning::essentials::MotionPtr start,
+                                 ::ompl::base::State *dest, unsigned int active_obj_id,
+                                 mps::planner::ompl::planning::essentials::MotionPtr &last_motion,
+                                 PlanningBlackboard &pb)
+{
+    static const std::string log_prefix("[mps::planner::pushing::algorithm::OracleRearrangementRRT::extend]");
     std::vector<const ::ompl::control::Control*> controls;
-    _oracle_sampler->sampleTo(controls,
-                              start->getState(),
-                              dest,
-                              active_obj_id);
+    // first only move the robot TODO: This often pushes the object away from us
+    _oracle_sampler->steerRobot(controls, start->getState(), dest);
     if (controls.empty()) {
         logging::logErr("OracleControlSampler provided no controls at all", log_prefix);
+        return false;
     }
+    bool extension_success = false;
+    bool b_goal = false;
+    extendStep(controls, start, last_motion, pb, extension_success, b_goal);
+    // next, if the active object is not the robot, try a push
+    if (extension_success and active_obj_id != pb.robot_id and not b_goal) {
+        controls.clear();
+        _oracle_sampler->steerPush(controls, last_motion->getState(), dest, active_obj_id);
+        extendStep(controls, last_motion, last_motion, pb, extension_success, b_goal);
+    }
+    return b_goal;
+}
 
-    MotionPtr prev_motion = start;
-    last_motion = start;
+void OracleRearrangementRRT::extendStep(const std::vector<const ::ompl::control::Control*>& controls,
+                                        const mps::planner::ompl::planning::essentials::MotionPtr &start_motion,
+                                        mps::planner::ompl::planning::essentials::MotionPtr &result_motion,
+                                        PlanningBlackboard& pb,
+                                        bool& extension_success,
+                                        bool& goal_reached)
+{
+    static const std::string log_prefix("[mps::planner::pushing::algorithm::OracleRearrangementRRT::extendStep]");
+    goal_reached = false;
+    extension_success = false;
+    auto prev_motion = start_motion;
     for (auto const* control : controls) {
         MotionPtr new_motion = getNewMotion();
         _si->copyControl(new_motion->getControl(), control);
-        bool success = _state_propagator->propagate(prev_motion->getState(),
-                                                    new_motion->getControl(),
-                                                    new_motion->getState());
+        extension_success = _state_propagator->propagate(prev_motion->getState(),
+                                                         new_motion->getControl(),
+                                                         new_motion->getState());
         pb.stats.num_state_propagations++;
-        if (not success) { // we failed, no tree extension
+        if (not extension_success) { // we failed, no tree extension
             logging::logDebug("A control provided by the oracle failed. ", log_prefix);
             cacheMotion(new_motion);
-            return false;
+            return;
         }
         printState("Oracle control took us to state ", new_motion->getState());
         // we extended the tree a bit, add this new state to the tree
         addToTree(new_motion, prev_motion, pb);
-        last_motion = new_motion;
+        result_motion = new_motion;
         if (pb.pq.goal_region->isSatisfied(new_motion->getState())) {
             // we reached a goal!
-            return true;
+            goal_reached = true;
+            return;
         }
         // otherwise we just continue extending as long as we have controls
         prev_motion = new_motion;
     }
-    return false;
 }
 
 mps::planner::pushing::oracle::OracleControlSamplerPtr OracleRearrangementRRT::getOracleSampler() const {
@@ -613,90 +622,66 @@ void SliceBasedOracleRRT::setup(const PlanningQuery& pq, PlanningBlackboard& pb)
     _slices_nn->clear();
     _slices_list.clear();
     _pushing_oracle->timer = timer_ptr;
-}
-
-bool SliceBasedOracleRRT::sample(mps::planner::ompl::planning::essentials::MotionPtr motion,
-                                 unsigned int& target_obj_id,
-                                 PlanningBlackboard& pb)
-{
-    bool sampled_goal = false;
-    ////////////////////////////////// Variant 1 //////////////////////////////////
-    // TODO if this variant is better, we don't need to overwrite, because it is actually the default sample method
-    auto nu = (float)_rng->uniform01();
-    if (nu < pb.pq.goal_bias and pb.pq.goal_region->canSample()) {
-        pb.pq.goal_region->sampleGoal(motion->getState());
-        target_obj_id = pb.pq.goal_region->sampleTargetObjectIndex();
-        sampled_goal = true;
-    } else {
-        _state_sampler->sample(motion->getState());
-        target_obj_id = sampleActiveObject(pb);
+    if (pq.max_slice_distance <= 0.0f) {
+        assert(_state_space->getNumObjects() > 1);
+        pb.pq.max_slice_distance = (_state_space->getNumObjects() - 1) * _pushing_oracle->getMaximalPushingDistance();
     }
-    pb.stats.num_samples++;
-
-    ////////////////////////////////// Variant 2 //////////////////////////////////
-//    if (nu < pb.pq.robot_bias) { // we want to move the robot
-//        // Variant 2 - sample a slice from _slices and sample a robot configuration and merge them
-//        // TODO
-//        unsigned int slice_idx = (unsigned int)(_rng->uniformInt(0, std::max(_slices_list.size() - 1, 0)));
-//        auto slice = _slices_list.at(slice_idx):
-//        // first set the slice
-//        _si->copyState(motion->getState(), slice->repr->getState());
-//        // now sample a random robot state within that slice
-//        auto world_state = dynamic_cast<mps_state::SimEnvWorldState*>(motion->getState());
-//        auto robot_state = world_state->getObjectState(pb.robot_id);
-//        _robot_state_sampler->sampleUniform(robot_state); // TODO might need valid state sampler
-//        target_obj_id = pb.robot_id;
-//    } else if (nu < pb.pq.target_bias + pb.pq.robot_bias and pb.pq.goal_region->canSample()) {
-//        // we want to move the target object to the goal
-//        pb.pq.goal_region->sampleGoal(motion->getState());
-//        target_obj_id = pb.target_id;
-//        sampled_goal = true;
-//    } else { // we want to explore more slices
-//        _state_sampler->sampleUniform(motion->getState());
-//        // TODO should we bias this on the target object as well?
-//        target_obj_id = (unsigned int)(_rng->uniformInt(0, _state_space->getNumObjects() - 1));
-//    }
-    return sampled_goal;
 }
 
-void SliceBasedOracleRRT::selectTreeNode(const ompl::planning::essentials::MotionPtr& sample,
-                                         ompl::planning::essentials::MotionPtr& selected_node,
-                                         unsigned int& active_obj_id,
-                                         bool sample_is_goal,
-                                         PlanningBlackboard& pb)
+
+void SliceBasedOracleRRT::selectTreeNode(const ompl::planning::essentials::MotionPtr &sample,
+                                         ompl::planning::essentials::MotionPtr &selected_node,
+                                         unsigned int &active_obj_id, bool sample_is_goal,
+                                         PlanningBlackboard &pb)
 {
+    static const std::string log_prefix("[mps::planner::pushing::algorithm::SliceBasedOracleRRT]");
+    logging::logDebug("Selecting tree node to extend for given sample", log_prefix);
+    // pick the slice that is closest to the sample
+    SlicePtr nearest_slice = getSlice(sample);
+    printState("Rerpresentative of nearest slice is ", nearest_slice->repr->getState());
+
     if (active_obj_id == pb.robot_id) {
-        // pick the slice that is closest to the sample
-        SlicePtr slice = getSlice(sample);
         // the selected node is the nearest node to the sample within the selected slice (in terms of robot distance)
-        selected_node = slice->slice_samples_nn->nearest(sample);
+        selected_node = nearest_slice->slice_samples_nn->nearest(sample);
     } else {
-        // pick k nearest neighbor slices of sample
-        std::vector<SlicePtr> k_neighbors;
-        // TODO can we pick k in a good way? Would it make sense to query within some radius?
-        getKSlices(sample, pb.pq.num_slice_neighbors, k_neighbors);
-        float best_feasibility = std::numeric_limits<float>::lowest();
-        for (std::size_t slice_idx = 0; slice_idx < k_neighbors.size(); ++slice_idx) {
-            SlicePtr slice_i = k_neighbors.at(slice_idx);
-            // search within this slice for a better sample
-            std::size_t num_states = slice_i->slice_samples_list.size();
-            std::size_t random_offset = (std::size_t) (_rng->uniformInt(0, std::max((int) (num_states) - 1, 0)));
-            std::size_t num_checks = (std::size_t) (std::floor(std::sqrt((double) (num_states))));
-            // we do not want to run through all, so we step through it in sqrt(n) steps with random initial offset
-            // this is inspired by the approximate nearest neighbor search in ompl::NearestNeighborsSqrtApprox
-            for (unsigned int state_check = 0; state_check < num_checks; ++state_check) {
-                std::size_t state_idx = (random_offset + state_check * num_checks) % num_states;
-                MotionPtr state = slice_i->slice_samples_list.at(state_idx);
-                float feasibility = evaluateFeasibility(state, sample, pb.robot_id, active_obj_id);
-                if (feasibility > best_feasibility) {
-                    selected_node = state;
-                    best_feasibility = feasibility;
-                }
+        // check whether the closest slice is within max_slice_distance
+        float slice_distance = distanceToSlice(sample, nearest_slice);
+        if (slice_distance > pb.pq.slice_volume) { // our sample lies within a new slice
+            auto sample_slice = getNewSlice(sample);
+            printState("Sample slice is new, representative is: ", sample_slice->repr->getState());
+            // get all neighbor slices within radius max_slice_distance
+            std::vector<ExtensionCandidateTuple> candidate_states;
+            std::vector<SlicePtr> candidate_slices;
+            // check whether the sample slice is within a radius of max_slice_distance to the nearest slice
+            if (pb.pq.do_slice_ball_projection and slice_distance > pb.pq.max_slice_distance) {
+                // if not, project it
+                projectSliceOnBall(sample_slice, nearest_slice, pb.pq.max_slice_distance, pb);
             }
+            _slices_nn->nearestR(sample_slice, 1.00001f * pb.pq.max_slice_distance, candidate_slices);
+            if (not pb.pq.do_slice_ball_projection and candidate_slices.empty()) {
+                // in case we didn't project, there may be no neighbor within radius max_slice_distance
+                candidate_slices.push_back(nearest_slice);
+            }
+            assert(not candidate_slices.empty());
+            // there is at least one slice we can extend the search from
+            for (auto& candidate_slice : candidate_slices) {
+                auto distance = _slice_distance_fn.distance(candidate_slice, sample_slice);
+                assert(distance > pb.pq.slice_volume);
+                auto probability = 1.0 / distance;
+                // save what we found
+                candidate_states.emplace_back(std::make_tuple(candidate_slice, probability));
+            }
+            // from all the slices we took a look at, pick one state
+            auto selected_state_tuple = selectCandidateSlice(candidate_states);
+            auto selected_slice = std::get<0>(selected_state_tuple);
+            // sample a feasible robot state for the desired push
+            _oracle_sampler->sampleFeasibleState(sample->getState(), selected_slice->repr->getState(), active_obj_id);
+            // sample the node that is closest to a feasible state in this slice
+            selected_node = selected_slice->slice_samples_nn->nearest(sample);
         }
-
     }
 }
+
 
 void SliceBasedOracleRRT::addToTree(MotionPtr new_motion, MotionPtr parent, PlanningBlackboard& pb) {
     RearrangementRRT::addToTree(new_motion, parent, pb);
@@ -712,14 +697,6 @@ void SliceBasedOracleRRT::addToTree(MotionPtr new_motion, MotionPtr parent, Plan
     } else { // the new motion/state is in the same slice
         closest_slice->addSample(new_motion);
     }
-}
-
-void SliceBasedOracleRRT::getKSlices(MotionPtr motion,
-                                     unsigned int k,
-                                     std::vector<SlicePtr>& slices) const {
-    auto query_slice = getNewSlice(motion);
-    _slices_nn->nearestK(query_slice, k, slices);
-    cacheSlice(query_slice);
 }
 
 SliceBasedOracleRRT::SlicePtr SliceBasedOracleRRT::getSlice(MotionPtr motion) const {
@@ -742,29 +719,6 @@ float SliceBasedOracleRRT::distanceToSlice(ompl::planning::essentials::MotionPtr
     return distance;
 }
 
-float SliceBasedOracleRRT::evaluateFeasibility(ompl::planning::essentials::MotionPtr from_motion,
-                                               ompl::planning::essentials::MotionPtr to_motion,
-                                               unsigned int robot_id,
-                                               unsigned int target_id) const
-{
-    // extract from state
-    auto from_world_state = dynamic_cast<mps_state::SimEnvWorldState*>(from_motion->getState());
-    auto from_robot_state = from_world_state->getObjectState(robot_id);
-    auto from_object_state = from_world_state->getObjectState(target_id);
-    // extract to state
-    auto to_world_state = dynamic_cast<mps_state::SimEnvWorldState*>(to_motion->getState());
-    auto to_object_state = to_world_state->getObjectState(target_id);
-    // extract Eigen vectors
-    Eigen::VectorXf eigen_current_robot = from_robot_state->getConfiguration();
-    Eigen::VectorXf eigen_current_object = from_object_state->getConfiguration();
-    Eigen::VectorXf eigen_next_object = to_object_state->getConfiguration();
-    // prepare oracle and let it predict feasibility
-    ////////////////////////////////////////// Pushability projection //////////////////////////////////////
-    Eigen::VectorXf projected_object_state;
-    // TODO minimal pushability needs to be externally settable
-    _pushing_oracle->projectToPushability(eigen_current_object, eigen_next_object, 1.0f, target_id, projected_object_state);
-    return _pushing_oracle->predictFeasibility(eigen_current_robot, eigen_current_object, projected_object_state, target_id);
-}
 
 SliceBasedOracleRRT::SlicePtr SliceBasedOracleRRT::getNewSlice(ompl::planning::essentials::MotionPtr motion) const {
     if (_slices_cache.empty()) {
@@ -784,136 +738,7 @@ void SliceBasedOracleRRT::cacheSlice(SliceBasedOracleRRT::SlicePtr slice) const 
     _slices_cache.push(slice);
 }
 
-//////////////////////////////////////// CompleteSliceBasedOracleRRT ////////////////////////////////////////////////
-CompleteSliceBasedOracleRRT::CompleteSliceBasedOracleRRT(::ompl::control::SpaceInformationPtr si,
-                                                         mps::planner::pushing::oracle::PushingOraclePtr pushing_oracle,
-                                                         mps::planner::pushing::oracle::RobotOraclePtr robot_oracle,
-                                                         const std::string &robot_name) :
-    SliceBasedOracleRRT(si, pushing_oracle, robot_oracle, robot_name)
-{
-
-}
-
-CompleteSliceBasedOracleRRT::~CompleteSliceBasedOracleRRT() = default;
-
-void CompleteSliceBasedOracleRRT::setup(const PlanningQuery &pq, PlanningBlackboard &blackboard)
-{
-    SliceBasedOracleRRT::setup(pq, blackboard);
-    if (blackboard.pq.max_slice_distance <= 0.0f) {
-        assert(_state_space->getNumObjects() > 1);
-        blackboard.pq.max_slice_distance = (_state_space->getNumObjects() - 1) * _pushing_oracle->getMaximalPushingDistance();
-    }
-}
-
-void CompleteSliceBasedOracleRRT::selectTreeNode(const ompl::planning::essentials::MotionPtr &sample,
-                                                 ompl::planning::essentials::MotionPtr &selected_node,
-                                                 unsigned int &active_obj_id, bool sample_is_goal,
-                                                 PlanningBlackboard &pb)
-{
-    static const std::string log_prefix("[mps::planner::pushing::algorithm::CompleteSliceBasedOracleRRT]");
-    logging::logDebug("Selecting tree node to extend for given sample", log_prefix);
-    // pick the slice that is closest to the sample
-    SlicePtr nearest_slice = getSlice(sample);
-    printState("Rerpresentative of nearest slice is ", nearest_slice->repr->getState());
-
-    if (active_obj_id == pb.robot_id) {
-        // the selected node is the nearest node to the sample within the selected slice (in terms of robot distance)
-        selected_node = nearest_slice->slice_samples_nn->nearest(sample);
-    } else {
-        // check whether the closest slice is within max_slice_distance
-        float slice_distance = distanceToSlice(sample, nearest_slice);
-        auto sample_slice = getNewSlice(sample);
-        if (slice_distance > pb.pq.max_slice_distance) {
-            // else project it
-            projectSliceOnBall(sample_slice, nearest_slice, pb.pq.max_slice_distance, pb);
-        }
-        // next get all neighbor slices within radius max_slice_distance
-        std::vector<ExtensionCandidateTuple> candidate_states;
-        std::vector<SlicePtr> candidate_slices;
-        printState("Sample slice is ", sample_slice->repr->getState());
-        _slices_nn->nearestR(sample_slice, 1.00001f * pb.pq.max_slice_distance, candidate_slices);
-        assert(not candidate_slices.empty());
-        // due to the projection, there is at least one slice we can extend the search from
-        for (auto& candidate_slice : candidate_slices) {
-            auto distance = _slice_distance_fn.distance(candidate_slice, sample_slice);
-            // TODO in case of distance == 0.0 (which should almost never happen), we should actually pick this slice
-            auto probability = distance != 0.0 ? 1.0 / distance : std::numeric_limits<double>::max();
-            // save what we found
-            candidate_states.emplace_back(std::make_tuple(candidate_slice, probability));
-        }
-        // from all the slices we took a look at, pick one state
-        auto selected_state_tuple = selectCandidateSlice(candidate_states);
-        auto selected_slice = std::get<0>(selected_state_tuple);
-        // sample a feasible robot state for the desired push
-        _oracle_sampler->sampleFeasibleState(sample->getState(), selected_slice->repr->getState(), active_obj_id);
-        // sample the node that is closest to a feasible state in this slice
-        selected_node = selected_slice->slice_samples_nn->nearest(sample);
-    }
-}
-
-bool CompleteSliceBasedOracleRRT::extend(mps::planner::ompl::planning::essentials::MotionPtr start,
-                                         ::ompl::base::State *dest, unsigned int active_obj_id,
-                                         mps::planner::ompl::planning::essentials::MotionPtr &last_motion,
-                                         PlanningBlackboard &pb)
-{
-    static const std::string log_prefix("[mps::planner::pushing::algorithm::CompleteSliceBasedOracleRRT::extend]");
-    std::vector<const ::ompl::control::Control*> controls;
-    // first only move the robot TODO: This often pushes the object away from us
-    _oracle_sampler->steerRobot(controls, start->getState(), dest);
-    if (controls.empty()) {
-        logging::logErr("OracleControlSampler provided no controls at all", log_prefix);
-        return false;
-    }
-    bool extension_success = false;
-    bool b_goal = false;
-    extendStep(controls, start, last_motion, pb, extension_success, b_goal);
-    // next, if the active object is not the robot, try a push
-    if (extension_success and active_obj_id != pb.robot_id and not b_goal) {
-        controls.clear();
-        _oracle_sampler->steerPush(controls, last_motion->getState(), dest, active_obj_id);
-        extendStep(controls, last_motion, last_motion, pb, extension_success, b_goal);
-    }
-    return b_goal;
-}
-
-void CompleteSliceBasedOracleRRT::extendStep(const std::vector<const ::ompl::control::Control*>& controls,
-                                             const mps::planner::ompl::planning::essentials::MotionPtr &start_motion,
-                                             mps::planner::ompl::planning::essentials::MotionPtr &result_motion,
-                                             PlanningBlackboard& pb,
-                                             bool& extension_success,
-                                             bool& goal_reached)
-{
-    static const std::string log_prefix("[mps::planner::pushing::algorithm::CompleteSliceBasedOracleRRT::extendStep]");
-    goal_reached = false;
-    extension_success = false;
-    auto prev_motion = start_motion;
-    for (auto const* control : controls) {
-        MotionPtr new_motion = getNewMotion();
-        _si->copyControl(new_motion->getControl(), control);
-        extension_success = _state_propagator->propagate(prev_motion->getState(),
-                                                         new_motion->getControl(),
-                                                         new_motion->getState());
-        pb.stats.num_state_propagations++;
-        if (not extension_success) { // we failed, no tree extension
-            logging::logDebug("A control provided by the oracle failed. ", log_prefix);
-            cacheMotion(new_motion);
-            return;
-        }
-        printState("Oracle control took us to state ", new_motion->getState());
-        // we extended the tree a bit, add this new state to the tree
-        addToTree(new_motion, prev_motion, pb);
-        result_motion = new_motion;
-        if (pb.pq.goal_region->isSatisfied(new_motion->getState())) {
-            // we reached a goal!
-            goal_reached = true;
-            return;
-        }
-        // otherwise we just continue extending as long as we have controls
-        prev_motion = new_motion;
-    }
-}
-
-void CompleteSliceBasedOracleRRT::projectSliceOnBall(SlicePtr sample_slice,
+void SliceBasedOracleRRT::projectSliceOnBall(SlicePtr sample_slice,
                                                      SliceConstPtr center_slice,
                                                      float radius,
                                                      PlanningBlackboard& pb)
@@ -931,8 +756,8 @@ void CompleteSliceBasedOracleRRT::projectSliceOnBall(SlicePtr sample_slice,
     _state_space->shiftState(sim_env_state_sample, radius / prev_distance * dir);
 }
 
-CompleteSliceBasedOracleRRT::ExtensionCandidateTuple CompleteSliceBasedOracleRRT::selectCandidateSlice(
-        const std::vector<CompleteSliceBasedOracleRRT::ExtensionCandidateTuple> &candidates) const {
+SliceBasedOracleRRT::ExtensionCandidateTuple SliceBasedOracleRRT::selectCandidateSlice(
+        const std::vector<SliceBasedOracleRRT::ExtensionCandidateTuple> &candidates) const {
     float normalizer = 0.0f;
     for (const auto& candidate : candidates) {
         normalizer += std::get<1>(candidate);
@@ -956,7 +781,7 @@ CompleteSliceBasedOracleRRT::ExtensionCandidateTuple CompleteSliceBasedOracleRRT
 //                                                          mps::planner::pushing::oracle::RobotOraclePtr robot_oracle,
 //                                                          const std::string &robot_name,
 //                                                          const oracle::OracleControlSampler::Parameters &params) :
-//     CompleteSliceBasedOracleRRT(si, pushing_oracle, robot_oracle, robot_name, params)
+//     SliceBasedOracleRRT(si, pushing_oracle, robot_oracle, robot_name, params)
 // {
 // }
 
