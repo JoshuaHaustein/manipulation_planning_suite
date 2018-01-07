@@ -5,6 +5,7 @@
 #include <mps/planner/ompl/state/goal/ObjectsRelocationGoal.h>
 #include <mps/planner/ompl/state/SimEnvState.h>
 #include <mps/planner/util/Random.h>
+#include <mps/planner/util/Logging.h>
 
 #include <algorithm>
 #include <limits>
@@ -39,12 +40,14 @@ ObjectsRelocationGoal::ObjectsRelocationGoal(::ompl::base::SpaceInformationPtr s
 ObjectsRelocationGoal::ObjectsRelocationGoal(::ompl::base::SpaceInformationPtr si,
                                             const std::vector<RelocationGoalSpecification>& goal_specifications) :
     ::ompl::base::GoalSampleableRegion(si),
-    _goal_specifications(goal_specifications)
+    _goal_specifications(goal_specifications),
+    _max_num_attempts(100) // TODO make settable
 {
     _state_sampler = si_->allocStateSampler();
     _rng = util::random::getDefaultRandomGenerator();
     ::ompl::base::StateSpacePtr ss = si_->getStateSpace();
     SimEnvWorldStateSpacePtr sim_env_ss = std::dynamic_pointer_cast<SimEnvWorldStateSpace>(ss);
+    _validity_checker = si->getStateValidityChecker();
     if(!sim_env_ss) {
         throw std::logic_error("[mps::planner::ompl::state::goal::ObjectRelocationGoal] Unknown state space type encountered.");
     }
@@ -62,29 +65,39 @@ ObjectsRelocationGoal::ObjectsRelocationGoal(::ompl::base::SpaceInformationPtr s
 ObjectsRelocationGoal::~ObjectsRelocationGoal() = default;
 
 void ObjectsRelocationGoal::sampleGoal(::ompl::base::State *state) const {
+    static const std::string log_prefix("[ObjectsRelocationGoal::sampleGoal]");
     // TODO do we need to ensure that the sampled state is valid??
     auto* sim_env_state = dynamic_cast<SimEnvWorldState*>(state);
     if (!sim_env_state) {
         throw std::logic_error("[mps::planner::ompl::state::goal::ObjectRelocationGoal::sampleGoal] Unknown state type encountered.");
     }
-    // first sample a normal state
-    _state_sampler->sampleUniform(state);
-    // now sample a pose of the target object around the target position
-    // TODO this is hardcoded for sampling in a plane, either change documentation or make this more general
-    double values[2];
-    for (const auto& goal_specification : _goal_specifications) {
-        _rng->uniformInBall(goal_specification.position_tolerance, 2, values);
-        Eigen::Vector3f position(goal_specification.goal_position);
-        position[0] += values[0];
-        position[1] += values[1];
-        auto* object_state = sim_env_state->getObjectState(goal_specification.id);
-        // TODO this is hardcoded for SE(2) objects
-        // set the position of the target object
-        Eigen::VectorXf config;
-        object_state->getConfiguration(config);
-        config[0] = position[0];
-        config[1] = position[1];
-        object_state->setConfiguration(config);
+    unsigned int num_attempts = 0;
+    bool has_valid_goal = false;
+    while (num_attempts < _max_num_attempts and not has_valid_goal) {
+        // first sample a normal state
+        _state_sampler->sampleUniform(state);
+        // now sample a pose of the target object around the target position
+        // TODO this is hardcoded for sampling in a plane, either change documentation or make this more general
+        double values[2];
+        for (const auto& goal_specification : _goal_specifications) {
+            _rng->uniformInBall(goal_specification.position_tolerance, 2, values);
+            Eigen::Vector3f position(goal_specification.goal_position);
+            position[0] += values[0];
+            position[1] += values[1];
+            auto* object_state = sim_env_state->getObjectState(goal_specification.id);
+            // TODO this is hardcoded for SE(2) objects
+            // set the position of the target object
+            Eigen::VectorXf config;
+            object_state->getConfiguration(config);
+            config[0] = position[0];
+            config[1] = position[1];
+            object_state->setConfiguration(config);
+        }
+        has_valid_goal = _validity_checker->isValid(state);
+        ++num_attempts;
+    }
+    if (not has_valid_goal) {
+        mps::planner::util::logging::logWarn("Failed to sample a valid goal, providing invalid one.", log_prefix);
     }
 }
 

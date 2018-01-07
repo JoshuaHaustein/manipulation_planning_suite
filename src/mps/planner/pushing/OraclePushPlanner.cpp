@@ -49,7 +49,7 @@ PlanningProblem::PlanningProblem(sim_env::WorldPtr world, sim_env::RobotPtr robo
     action_noise = 0.01f;
     state_noise = 0.001f;
     do_slice_ball_projection = true;
-    min_state_distance = 0.01;
+    min_state_distance = 0.001;
     // create default workspace limits
     workspace_bounds.x_limits[0] = std::numeric_limits<float>::lowest();
     workspace_bounds.x_limits[1] = std::numeric_limits<float>::max();
@@ -124,12 +124,12 @@ bool OraclePushPlanner::setup(PlanningProblem& problem) {
     _validity_checker =
             std::make_shared<mps::planner::ompl::state::SimEnvValidityChecker>(_space_information,
                                                                                _planning_problem.world);
+    _validity_checker->collision_policy = _planning_problem.collision_policy;
     _space_information->setStateValidityChecker(_validity_checker);
     _state_propagator =
             std::make_shared<mps::planner::ompl::control::SimEnvStatePropagator>(_space_information,
                                                                                  _planning_problem.world,
                                                                                  _planning_problem.robot_controller,
-                                                                                 _planning_problem.collision_policy,
                                                                                  _planning_problem.b_semi_dynamic,
                                                                                  _planning_problem.t_max);
     prepareDistanceWeights();
@@ -431,13 +431,13 @@ mps::planner::pushing::algorithm::RearrangementRRTPtr OraclePushPlanner::createA
             case PlanningProblem::OracleType::Human:
             {
                 pushing_oracle = std::make_shared<oracle::HumanOracle>(robot_oracle, object_data);
-                util::logging::logDebug("Using human made oracle!", log_prefix);
+                util::logging::logInfo("Using human made oracle!", log_prefix);
                 break;
             }
             case PlanningProblem::OracleType::Learned:
             {
                 pushing_oracle = std::make_shared<oracle::LearnedPipeOracle>(object_data);
-                util::logging::logDebug("Using learned oracle!", log_prefix);
+                util::logging::logInfo("Using learned oracle!", log_prefix);
                 break;
             }
         }
@@ -448,6 +448,7 @@ mps::planner::pushing::algorithm::RearrangementRRTPtr OraclePushPlanner::createA
                                                                            pushing_oracle,
                                                                            robot_oracle,
                                                                            _planning_problem.robot->getName());
+                util::logging::logInfo("Using OracleRRT", log_prefix);
                 break;
             }
             case PlanningProblem::AlgorithmType ::SliceOracleRRT:
@@ -456,6 +457,7 @@ mps::planner::pushing::algorithm::RearrangementRRTPtr OraclePushPlanner::createA
                                                                         pushing_oracle,
                                                                         robot_oracle,
                                                                         _planning_problem.robot->getName());
+                util::logging::logInfo("Using SliceOracleRRT", log_prefix);
                 break;
             }
             case PlanningProblem::AlgorithmType::HybridActionRRT:
@@ -463,6 +465,7 @@ mps::planner::pushing::algorithm::RearrangementRRTPtr OraclePushPlanner::createA
                 algo = std::make_shared<algorithm::HybridActionRRT>(_space_information,
                                                                     pushing_oracle,
                                                                     robot_oracle, _planning_problem.robot->getName());
+                util::logging::logInfo("Using HybridActionRRT", log_prefix);
                 break;
             }
             case PlanningProblem::AlgorithmType::GNATSamplingSliceOracleRRT:

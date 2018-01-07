@@ -21,13 +21,17 @@ void mps::planner::util::logging::resetLogger() {
 }
 
 void mps::planner::util::logging::logDebug(const std::string &msg, const std::string &prefix) {
+    #ifdef DEBUG_PRINTOUTS
     auto logger = getLogger();
     logger->logDebug(msg, prefix);
+    #endif
 }
 
 void mps::planner::util::logging::logDebug(const boost::format& bf, const std::string &prefix) {
+    #ifdef DEBUG_PRINTOUTS
     auto logger = getLogger();
     logger->logDebug(bf, prefix);
+    #endif
 }
 
 void mps::planner::util::logging::logWarn(const std::string &msg, const std::string &prefix) {

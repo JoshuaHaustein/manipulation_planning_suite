@@ -92,6 +92,8 @@ namespace mps {
                         std::vector<unsigned int> _target_indices;
                         ::ompl::base::StateSamplerPtr _state_sampler;
                         ::ompl::RNGPtr _rng;
+                        ::ompl::base::StateValidityCheckerPtr _validity_checker;
+                        unsigned int _max_num_attempts;
 
                     };
                     typedef std::shared_ptr<ObjectsRelocationGoal> ObjectsRelocationGoalPtr;
