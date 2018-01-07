@@ -35,7 +35,8 @@ RearrangementRRT::PlanningQuery::PlanningQuery(ompl::state::goal::ObjectsRelocat
     goal_bias = 0.2f;
     robot_bias = 0.0f;
     target_bias = 0.25f;
-    slice_volume = 0.01;
+    min_state_distance = 0.01;
+    min_slice_distance = min_state_distance;
     do_slice_ball_projection = true;
     max_slice_distance = 0.0;
     action_randomness = 0.5f;
@@ -52,9 +53,9 @@ std::string RearrangementRRT::PlanningQuery::toString() const {
     ss << "goal_bias: " << goal_bias << "\n";
     ss << "target_bias: " << target_bias << "\n";
     ss << "robot_bias: " << robot_bias << "\n";
-    ss << "slice_volume: " << slice_volume << "\n";
-    ss << "do_slice_ball_projection: " << do_slice_ball_projection << "\n";
+    ss << "min_state_distance: " << min_state_distance << "\n";
     ss << "max_slice_distance: " << max_slice_distance << "\n";
+    ss << "do_slice_ball_projection: " << do_slice_ball_projection << "\n";
     ss << "action_randomness: " << action_randomness << "\n";
     ss << "num_control_samples: " << num_control_samples << "\n";
     ss << "distance weights: ";
@@ -112,7 +113,7 @@ void RearrangementRRT::setup(const PlanningQuery& pq, PlanningBlackboard& blackb
         _debug_drawer->clear();
     }
     _tree->clear();
-    logging::logDebug("Planner setup for the following query:\n " + blackboard.pq.toString(), log_prefix);
+    logging::logInfo("Planner setup for the following query:\n " + blackboard.pq.toString(), log_prefix);
 }
 
 bool RearrangementRRT::plan(const PlanningQuery& pq, mps::planner::ompl::planning::essentials::PathPtr path) {
@@ -629,7 +630,6 @@ SliceBasedOracleRRT::SliceBasedOracleRRT(::ompl::control::SpaceInformationPtr si
     _pushing_oracle(pushing_oracle)
 {
     _slices_nn = std::make_shared<::ompl::NearestNeighborsGNAT <SlicePtr> >();
-
     _slices_nn->setDistanceFunction(std::bind(&SliceBasedOracleRRT::SliceDistance::distance,
                                               std::ref(_slice_distance_fn),
                                               std::placeholders::_1,
@@ -642,7 +642,9 @@ void SliceBasedOracleRRT::setup(const PlanningQuery& pq, PlanningBlackboard& pb)
     RearrangementRRT::setup(pq, pb);
     _robot_state_space = std::dynamic_pointer_cast<mps_state::SimEnvObjectStateSpace>(_state_space->getSubspace(pb.robot_id));
     _robot_state_sampler = _robot_state_space->allocStateSampler();
+    _slice_distance_fn.distance_measure.setWeights(pq.weights);
     _slice_distance_fn.setRobotId(pb.robot_id);
+    _within_slice_distance_fn.distance_measure.setWeights(pq.weights);
     _within_slice_distance_fn.setRobotId(pb.robot_id);
     _slices_nn->clear();
     _slices_list.clear();
@@ -651,8 +653,13 @@ void SliceBasedOracleRRT::setup(const PlanningQuery& pq, PlanningBlackboard& pb)
         assert(_state_space->getNumObjects() > 1);
         pb.pq.max_slice_distance = (_state_space->getNumObjects() - 1) * _pushing_oracle->getMaximalPushingDistance();
     }
+    // set min slice distance
+    // TODO should update this using state space and distance weights
+    pb.pq.min_slice_distance = (_state_space->getNumObjects() - 1) * pb.pq.min_state_distance;
+    if (pb.pq.min_slice_distance >= pb.pq.max_slice_distance) {
+        throw std::runtime_error("[SliceBasedOracleRRT::setup] min slice distance must be smaller max slice distance");
+    }
 }
-
 
 void SliceBasedOracleRRT::selectTreeNode(const ompl::planning::essentials::MotionPtr &sample,
                                          ompl::planning::essentials::MotionPtr &selected_node,
@@ -671,7 +678,7 @@ void SliceBasedOracleRRT::selectTreeNode(const ompl::planning::essentials::Motio
     } else {
         // check whether the closest slice is within max_slice_distance
         float slice_distance = distanceToSlice(sample, nearest_slice);
-        if (slice_distance > pb.pq.slice_volume) { // our sample lies within a new slice
+        if (slice_distance > pb.pq.min_slice_distance) { // our sample lies within a new slice
             auto sample_slice = getNewSlice(sample);
             printState("Sample slice is new, representative is: ", sample_slice->repr->getState());
             // get all neighbor slices within radius max_slice_distance
@@ -693,10 +700,10 @@ void SliceBasedOracleRRT::selectTreeNode(const ompl::planning::essentials::Motio
             // there is at least one slice we can extend the search from
             for (auto& candidate_slice : candidate_slices) {
                 auto distance = _slice_distance_fn.distance(candidate_slice, sample_slice);
-                assert(distance > pb.pq.slice_volume);
-                auto probability = 1.0 / distance;
+                assert(distance > pb.pq.min_slice_distance);
+                auto weight = 1.0 / distance;
                 // save what we found
-                candidate_states.emplace_back(std::make_tuple(candidate_slice, probability));
+                candidate_states.emplace_back(std::make_tuple(candidate_slice, weight));
             }
             // from all the slices we took a look at, pick one state
             auto selected_state_tuple = selectCandidateSlice(candidate_states);
@@ -713,7 +720,7 @@ void SliceBasedOracleRRT::addToTree(MotionPtr new_motion, MotionPtr parent, Plan
     RearrangementRRT::addToTree(new_motion, parent, pb);
     SlicePtr closest_slice = getSlice(new_motion);
     float slice_distance = distanceToSlice(new_motion, closest_slice);
-    if (slice_distance > pb.pq.slice_volume) { // we discovered a new slice!
+    if (slice_distance > pb.pq.min_slice_distance) { // we discovered a new slice!
         auto new_slice = getNewSlice(new_motion);
         _slices_nn->add(new_slice);
         _slices_list.push_back(new_slice);
@@ -765,9 +772,9 @@ void SliceBasedOracleRRT::cacheSlice(SliceBasedOracleRRT::SlicePtr slice) const 
 }
 
 void SliceBasedOracleRRT::projectSliceOnBall(SlicePtr sample_slice,
-                                                     SliceConstPtr center_slice,
-                                                     float radius,
-                                                     PlanningBlackboard& pb)
+                                             SliceConstPtr center_slice,
+                                             float radius,
+                                             PlanningBlackboard& pb)
 {
     auto sim_env_state_center = center_slice->repr->getState()->as<mps::planner::ompl::state::SimEnvWorldStateSpace::StateType>();
     auto sim_env_state_sample = sample_slice->repr->getState()->as<mps::planner::ompl::state::SimEnvWorldStateSpace::StateType>();

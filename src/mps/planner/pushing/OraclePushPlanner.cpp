@@ -46,9 +46,9 @@ PlanningProblem::PlanningProblem(sim_env::WorldPtr world, sim_env::RobotPtr robo
     goal_bias = 0.1f;
     robot_bias = 0.1f;
     target_bias = 0.1f;
-    num_slice_neighbors = 8;
     p_rand = 0.5f;
     do_slice_ball_projection = true;
+    min_state_distance = 0.01;
     // create default workspace limits
     workspace_bounds.x_limits[0] = std::numeric_limits<float>::lowest();
     workspace_bounds.x_limits[1] = std::numeric_limits<float>::max();
@@ -188,6 +188,7 @@ bool OraclePushPlanner::solve(PlanningSolution& solution) {
     pq.robot_bias = _planning_problem.robot_bias;
     pq.target_bias = _planning_problem.target_bias;
     pq.do_slice_ball_projection = _planning_problem.do_slice_ball_projection;
+    pq.min_state_distance = _planning_problem.min_state_distance;
     solution.path = std::make_shared<mps::planner::ompl::planning::essentials::Path>(_space_information);
     // before planning. let's save the state of the world
     auto world_state = _planning_problem.world->getWorldState();

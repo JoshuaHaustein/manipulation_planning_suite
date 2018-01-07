@@ -67,9 +67,9 @@ namespace mps {
                 float goal_bias;
                 float robot_bias;
                 float target_bias;
-                unsigned int num_slice_neighbors;
                 float p_rand;
                 bool do_slice_ball_projection;
+                float min_state_distance;
                 // flag whether to enable debug info
                 bool debug;
                 float sdf_resolution;

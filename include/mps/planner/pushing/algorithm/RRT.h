@@ -110,7 +110,8 @@ namespace mps {
                         float goal_bias; // fraction of times the planner should attempt to connect to a goal configuration
                         float target_bias; // fraction of times the planner should focus at least on moving the target objects
                         float robot_bias; // fraction of times the planner should focus at least on moving the robot
-                        float slice_volume; // maximum distance a state is allowed to have from a slice representative to be considered part of the slice
+                        float min_state_distance; // minimum radius for Voronoi distance for an object/robot state // TODO technically we would need a different value for each uniqie state space -> should maybe move this into state space
+                        float min_slice_distance; // not set by user, is updated using min_state_distance
                         bool do_slice_ball_projection; // if true, SliceBasedOracleRRT projects sample slices to a ball with radius max_slice_distance before attempting an extension
                         float max_slice_distance; // maximum distance two slices can be apart from each other such that there still can exist an action connecting them
                         float action_randomness; // parameter in [0, 1] that determines randomness of action sampling (prand)
