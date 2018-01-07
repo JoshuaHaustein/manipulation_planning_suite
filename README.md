@@ -5,7 +5,7 @@ It is currently in its early stages of development.
 Available rearrangement planning algorithms:
 - NaiveRRT (Standard kinodynamic RRT)
 - HybridActionRRT (Kinodynamic RRT that utilizes action primitives to approximately solve the 2BVP)
-- OracleRearrangementRRT (Kinodynamic RRT that utilizes learned action primitives to approximately solve the 2BVP)
+- OracleRearrangementRRT (Kinodynamic RRT that utilizes action primitives in the same way as SliceBasedOracleRRT to approximately solve the 2BVP)
 - SliceBasedOracleRRT (RRT-style planning algorithm that utilizes a slice view of the problem in combination with learned action primitives)
 
 Parameters for each rearrangement planning algorithm:
@@ -19,10 +19,12 @@ Parameters for each rearrangement planning algorithm:
 - num_control_samples - number of control samples
 **HybridActionRRT**:
 - num_control_samples - number of control samples, must be positive
-- p_rand - value in [0,1] that indicates randomness of action selection
+- action_noise - value in [0,1] that indicates randomness of action selection
 **OracleRearrangementRRT**:
-- No additional parameters
+- feasibility_sample_noise - probability to sample feasible state uniformly rather than from oracle
 **SliceBasedOracleRRT**:
 - do_slice_ball_projection - indiciates whether to project a sampled slice to reachable slice in the extension step
 - max_pushing_distance - maximum distance an object can be pushed (set in Oracle)
+- state_noise - probability to sample feasible state uniformly rather than from oracle
+- action_noise - probability to sample action uniformly rather than from oracle
 

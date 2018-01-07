@@ -115,6 +115,7 @@ namespace mps {
                         bool do_slice_ball_projection; // if true, SliceBasedOracleRRT projects sample slices to a ball with radius max_slice_distance before attempting an extension
                         float max_slice_distance; // maximum distance two slices can be apart from each other such that there still can exist an action connecting them
                         float action_randomness; // parameter in [0, 1] that determines randomness of action sampling (prand)
+                        float feasible_state_noise; // probability (in [0,1]) to sample a feasible state uniformly rather than from the oracle
                         unsigned int num_control_samples; // number of control samples (only relevant for some algorithms)
                         std::vector<float> weights; // optional weights for the distance function
                         std::function<bool()> stopping_condition; // optionally a customized stopping condition

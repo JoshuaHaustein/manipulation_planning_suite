@@ -38,6 +38,8 @@ OracleControlSampler::OracleControlSampler(::ompl::control::SpaceInformationPtr 
     _robot_state->setVelocity(vel);
     assert(_robot_state);
     _control_sampler = _si->allocControlSampler();
+    _robot_state_sampler = _robot_state_space->allocStateSampler();
+    _rng = mps::planner::util::random::getDefaultRandomGenerator();
 }
 
 OracleControlSampler::~OracleControlSampler() {
@@ -74,7 +76,8 @@ void OracleControlSampler::sampleTo(std::vector<::ompl::control::Control const*>
 
 void OracleControlSampler::sampleFeasibleState(::ompl::base::State* x_state_ompl,
                                                const ::ompl::base::State* x_prime_state_ompl,
-                                               unsigned int local_target_obj)
+                                               unsigned int local_target_obj,
+                                               const float& p_uniform)
 {
     static const std::string log_prefix("[mps::planner::pushing::oracle::OracleControlSampler::sampleFeasibleState]");
     auto x_state = dynamic_cast<ompl::state::SimEnvWorldState*>(x_state_ompl);
@@ -84,6 +87,17 @@ void OracleControlSampler::sampleFeasibleState(::ompl::base::State* x_state_ompl
     auto x_prime_t = x_prime_state->getObjectState(local_target_obj);
     auto x_t = x_state->getObjectState(local_target_obj);
     auto x_r = x_state->getObjectState(_robot_id);
+    // with probability p_uniform sample feasible state uniformly
+    if (p_uniform > 0.0f) {
+        float die = _rng->uniform01();
+        if (die <= p_uniform) {
+            mps_logging::logDebug("Sampling feasible state uniformly.", log_prefix);
+            // sample a state uniformly
+            _robot_state_sampler->sampleUniform(x_r);
+            return;
+        }
+    }
+    mps_logging::logDebug("Sampling feasible state from oracle.", log_prefix);
     Eigen::VectorXf new_robot_dest;
     x_r->getConfiguration(new_robot_dest);
     Eigen::VectorXf current_obj_state;
@@ -151,19 +165,28 @@ bool OracleControlSampler::steerRobot(std::vector<::ompl::control::Control const
 bool OracleControlSampler::steerPush(std::vector<::ompl::control::Control const*>& controls,
                                      const ::ompl::base::State* source,
                                      const ::ompl::base::State* dest,
-                                     unsigned int obj_id)
+                                     unsigned int obj_id,
+                                     const float& action_noise)
 {
     auto x_state = dynamic_cast<const ompl::state::SimEnvWorldState*>(source);
     auto x_prime_state = dynamic_cast<const ompl::state::SimEnvWorldState*>(dest);
-    return steerPush(controls, x_state, x_prime_state, obj_id);
+    return steerPush(controls, x_state, x_prime_state, obj_id, action_noise);
 }
 
 bool OracleControlSampler::steerPush(std::vector<::ompl::control::Control const *> &controls,
                                      const mps::planner::ompl::state::SimEnvWorldState* source,
                                      const mps::planner::ompl::state::SimEnvWorldState* dest,
-                                     unsigned int object_id)
+                                     unsigned int object_id,
+                                     const float&  action_noise)
 {
     static const std::string log_prefix("[mps::planner::pushing::oracle::OracleControlSampler::steerPush]");
+    if (action_noise > 0.0f) { // if action noise is provided roll a die to decide whether to sample action uniformly
+        float die = _rng->uniform01();
+        if (die <= action_noise) {
+            randomControl(controls);
+            return true;
+        }
+    }
     const auto* current_robot_state = source->getObjectState(_robot_id);
     const auto* current_obj_state = source->getObjectState(object_id);
     const auto* dest_obj_state = dest->getObjectState(object_id);

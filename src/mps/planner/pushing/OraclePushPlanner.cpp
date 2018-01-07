@@ -46,7 +46,8 @@ PlanningProblem::PlanningProblem(sim_env::WorldPtr world, sim_env::RobotPtr robo
     goal_bias = 0.1f;
     robot_bias = 0.1f;
     target_bias = 0.1f;
-    p_rand = 0.5f;
+    action_noise = 0.01f;
+    state_noise = 0.001f;
     do_slice_ball_projection = true;
     min_state_distance = 0.01;
     // create default workspace limits
@@ -181,7 +182,8 @@ bool OraclePushPlanner::solve(PlanningSolution& solution) {
                                                   _planning_problem.robot->getName());
     pq.stopping_condition = _planning_problem.stopping_condition;
     pq.weights = _distance_weights;
-    pq.action_randomness = _planning_problem.p_rand;
+    pq.action_randomness = _planning_problem.action_noise;
+    pq.feasible_state_noise = _planning_problem.state_noise;
     pq.goal_bias = _planning_problem.goal_bias;
     pq.num_control_samples = _planning_problem.num_control_samples;
     pq.goal_bias = _planning_problem.goal_bias;

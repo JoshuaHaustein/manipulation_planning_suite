@@ -54,7 +54,8 @@ namespace mps {
                     float goal_bias;
                     float target_bias;
                     float robot_bias;
-                    float p_rand;
+                    float action_noise;
+                    float state_noise;
                     bool do_slice_ball_projection;
                     mps::planner::pushing::PlanningProblem::OracleType oracle_type;
                     mps::planner::pushing::PlanningProblem::AlgorithmType algorithm_type;
@@ -162,7 +163,8 @@ namespace YAML {
             node["algorithm_type"] = mps::planner::util::yaml::algorithmTypeToString(problem_desc.algorithm_type);
             node["local_planner_type"] = mps::planner::util::yaml::localPlannerTypeToString(problem_desc.local_planner_type);
             node["num_control_samples"] = problem_desc.num_control_samples;
-            node["p_rand"] = problem_desc.p_rand;
+            node["action_noise"] = problem_desc.action_noise;
+            node["state_noise"] = problem_desc.state_noise;
             node["do_slice_ball_projection"] = problem_desc.do_slice_ball_projection;
             return node;
         }
@@ -197,10 +199,15 @@ namespace YAML {
             problem_desc.robot_bias = node["robot_bias"].as<float>();
             problem_desc.target_bias = node["target_bias"].as<float>();
             problem_desc.goal_bias = node["goal_bias"].as<float>();
-            if (node["p_rand"]) {
-                problem_desc.p_rand = node["p_rand"].as<float>();
+            if (node["action_noise"]) {
+                problem_desc.action_noise = node["action_noise"].as<float>();
             } else {
-                problem_desc.p_rand = 0.5f;
+                problem_desc.action_noise = 0.001f;
+            }
+            if (node["state_noise"]) {
+                problem_desc.state_noise = node["state_noise"].as<float>();
+            } else {
+                problem_desc.state_noise = 0.001f;
             }
             if (node["do_slice_ball_projection"]) {
                 problem_desc.do_slice_ball_projection = node["do_slice_ball_projection"].as<bool>();

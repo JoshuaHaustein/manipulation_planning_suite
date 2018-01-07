@@ -109,7 +109,8 @@ void mps::planner::util::yaml::configurePlanningProblem(mps::planner::pushing::P
     problem.goal_bias = problem_desc.goal_bias;
     problem.robot_bias = problem_desc.robot_bias;
     problem.target_bias = problem_desc.target_bias;
-    problem.p_rand = problem_desc.p_rand;
+    problem.action_noise = problem_desc.action_noise;
+    problem.state_noise = problem_desc.state_noise;
     problem.do_slice_ball_projection = problem_desc.do_slice_ball_projection;
     // TODO b_semi_dynamic
     // Collisions policy

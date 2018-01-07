@@ -39,7 +39,8 @@ RearrangementRRT::PlanningQuery::PlanningQuery(ompl::state::goal::ObjectsRelocat
     min_slice_distance = min_state_distance;
     do_slice_ball_projection = true;
     max_slice_distance = 0.0;
-    action_randomness = 0.5f;
+    action_randomness = 0.0001f;
+    feasible_state_noise = 0.00001f;
     num_control_samples = 10;
 }
 
@@ -57,6 +58,7 @@ std::string RearrangementRRT::PlanningQuery::toString() const {
     ss << "max_slice_distance: " << max_slice_distance << "\n";
     ss << "do_slice_ball_projection: " << do_slice_ball_projection << "\n";
     ss << "action_randomness: " << action_randomness << "\n";
+    ss << "feasible state noise: " << feasible_state_noise << "\n";
     ss << "num_control_samples: " << num_control_samples << "\n";
     ss << "distance weights: ";
     for (auto& weight : weights) {
@@ -499,7 +501,7 @@ void OracleRearrangementRRT::selectTreeNode(const ompl::planning::essentials::Mo
         // tmp_motion = slice_representative
         _state_space->copyState(tmp_motion->getState(), selected_node->getState());
         // tmp_motion's robot state gets updated with feasible robot state
-        _oracle_sampler->sampleFeasibleState(tmp_motion->getState(), sample_motion->getState(), active_obj_id);
+        _oracle_sampler->sampleFeasibleState(tmp_motion->getState(), sample_motion->getState(), active_obj_id, pb.pq.feasible_state_noise);
         // save that robot state in sample_motion
         _state_space->copySubState(sample_motion->getState(), tmp_motion->getState(), pb.robot_id);
         cacheMotion(tmp_motion);
@@ -527,7 +529,7 @@ bool OracleRearrangementRRT::extend(mps::planner::ompl::planning::essentials::Mo
     if (extension_success and active_obj_id != pb.robot_id and not b_goal) {
         logging::logDebug("Steering robot to feasible state successful, attempting push", log_prefix);
         controls.clear();
-        _oracle_sampler->steerPush(controls, last_motion->getState(), dest, active_obj_id);
+        _oracle_sampler->steerPush(controls, last_motion->getState(), dest, active_obj_id, pb.pq.action_randomness);
         extendStep(controls, last_motion, last_motion, pb, extension_success, b_goal);
     }
     return b_goal;
@@ -738,7 +740,8 @@ void SliceBasedOracleRRT::selectTreeNode(const ompl::planning::essentials::Motio
             // tmp_motion = slice_representative
             _state_space->copyState(tmp_motion->getState(), selected_slice->repr->getState());
             // tmp_motion's robot state gets updated with feasible robot state
-            _oracle_sampler->sampleFeasibleState(tmp_motion->getState(), sample->getState(), active_obj_id);
+            _oracle_sampler->sampleFeasibleState(tmp_motion->getState(), sample->getState(), active_obj_id,
+                                                 pb.pq.feasible_state_noise);
             // save that robot state in sample
             _state_space->copySubState(sample->getState(), tmp_motion->getState(), pb.robot_id);
             cacheMotion(tmp_motion);
