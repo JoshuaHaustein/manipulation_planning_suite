@@ -481,6 +481,31 @@ OracleRearrangementRRT::OracleRearrangementRRT(::ompl::control::SpaceInformation
 
 OracleRearrangementRRT::~OracleRearrangementRRT() = default;
 
+void OracleRearrangementRRT::selectTreeNode(const ompl::planning::essentials::MotionPtr& sample_motion,
+                                             ompl::planning::essentials::MotionPtr& selected_node,
+                                             unsigned int& active_obj_id,
+                                             bool sample_is_goal,
+                                             PlanningBlackboard& pb)
+{
+    static const std::string log_prefix("[mps::planner::pushing::algorithm::OracleRearrangementRRT::selectTreeNode]");
+    // TODO we only overwrite this because we need to sample a feasible state.
+    RearrangementRRT::selectTreeNode(sample_motion, selected_node, active_obj_id, sample_is_goal, pb);
+    // now sample a feasible state for pushing
+    // TODO This is a bit of a hack and should probably be done in a cleaner way
+    // TODO semantically this is part of extend and not selectTreeNode. The reason it is here is in SliceBasedOracleRRT
+    if (active_obj_id != pb.robot_id) {
+        // sample a feasible robot state for the desired push
+        auto tmp_motion = getNewMotion();
+        // tmp_motion = slice_representative
+        _state_space->copyState(tmp_motion->getState(), selected_node->getState());
+        // tmp_motion's robot state gets updated with feasible robot state
+        _oracle_sampler->sampleFeasibleState(tmp_motion->getState(), sample_motion->getState(), active_obj_id);
+        // save that robot state in sample_motion
+        _state_space->copySubState(sample_motion->getState(), tmp_motion->getState(), pb.robot_id);
+        cacheMotion(tmp_motion);
+    }
+}
+
 bool OracleRearrangementRRT::extend(mps::planner::ompl::planning::essentials::MotionPtr start,
                                  ::ompl::base::State *dest, unsigned int active_obj_id,
                                  mps::planner::ompl::planning::essentials::MotionPtr &last_motion,
@@ -709,7 +734,14 @@ void SliceBasedOracleRRT::selectTreeNode(const ompl::planning::essentials::Motio
             auto selected_state_tuple = selectCandidateSlice(candidate_states);
             auto selected_slice = std::get<0>(selected_state_tuple);
             // sample a feasible robot state for the desired push
-            _oracle_sampler->sampleFeasibleState(sample->getState(), selected_slice->repr->getState(), active_obj_id);
+            auto tmp_motion = getNewMotion();
+            // tmp_motion = slice_representative
+            _state_space->copyState(tmp_motion->getState(), selected_slice->repr->getState());
+            // tmp_motion's robot state gets updated with feasible robot state
+            _oracle_sampler->sampleFeasibleState(tmp_motion->getState(), sample->getState(), active_obj_id);
+            // save that robot state in sample
+            _state_space->copySubState(sample->getState(), tmp_motion->getState(), pb.robot_id);
+            cacheMotion(tmp_motion);
             // sample the node that is closest to a feasible state in this slice
             selected_node = selected_slice->slice_samples_nn->nearest(sample);
         }

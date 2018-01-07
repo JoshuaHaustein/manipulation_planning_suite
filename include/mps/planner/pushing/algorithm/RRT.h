@@ -272,6 +272,11 @@ namespace mps {
                                           const std::string& robot_name);
                     ~OracleRearrangementRRT() override;
 
+                    void selectTreeNode(const ompl::planning::essentials::MotionPtr& sample,
+                                        ompl::planning::essentials::MotionPtr& selected_node,
+                                        unsigned int& active_obj_id,
+                                        bool sample_is_goal,
+                                        PlanningBlackboard& pb) override;
                     bool extend(mps::planner::ompl::planning::essentials::MotionPtr start,
                                 ::ompl::base::State* dest,
                                 unsigned int active_obj_id,
