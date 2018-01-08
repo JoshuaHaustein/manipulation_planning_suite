@@ -32,8 +32,6 @@ std::string mps::planner::util::yaml::algorithmTypeToString(mps::planner::pushin
             return "OracleRRT";
         case mps::planner::pushing::PlanningProblem::AlgorithmType::SliceOracleRRT:
             return "SliceOracleRRT";
-        case mps::planner::pushing::PlanningProblem::AlgorithmType::CompleteSliceOracleRRT:
-            return "CompleteSliceOracleRRT";
         case mps::planner::pushing::PlanningProblem::AlgorithmType::HybridActionRRT:
             return "HybridActionRRT";
         case mps::planner::pushing::PlanningProblem::AlgorithmType::GNATSamplingSliceOracleRRT:
@@ -61,8 +59,6 @@ mps::planner::pushing::PlanningProblem::AlgorithmType mps::planner::util::yaml::
         return mps::planner::pushing::PlanningProblem::AlgorithmType::OracleRRT;
     } else if (str.compare("SliceOracleRRT") == 0) {
         return mps::planner::pushing::PlanningProblem::AlgorithmType::SliceOracleRRT;
-    } else if (str.compare("CompleteSliceOracleRRT") == 0) {
-        return mps::planner::pushing::PlanningProblem::AlgorithmType::CompleteSliceOracleRRT;
     } else if (str.compare("HybridActionRRT") == 0) {
         return mps::planner::pushing::PlanningProblem::AlgorithmType::HybridActionRRT;
     } else if (str.compare("GNATSamplingSliceOracleRRT") == 0) {
@@ -104,6 +100,7 @@ void mps::planner::util::yaml::configurePlanningProblem(mps::planner::pushing::P
     problem.workspace_bounds.max_rotation_vel = problem_desc.max_rotation_vel;
     problem.workspace_bounds.max_velocity = problem_desc.max_velocity;
     // Various planner parameters
+    problem.object_weights = problem_desc.object_weights;
     problem.t_max = problem_desc.t_max;
     problem.planning_time_out = problem_desc.planning_timeout;
     problem.num_control_samples = problem_desc.num_control_samples;
@@ -113,7 +110,9 @@ void mps::planner::util::yaml::configurePlanningProblem(mps::planner::pushing::P
     problem.goal_bias = problem_desc.goal_bias;
     problem.robot_bias = problem_desc.robot_bias;
     problem.target_bias = problem_desc.target_bias;
-    problem.p_rand = problem_desc.p_rand;
+    problem.action_noise = problem_desc.action_noise;
+    problem.state_noise = problem_desc.state_noise;
+    problem.do_slice_ball_projection = problem_desc.do_slice_ball_projection;
     // TODO b_semi_dynamic
     // Collisions policy
     problem.collision_policy.setStaticCollisions(problem_desc.collision_policy.static_collisions_allowed);

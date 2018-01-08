@@ -46,8 +46,10 @@ PlanningProblem::PlanningProblem(sim_env::WorldPtr world, sim_env::RobotPtr robo
     goal_bias = 0.1f;
     robot_bias = 0.1f;
     target_bias = 0.1f;
-    num_slice_neighbors = 8;
-    p_rand = 0.5f;
+    action_noise = 0.01f;
+    state_noise = 0.001f;
+    do_slice_ball_projection = true;
+    min_state_distance = 0.001;
     // create default workspace limits
     workspace_bounds.x_limits[0] = std::numeric_limits<float>::lowest();
     workspace_bounds.x_limits[1] = std::numeric_limits<float>::max();
@@ -122,12 +124,12 @@ bool OraclePushPlanner::setup(PlanningProblem& problem) {
     _validity_checker =
             std::make_shared<mps::planner::ompl::state::SimEnvValidityChecker>(_space_information,
                                                                                _planning_problem.world);
+    _validity_checker->collision_policy = _planning_problem.collision_policy;
     _space_information->setStateValidityChecker(_validity_checker);
     _state_propagator =
             std::make_shared<mps::planner::ompl::control::SimEnvStatePropagator>(_space_information,
                                                                                  _planning_problem.world,
                                                                                  _planning_problem.robot_controller,
-                                                                                 _planning_problem.collision_policy,
                                                                                  _planning_problem.b_semi_dynamic,
                                                                                  _planning_problem.t_max);
     prepareDistanceWeights();
@@ -180,10 +182,15 @@ bool OraclePushPlanner::solve(PlanningSolution& solution) {
                                                   _planning_problem.robot->getName());
     pq.stopping_condition = _planning_problem.stopping_condition;
     pq.weights = _distance_weights;
-    pq.num_slice_neighbors = _planning_problem.num_slice_neighbors;
+    pq.action_randomness = _planning_problem.action_noise;
+    pq.feasible_state_noise = _planning_problem.state_noise;
+    pq.goal_bias = _planning_problem.goal_bias;
+    pq.num_control_samples = _planning_problem.num_control_samples;
     pq.goal_bias = _planning_problem.goal_bias;
     pq.robot_bias = _planning_problem.robot_bias;
     pq.target_bias = _planning_problem.target_bias;
+    pq.do_slice_ball_projection = _planning_problem.do_slice_ball_projection;
+    pq.min_state_distance = _planning_problem.min_state_distance;
     solution.path = std::make_shared<mps::planner::ompl::planning::essentials::Path>(_space_information);
     // before planning. let's save the state of the world
     auto world_state = _planning_problem.world->getWorldState();
@@ -375,8 +382,7 @@ mps::planner::pushing::algorithm::RearrangementRRTPtr OraclePushPlanner::createA
     mps::planner::pushing::algorithm::RearrangementRRTPtr algo;
     if (_planning_problem.algorithm_type == PlanningProblem::AlgorithmType::Naive)
     {
-        algo = std::make_shared<algorithm::NaiveRearrangementRRT>(_space_information,
-                                                                  _planning_problem.num_control_samples);
+        algo = std::make_shared<algorithm::NaiveRearrangementRRT>(_space_information);
         util::logging::logDebug("Using naive algorithm, i.e. no oracle at all", log_prefix);
     } else {
         // all other algorithms need an oracle
@@ -425,13 +431,13 @@ mps::planner::pushing::algorithm::RearrangementRRTPtr OraclePushPlanner::createA
             case PlanningProblem::OracleType::Human:
             {
                 pushing_oracle = std::make_shared<oracle::HumanOracle>(robot_oracle, object_data);
-                util::logging::logDebug("Using human made oracle!", log_prefix);
+                util::logging::logInfo("Using human made oracle!", log_prefix);
                 break;
             }
             case PlanningProblem::OracleType::Learned:
             {
                 pushing_oracle = std::make_shared<oracle::LearnedPipeOracle>(object_data);
-                util::logging::logDebug("Using learned oracle!", log_prefix);
+                util::logging::logInfo("Using learned oracle!", log_prefix);
                 break;
             }
         }
@@ -442,6 +448,7 @@ mps::planner::pushing::algorithm::RearrangementRRTPtr OraclePushPlanner::createA
                                                                            pushing_oracle,
                                                                            robot_oracle,
                                                                            _planning_problem.robot->getName());
+                util::logging::logInfo("Using OracleRRT", log_prefix);
                 break;
             }
             case PlanningProblem::AlgorithmType ::SliceOracleRRT:
@@ -450,21 +457,15 @@ mps::planner::pushing::algorithm::RearrangementRRTPtr OraclePushPlanner::createA
                                                                         pushing_oracle,
                                                                         robot_oracle,
                                                                         _planning_problem.robot->getName());
-                break;
-            }
-            case PlanningProblem::AlgorithmType::CompleteSliceOracleRRT:
-            {
-                algo = std::make_shared<algorithm::CompleteSliceBasedOracleRRT>(_space_information,
-                                                                                pushing_oracle,
-                                                                                robot_oracle,
-                                                                                _planning_problem.robot->getName());
+                util::logging::logInfo("Using SliceOracleRRT", log_prefix);
                 break;
             }
             case PlanningProblem::AlgorithmType::HybridActionRRT:
             {
-                algo = std::make_shared<algorithm::HybridActionRRT>(_space_information, _planning_problem.num_control_samples,
-                                                                    _planning_problem.p_rand, pushing_oracle,
+                algo = std::make_shared<algorithm::HybridActionRRT>(_space_information,
+                                                                    pushing_oracle,
                                                                     robot_oracle, _planning_problem.robot->getName());
+                util::logging::logInfo("Using HybridActionRRT", log_prefix);
                 break;
             }
             case PlanningProblem::AlgorithmType::GNATSamplingSliceOracleRRT:

@@ -269,7 +269,6 @@ void SimEnvObjectConfigurationSpace::addPoseSubspace(sim_env::ObjectConstPtr obj
 }
 
 void SimEnvObjectConfigurationSpace::addPoseSubspace2D(sim_env::ObjectConstPtr object) {
-    sim_env::LoggerConstPtr logger = object->getConstWorld()->getConstLogger();
     // let's first create a helper vector for which idx_helper[i] = _active_dofs[i] if i < _active_dofs.size(),
     // else idx_helper[i] = -1 for i = 0 .. 2
     Eigen::VectorXi idx_helper(3);
@@ -296,7 +295,6 @@ void SimEnvObjectConfigurationSpace::addPoseSubspace2D(sim_env::ObjectConstPtr o
 }
 
 void SimEnvObjectConfigurationSpace::addPoseSubspace3D(sim_env::ObjectConstPtr object) {
-    sim_env::LoggerConstPtr logger = object->getConstWorld()->getConstLogger();
     // let's first create a helper vector for which idx_helper[i] = _active_dofs[i] if i < _active_dofs.size(),
     // else idx_helper[i] = -1 for i = 0 .. 5
     Eigen::VectorXi idx_helper(6);
@@ -376,7 +374,6 @@ void SimEnvObjectConfigurationSpace::addJointsSubspace(sim_env::ObjectConstPtr o
 }
 
 void SimEnvObjectConfigurationSpace::addSingleBasePoseSpace2D(int dof, unsigned int idx) {
-    sim_env::LoggerConstPtr logger = getLogger();
     ::ompl::base::StateSpacePtr space;
     internal::SubstateTypeDescription type_desc;
     type_desc.dim = 1;
@@ -404,7 +401,6 @@ void SimEnvObjectConfigurationSpace::addSingleBasePoseSpace2D(int dof, unsigned 
 }
 
 void SimEnvObjectConfigurationSpace::addSingleBasePoseSpace3D(int dof, unsigned int idx) {
-    sim_env::LoggerConstPtr logger = getLogger();
     ::ompl::base::StateSpacePtr space;
     double weight = 1.0;
     internal::SubstateTypeDescription type_desc;
@@ -580,7 +576,6 @@ void SimEnvObjectVelocitySpace::addPoseVelocitySubspace(sim_env::ObjectConstPtr 
     std::vector<unsigned int> position_dof_indices;
     std::vector<int> orientation_dofs;
     std::vector<unsigned int> orientation_dof_indices;
-    sim_env::LoggerConstPtr logger = getLogger();
     // 2d world
     int max_num_position_dofs = 2;
     int max_num_orientation_dofs = 1;
@@ -1284,7 +1279,7 @@ bool SimEnvValidityChecker::isValid(const ::ompl::base::State *state) const {
     // first check whether the provided state is within bounds
     bool bounds_valid = _world_space->satisfiesBounds(state);
     if (!bounds_valid) {
-        _world->getLogger()->logDebug("State bounds violated. Rejecting state.",
+        mps_logging::logDebug("State bounds violated. Rejecting state.",
                                       "[mps::planner::ompl::state::SimEnvValidityChecker::isValid]");
         return false;
     }
@@ -1296,8 +1291,8 @@ bool SimEnvValidityChecker::isValid(const ::ompl::base::State *state) const {
     _world_space->setToState(_world, world_state);
     // first check whether this state is physically feasible
     if (not _world->isPhysicallyFeasible()) {
-        _world->getLogger()->logDebug("Rejecting state because it is physically infeasible.",
-                                      "[mps::planner::ompl::state::SimEnvValidityChecker::isValid]");
+        mps_logging::logDebug("Rejecting state because it is physically infeasible.",
+                              "[mps::planner::ompl::state::SimEnvValidityChecker::isValid]");
         return false;
     }
     // check for collisions
@@ -1309,7 +1304,7 @@ bool SimEnvValidityChecker::isValid(const ::ompl::base::State *state) const {
         for (auto& contact : contacts) {
             bool contact_ok = checkContact(contact);
             if (!contact_ok) {
-                _world->getLogger()->logDebug("Rejecting state due to violation of contact constraints.",
+                mps_logging::logDebug("Rejecting state due to violation of contact constraints.",
                                               "[mps::planner::ompl::state::SimEnvValidityChecker::isValid]");
                 return false;
             }
@@ -1336,8 +1331,8 @@ bool SimEnvValidityChecker::isValidIntermediate() const {
     // first check whether the current state is within bounds
     bool bounds_valid = _world_space->satisfiesBounds(_world_state);
     if (!bounds_valid) {
-        _world->getLogger()->logDebug("State bounds violated. Rejecting state.",
-                                      "[mps::planner::ompl::state::SimEnvValidityChecker::isValidIntermediate]");
+        mps_logging::logDebug("State bounds violated. Rejecting state.",
+                              "[mps::planner::ompl::state::SimEnvValidityChecker::isValidIntermediate]");
         return false;
     }
     // next check, whether the state is valid in terms of collisions
@@ -1351,8 +1346,8 @@ bool SimEnvValidityChecker::isValidIntermediate() const {
         for (const auto &contact : contacts) {
             bool contact_ok = checkContact(contact);
             if (!contact_ok) {
-                _world->getLogger()->logDebug("Rejecting state due to violation of contact constraints.",
-                                              "[mps::planner::ompl::state::SimEnvValidityChecker::isValidIntermediate]");
+                mps_logging::logDebug("Rejecting state due to violation of contact constraints.",
+                                      "[mps::planner::ompl::state::SimEnvValidityChecker::isValidIntermediate]");
                 return false;
             }
         }

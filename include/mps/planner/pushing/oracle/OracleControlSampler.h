@@ -9,6 +9,7 @@
 #include <mps/planner/ompl/control/Interfaces.h>
 #include <mps/planner/pushing/oracle/Oracle.h>
 #include <mps/planner/ompl/state/SimEnvState.h>
+#include <mps/planner/util/Random.h>
 
 namespace mps {
     namespace planner {
@@ -47,11 +48,13 @@ namespace mps {
                      * @param sample_state - contains x_t and as a result will contain the sampled x_r. WARNING: Must be an instance of SimEnvState
                      * @param target_state - contains x'_t. WARNING: Must be an instance of SimEnvState
                      * @param local_target_obj - object identifier t
-                     * @return feasibility of sampled state
+                     * @param p_uniform - if > 0.0f, feasible state is sampled uniformly rather than using oracle with
+                     *          probability p_uniform;.
                      */
-                    float sampleFeasibleState(::ompl::base::State* x_state,
+                    void sampleFeasibleState(::ompl::base::State* x_state,
                                               const ::ompl::base::State* x_prime_state,
-                                              unsigned int local_target_obj);
+                                              unsigned int local_target_obj,
+                                              const float& p_uniform=0.0f);
                     float getFeasibility(const ::ompl::base::State* x_state,
                                          const ::ompl::base::State* x_prime_state,
                                          unsigned int active_obj_id) const;
@@ -72,15 +75,22 @@ namespace mps {
                      * Steers the system to the given state by trying to reduce the distance
                      * for object obj_id. This method essentially just calls the pushing oracle
                      * and asks for a pushing action.
+                     * @param controls - will contain controls provided by oracle
+                     * @param source - state from which to execute push from
+                     * @param dest - state towards which to execute push to
+                     * @param obj_id - id of the object to push
+                     * @param action_noise - probability to sample an action uniformly at random rather than using the oracle
                      */
                     bool steerPush(std::vector<::ompl::control::Control const*>& controls,
                                    const ::ompl::base::State* source,
                                    const ::ompl::base::State* dest,
-                                   unsigned int obj_id);
+                                   unsigned int obj_id,
+                                   const float& action_noise=0.0f);
                     bool steerPush(std::vector<::ompl::control::Control const*>& controls,
                                    const mps::planner::ompl::state::SimEnvWorldState* source,
                                    const mps::planner::ompl::state::SimEnvWorldState* dest,
-                                   unsigned int obj_id);
+                                   unsigned int obj_id,
+                                   const float& action_noise=0.0f);
                     // bool steerPushSimple(std::vector<::ompl::control::Control const*>& controls,
                     //                      const ::ompl::base::State* source,
                     //                      const ::ompl::base::State* dest,
@@ -98,9 +108,11 @@ namespace mps {
                     mps::planner::pushing::oracle::PushingOraclePtr _pushing_oracle;
                     mps::planner::ompl::state::SimEnvObjectState* _robot_state;
                     mps::planner::ompl::state::SimEnvObjectStateSpacePtr _robot_state_space;
+                    ::ompl::base::StateSamplerPtr _robot_state_sampler;
                     std::size_t _control_idx;
                     std::vector<mps::planner::ompl::control::RealValueParameterizedControl*> _controls;
                     unsigned int _robot_id;
+                    ::ompl::RNGPtr _rng;
 
                     inline mps::planner::ompl::control::RealValueParameterizedControl* getControl();
                     inline void resetControlIdx();

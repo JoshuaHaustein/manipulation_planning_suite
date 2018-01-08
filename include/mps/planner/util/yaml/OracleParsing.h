@@ -46,6 +46,7 @@ namespace mps {
                     float max_rotation_vel;
                     float planning_timeout;
                     // todo object weights
+                    std::map<std::string, float> object_weights;
                     // todo weight map
                     ControlLimitsDesc control_limits;
                     CollisionPolicyDesc collision_policy;
@@ -54,7 +55,9 @@ namespace mps {
                     float goal_bias;
                     float target_bias;
                     float robot_bias;
-                    float p_rand;
+                    float action_noise;
+                    float state_noise;
+                    bool do_slice_ball_projection;
                     mps::planner::pushing::PlanningProblem::OracleType oracle_type;
                     mps::planner::pushing::PlanningProblem::AlgorithmType algorithm_type;
                     mps::planner::pushing::PlanningProblem::LocalPlanner local_planner_type;
@@ -149,6 +152,7 @@ namespace YAML {
             node["max_velocity"] = problem_desc.max_velocity;
             node["max_rotation_vel"] = problem_desc.max_rotation_vel;
             node["planning_timeout"] = problem_desc.planning_timeout;
+            node["object_weights_distance_fn"] = problem_desc.object_weights;
             // todo object weights
             // todo weight map
             node["control_limits"] = problem_desc.control_limits;
@@ -161,7 +165,9 @@ namespace YAML {
             node["algorithm_type"] = mps::planner::util::yaml::algorithmTypeToString(problem_desc.algorithm_type);
             node["local_planner_type"] = mps::planner::util::yaml::localPlannerTypeToString(problem_desc.local_planner_type);
             node["num_control_samples"] = problem_desc.num_control_samples;
-            node["p_rand"] = problem_desc.p_rand;
+            node["action_noise"] = problem_desc.action_noise;
+            node["state_noise"] = problem_desc.state_noise;
+            node["do_slice_ball_projection"] = problem_desc.do_slice_ball_projection;
             return node;
         }
 
@@ -176,7 +182,10 @@ namespace YAML {
             problem_desc.max_velocity = node["max_velocity"].as<float>();
             problem_desc.max_rotation_vel = node["max_rotation_vel"].as<float>();
             problem_desc.planning_timeout = node["planning_timeout"].as<float>();
-            // todo object weights
+            // object weights
+            if (node["object_weights_distance_fn"]) {
+                problem_desc.object_weights = node["object_weights_distance_fn"].as<std::map<std::string, float> >();
+            }
             // todo weight map
             problem_desc.control_limits = node["control_limits"].as<mps::planner::util::yaml::ControlLimitsDesc>();
             problem_desc.t_max = node["t_max"].as<float>();
@@ -191,14 +200,28 @@ namespace YAML {
             } else {
                 problem_desc.local_planner_type = mps::planner::pushing::PlanningProblem::LocalPlanner::Line;
             }
-            problem_desc.num_control_samples = node["num_control_samples"].as<unsigned int>();
+            if (node["num_control_samples"]) {
+                problem_desc.num_control_samples = node["num_control_samples"].as<unsigned int>();
+            } else {
+                problem_desc.num_control_samples = 1;
+            }
             problem_desc.robot_bias = node["robot_bias"].as<float>();
             problem_desc.target_bias = node["target_bias"].as<float>();
             problem_desc.goal_bias = node["goal_bias"].as<float>();
-            if (node["p_rand"]) {
-                problem_desc.p_rand = node["p_rand"].as<float>();
+            if (node["action_noise"]) {
+                problem_desc.action_noise = node["action_noise"].as<float>();
             } else {
-                problem_desc.p_rand = 0.5f;
+                problem_desc.action_noise = 0.001f;
+            }
+            if (node["state_noise"]) {
+                problem_desc.state_noise = node["state_noise"].as<float>();
+            } else {
+                problem_desc.state_noise = 0.001f;
+            }
+            if (node["do_slice_ball_projection"]) {
+                problem_desc.do_slice_ball_projection = node["do_slice_ball_projection"].as<bool>();
+            } else {
+                problem_desc.do_slice_ball_projection = true;
             }
             return true;
         }
