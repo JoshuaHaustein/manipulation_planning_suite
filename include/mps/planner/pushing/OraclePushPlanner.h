@@ -129,6 +129,10 @@ namespace mps {
                                   unsigned int num_samples,
                                   const std::string& annotation,
                                   bool deterministic);
+                void evaluateOracle(mps::planner::ompl::state::goal::RelocationGoalSpecification goal,
+                                    const std::string& file_name,
+                                    unsigned int num_samples,
+                                    const std::string& annotation);
                 void dummyTest();
 
                 /**
