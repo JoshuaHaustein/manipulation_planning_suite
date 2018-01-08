@@ -139,36 +139,44 @@ void DataGenerator::evaluateOracle(mps::planner::ompl::state::goal::RelocationGo
             continue;
         }
 
-        std::cout << start_state << goal_state << std::endl;
-
-        std::vector<::ompl::control::Control const*> oracle_controls;
         bool success = false;
 
         int target_id = state_space->getObjectIndex(goal.object_name);
 
-        success = oracle_sampler->steerRobot(oracle_controls, start_state, goal_state);
+        // Sample feasible state and try to move robot there
+        oracle_sampler->sampleFeasibleState(feasible_state, goal_state, target_id);
+        std::vector<::ompl::control::Control const*> oracle_controls_robot;
+        success = oracle_sampler->steerRobot(oracle_controls_robot, start_state, feasible_state);
         if (not success) {
-            _world->getLogger()->logWarn("State propagation to feasible state failed, skipping");
-            continue;
+            _world->getLogger()->logWarn("Sampling feasible state produced no controls, trying push");
+        } else {
+            for (auto *control_const : oracle_controls_robot) {
+                auto *control = const_cast<::ompl::control::Control*>(control_const);
+                success = _state_propagator->propagate(start_state, control, start_state);
+                if (not success) {
+                    _world->getLogger()->logErr("State propagation to feasible state failed!!!");
+                }
+            }
         }
 
         // TODO change to steer from achieved feasible state
-        success = oracle_sampler->steerPush(oracle_controls, start_state, goal_state, target_id);
+        std::vector<::ompl::control::Control const*> oracle_controls_push;
+        success = oracle_sampler->steerPush(oracle_controls_push, start_state, goal_state, target_id);
         if (not success) {
-            _world->getLogger()->logWarn("State propagation for pushing failed, skipping");
+            _world->getLogger()->logWarn("Could not sample pushing controls! Skipping");
             continue;
+        } else {
+            for (auto *control_const : oracle_controls_push) {
+                auto *control = const_cast<::ompl::control::Control*>(control_const);
+                success = _state_propagator->propagate(start_state, control, start_state);
+                if (not success) {
+                    _world->getLogger()->logErr("State propagation with pushing failed!!!");
+                }
+            }
         }
 
-        control_sampler->sample(control);
-        _world->getLogger()->logDebug("Sampled state");
-        success = _state_propagator->propagate(start_state, control, final_state);
-        _world->getLogger()->logDebug("Propagated state");
-        if (not success) {
-            _world->getLogger()->logWarn("State propagation to goal state failed, skipping");
-            continue;
-        }
-        data_dumper.saveData(goal_state, final_state, control, annotation);
-        std::cout << "Finished one trial" << std::endl;
+        // Start state is now incrementally changed to the resulting state
+        data_dumper.saveData(goal_state, start_state, control, annotation);
         ++i;
     }
     _space_information->freeState(start_state);
