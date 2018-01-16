@@ -357,7 +357,7 @@ namespace mps {
 
                     typedef std::tuple<SlicePtr, float> ExtensionCandidateTuple;
                     // member functions
-                    SlicePtr getSlice(ompl::planning::essentials::MotionPtr motion) const;
+                    SlicePtr getSlice(ompl::planning::essentials::MotionPtr motion, PlanningBlackboard& pb) const;
                     float distanceToSlice(ompl::planning::essentials::MotionPtr motion, SlicePtr slice) const;
                     void projectSliceOnBall(SlicePtr sample_slice,
                                             SliceConstPtr center_slice,

@@ -47,6 +47,7 @@ add_definitions(-std=c++11)
 add_definitions(-Wno-deprecated-register)
 set(CMAKE_CXX_FLAGS_DEBUG "-g -O0 -Wall -DDEBUG_VISUALIZE -DDEBUG_PRINTOUTS")
 set(CMAKE_CXX_FLAGS_RELEASE "-O3")
+# add_definitions(-DUSE_SLICE_BALL)
 
 #message("Proto source: " ${PROTO_SRCS})
 #message("Proto header: " ${PROTO_HDRS})

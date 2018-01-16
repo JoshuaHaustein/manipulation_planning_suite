@@ -154,14 +154,20 @@ bool RearrangementRRT::plan(const PlanningQuery& pq,
         // sample a new state
         unsigned int active_obj_id = 0;
         bool goal_sampled = sample(sample_motion, active_obj_id, blackboard);
-        // printState("Sampled state is ", sample_motion->getState()); // TODO remove
+        #ifdef DEBUG_PRINTOUTS
+        printState("Sampled state is ", sample_motion->getState()); // TODO remove
+        #endif
         // Get a tree node to expand
         selectTreeNode(sample_motion, current_motion, active_obj_id, goal_sampled, blackboard);
-        // printState("Selected tree state: ", current_motion->getState()); // TODO remove
+        #ifdef DEBUG_PRINTOUTS
+        printState("Selected tree state: ", current_motion->getState()); // TODO remove
+        #endif
         logging::logDebug(boost::format("Active object is %i") % active_obj_id, log_prefix);
         // Extend the tree
         solved = extend(current_motion, sample_motion->getState(), active_obj_id, final_motion, blackboard);
-        // printState("Tree extended to ", final_motion->getState()); // TODO remove
+        #ifdef DEBUG_PRINTOUTS
+        printState("Tree extended to ", final_motion->getState()); // TODO remove
+        #endif
     }
 
     blackboard.stats.runtime = timer_ptr->stopTimer();
@@ -250,7 +256,7 @@ void RearrangementRRT::printState(const std::string& msg, ::ompl::base::State *s
     world_state->print(ss);
     logging::logDebug(ss.str(), "[mps::planner::pushing::oracle::RearrangementRRT::printState]");
     #ifdef DEBUG_VISUALIZE
-    if (_debug_drawer) _debug_drawer->showState(world_state, _state_space);
+        if (_debug_drawer) _debug_drawer->showState(world_state, _state_space);
     #endif
 }
 
@@ -327,7 +333,9 @@ bool NaiveRearrangementRRT::extend(mps::planner::ompl::planning::essentials::Mot
                                                        new_motion->getState());
     bool reached_a_goal = pb.pq.goal_region->isSatisfied(new_motion->getState());
     if (num_steps > 0) { // the sampled control is valid, i.e. the outcoming state is valid
+        #ifdef DEBUG_PRINTOUTS
         printState("Extending towards state ", new_motion->getState());
+        #endif
         addToTree(new_motion, start, pb);
         last_motion = new_motion;
     } else {
@@ -403,7 +411,9 @@ void HybridActionRRT::sampleActionSequence(std::vector<::ompl::control::Control 
 {
     static const std::string log_prefix("[HybridActionRRT::sampleActionSequence]");
     float random_die = _rng->uniform01();
-    // printState(log_prefix + "Sampling action sequence given state ", start->getState());
+    #ifdef DEBUG_PRINTOUTS
+    printState(log_prefix + "Sampling action sequence given state ", start->getState());
+    #endif
     if (random_die < pb.pq.action_randomness) {
         logging::logDebug("Sampling random action sequence", log_prefix);
         // sample random action
@@ -420,7 +430,9 @@ void HybridActionRRT::sampleActionSequence(std::vector<::ompl::control::Control 
             _state_space->copyState(new_motion->getState(), start->getState());
             // first sample robot state
             _oracle_sampler->sampleFeasibleState(new_motion->getState(), dest, obj_id);
-            // printState(log_prefix + " Steering robot first to feasible state ", new_motion->getState());
+            #ifdef DEBUG_PRINTOUTS
+            printState(log_prefix + " Steering robot first to feasible state ", new_motion->getState());
+            #endif
             // compute controls to move to that state
             _oracle_sampler->steerRobot(controls, start->getConstState(), new_motion->getState());
             // TODO we could now either forward propagate these controls, or we beam the robot to this state
@@ -441,21 +453,27 @@ void HybridActionRRT::forwardPropagateActionSequence(const std::vector<::ompl::c
     // now forward propagate these controls
     bool extension_success = false;
     auto prev_motion = start;
-    // printState(log_prefix + " Starting forward propagation from state ", start->getState());
+    #ifdef DEBUG_PRINTOUTS
+    printState(log_prefix + " Starting forward propagation from state ", start->getState());
+    #endif
     for (auto const* control : controls) {
         MotionPtr new_motion = getNewMotion();
         _si->copyControl(new_motion->getControl(), control);
         extension_success = _state_propagator->propagate(prev_motion->getState(),
                                                          new_motion->getControl(),
                                                          new_motion->getState());
-        // printState(log_prefix + " Propagated to state ", new_motion->getState());
+        #ifdef DEBUG_PRINTOUTS
+        printState(log_prefix + " Propagated to state ", new_motion->getState());
+        #endif
         pb.stats.num_state_propagations++;
         if (not extension_success) { // this action primitive ends here
             logging::logDebug("An action sequence failed, aborting forward propagation", log_prefix);
             cacheMotion(new_motion);
             break;
         }
-        // printState("Oracle control took us to state ", new_motion->getState());
+        #ifdef DEBUG_PRINTOUTS
+        printState("Oracle control took us to state ", new_motion->getState());
+        #endif
         state_action_seq.push_back(new_motion);
         // otherwise we just continue extending as long as we have controls
         prev_motion = new_motion;
@@ -505,9 +523,13 @@ void OracleRearrangementRRT::selectTreeNode(const ompl::planning::essentials::Mo
         // tmp_motion's robot state gets updated with feasible robot state
         _oracle_sampler->sampleFeasibleState(tmp_motion->getState(), sample_motion->getState(), active_obj_id, pb.pq.feasible_state_noise);
         // save that robot state in sample_motion
-        // printState(log_prefix + " For sample ", sample_motion->getState());
+        #ifdef DEBUG_PRINTOUTS
+        printState(log_prefix + " For sample ", sample_motion->getState());
+        #endif
         _state_space->copySubState(sample_motion->getState(), tmp_motion->getState(), pb.robot_id);
-        // printState(log_prefix + " Sampled feasible state ", sample_motion->getState());
+        #ifdef DEBUG_PRINTOUTS
+        printState(log_prefix + " Sampled feasible state ", sample_motion->getState());
+        #endif
         cacheMotion(tmp_motion);
     }
 }
@@ -562,7 +584,9 @@ void OracleRearrangementRRT::extendStep(const std::vector<const ::ompl::control:
             cacheMotion(new_motion);
             return;
         }
-        // printState("Oracle control took us to state ", new_motion->getState());
+        #ifdef DEBUG_PRINTOUTS
+        printState("Oracle control took us to state ", new_motion->getState());
+        #endif
         // we extended the tree a bit, add this new state to the tree
         addToTree(new_motion, prev_motion, pb);
         result_motion = new_motion;
@@ -700,69 +724,89 @@ void SliceBasedOracleRRT::selectTreeNode(const ompl::planning::essentials::Motio
     static const std::string log_prefix("[mps::planner::pushing::algorithm::SliceBasedOracleRRT]");
     logging::logDebug("Selecting tree node to extend for given sample", log_prefix);
     // pick the slice that is closest to the sample
-    SlicePtr nearest_slice = getSlice(sample);
-    // printState("Rerpresentative of nearest slice is ", nearest_slice->repr->getState());
+    SlicePtr nearest_slice = getSlice(sample, pb);
+    #ifdef DEBUG_PRINTOUTS
+    printState("Rerpresentative of nearest slice is ", nearest_slice->repr->getState());
+    #endif
 
     if (active_obj_id == pb.robot_id) {
         // the selected node is the nearest node to the sample within the selected slice (in terms of robot distance)
         selected_node = nearest_slice->slice_samples_nn->nearest(sample);
     } else {
-        // check whether the closest slice is within max_slice_distance
-        float slice_distance = distanceToSlice(sample, nearest_slice);
-        // if (slice_distance > pb.pq.min_slice_distance) { // our sample lies within a new slice
-        auto sample_slice = getNewSlice(sample);
-        // printState("Sample is ", sample_slice->repr->getState());
-        // get all neighbor slices within radius max_slice_distance
-        std::vector<ExtensionCandidateTuple> candidate_states;
-        std::vector<SlicePtr> candidate_slices;
-        // check whether the sample slice is within a radius of max_slice_distance to the nearest slice
-        if (pb.pq.do_slice_ball_projection and slice_distance > pb.pq.max_slice_distance) {
-            // if not, project it
-            logging::logDebug("Projecting sample slice to reachable slice ball", log_prefix);
-            projectSliceOnBall(sample_slice, nearest_slice, pb.pq.max_slice_distance, pb);
-            // printState("Projected slice is ", sample_slice->repr->getState());
-        }
-        _slices_nn->nearestR(sample_slice, 1.00001f * pb.pq.max_slice_distance, candidate_slices);
-        if (not pb.pq.do_slice_ball_projection and candidate_slices.empty()) {
-            // in case we didn't project, there may be no neighbor within radius max_slice_distance
-            logging::logDebug("Projection disabled, adding nearest slice to candidates", log_prefix);
-            candidate_slices.push_back(nearest_slice);
-        }
-        assert(not candidate_slices.empty());
-        // there is at least one slice we can extend the search from
-        for (auto& candidate_slice : candidate_slices) {
-            auto distance = _slice_distance_fn.distance(candidate_slice, sample_slice);
-            // assert(distance > pb.pq.min_slice_distance);
-            distance = std::max((float)distance, pb.pq.min_slice_distance); // if sample lies within a slice, prevent divison by zero
-            auto weight = 1.0 / distance;
-            // save what we found
-            candidate_states.emplace_back(std::make_tuple(candidate_slice, weight));
-        }
-        // from all the slices we took a look at, pick one state
-        auto selected_state_tuple = selectCandidateSlice(candidate_states);
-        auto selected_slice = std::get<0>(selected_state_tuple);
-        // printState("Slice selected for extension: ", selected_slice->repr->getState());
+        #ifdef DEBUG_PRINTOUTS
+            printState("Sample is ", sample->getState());
+        #endif
+        #ifdef USE_SLICE_BALL
+            // check whether the closest slice is within max_slice_distance
+            float slice_distance = distanceToSlice(sample, nearest_slice);
+            // if (slice_distance > pb.pq.min_slice_distance) { // our sample lies within a new slice
+            auto sample_slice = getNewSlice(sample);
+            // get all neighbor slices within radius max_slice_distance
+            std::vector<ExtensionCandidateTuple> candidate_states;
+            std::vector<SlicePtr> candidate_slices;
+            // check whether the sample slice is within a radius of max_slice_distance to the nearest slice
+            if (pb.pq.do_slice_ball_projection and slice_distance > pb.pq.max_slice_distance) {
+                // if not, project it
+                logging::logDebug("Projecting sample slice to reachable slice ball", log_prefix);
+                projectSliceOnBall(sample_slice, nearest_slice, pb.pq.max_slice_distance, pb);
+                #ifdef DEBUG_PRINTOUTS
+                printState("Projected slice is ", sample_slice->repr->getState());
+                #endif
+            }
+            _slices_nn->nearestR(sample_slice, 1.00001f * pb.pq.max_slice_distance, candidate_slices);
+            if (not pb.pq.do_slice_ball_projection and candidate_slices.empty()) {
+                // in case we didn't project, there may be no neighbor within radius max_slice_distance
+                logging::logDebug("Projection disabled, adding nearest slice to candidates", log_prefix);
+                candidate_slices.push_back(nearest_slice);
+            }
+            assert(not candidate_slices.empty());
+            // there is at least one slice we can extend the search from
+            for (auto& candidate_slice : candidate_slices) {
+                auto distance = _slice_distance_fn.distance(candidate_slice, sample_slice);
+                // assert(distance > pb.pq.min_slice_distance);
+                distance = std::max((float)distance, pb.pq.min_slice_distance); // if sample lies within a slice, prevent divison by zero
+                auto weight = 1.0 / distance;
+                // save what we found
+                candidate_states.emplace_back(std::make_tuple(candidate_slice, weight));
+            }
+            // from all the slices we took a look at, pick one state
+            auto selected_state_tuple = selectCandidateSlice(candidate_states);
+            auto selected_slice = std::get<0>(selected_state_tuple);
+        #else
+            auto selected_slice = nearest_slice;
+        #endif
+
+        #ifdef DEBUG_PRINTOUTS
+            printState("Slice selected for extension: ", selected_slice->repr->getState());
+        #endif
         // sample a feasible robot state for the desired push
         auto tmp_motion = getNewMotion();
         // tmp_motion = slice_representative
         _state_space->copyState(tmp_motion->getState(), selected_slice->repr->getState());
         // tmp_motion's robot state gets updated with feasible robot state
-        // printState("Sample to move to is ", sample->getState());
+        #ifdef DEBUG_PRINTOUTS
+            printState("Sample to move to is ", sample->getState());
+        #endif
         _oracle_sampler->sampleFeasibleState(tmp_motion->getState(), sample->getState(), active_obj_id,
                                                 pb.pq.feasible_state_noise);
         // save that robot state in sample
-        // printState("Sampled feasible state is ", tmp_motion->getState());
+        #ifdef DEBUG_PRINTOUTS
+            printState("Sampled feasible state is ", tmp_motion->getState());
+        #endif
         _state_space->copySubState(sample->getState(), tmp_motion->getState(), pb.robot_id);
         cacheMotion(tmp_motion);
         // sample the node that is closest to a feasible state in this slice
         selected_node = selected_slice->slice_samples_nn->nearest(sample);
+        #ifdef USE_SLICE_BALL
+            cacheSlice(sample_slice);
+        #endif
         // }
     }
 }
 
 void SliceBasedOracleRRT::addToTree(MotionPtr new_motion, MotionPtr parent, PlanningBlackboard& pb) {
     RearrangementRRT::addToTree(new_motion, parent, pb);
-    SlicePtr closest_slice = getSlice(new_motion);
+    SlicePtr closest_slice = getSlice(new_motion, pb);
     float slice_distance = distanceToSlice(new_motion, closest_slice);
     if (slice_distance > pb.pq.min_slice_distance) { // we discovered a new slice!
         auto new_slice = getNewSlice(new_motion);
@@ -776,12 +820,13 @@ void SliceBasedOracleRRT::addToTree(MotionPtr new_motion, MotionPtr parent, Plan
     }
 }
 
-SliceBasedOracleRRT::SlicePtr SliceBasedOracleRRT::getSlice(MotionPtr motion) const {
+SliceBasedOracleRRT::SlicePtr SliceBasedOracleRRT::getSlice(MotionPtr motion, PlanningBlackboard& pb) const {
     if (_slices_nn->size() == 0) {
         return nullptr;
     }
     auto query_slice = getNewSlice(motion);
     auto nearest = _slices_nn->nearest(query_slice);
+    ++pb.stats.num_nearest_neighbor_queries;
     cacheSlice(query_slice);
     return nearest;
 }

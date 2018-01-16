@@ -214,7 +214,7 @@ void OraclePushPlanner::playback(const PlanningSolution& solution,
 }
 
 void OraclePushPlanner::setSliceDrawer(algorithm::SliceDrawerInterfacePtr slice_drawer) {
-    _rrt_debug_drawer->setSliceDrawer(slice_drawer);
+    if (_rrt_debug_drawer) _rrt_debug_drawer->setSliceDrawer(slice_drawer);
 }
 
 void OraclePushPlanner::renderSDF(float resolution) {
