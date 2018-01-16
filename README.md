@@ -9,6 +9,7 @@ Available rearrangement planning algorithms:
 - SliceOracleRRT (RRT-style planning algorithm that utilizes a slice view of the problem in combination with learned action primitives)
 
 Parameters for each rearrangement planning algorithm:
+
 **All**:
 - timeout - maximum number of seconds to plan (reasonable value is 60s)
 - weights - weights of individual entities (objects, robot) in distance function on search space (by default 1.0 for all)
@@ -16,14 +17,18 @@ Parameters for each rearrangement planning algorithm:
 - target_bias - number in range [0, 1 - robot_bias] that biases the algorithm to attempt moving target objects (0.2 is reasonable again)
 - robot_bias - number in range [0, 1 - target_bias] that biases the algorithm to attempt moving the robot (not as important as target_bias)
 - object_weights_distance_fn - an optional map that may contain weights used in the distance function for each object. If the object is not in the map,
-        the default value (1.0) is used.
+        the default value (1.0) is used. These weights are most relevant for HybridAtionRRT and OralceRRT (by choosing a small robot weight, these algorithm should become more similar to SliceOracleRRT)
+       
 **NaiveRRT**:
 - num_control_samples - number of control samples
+
 **HybridActionRRT**:
 - num_control_samples - number of control samples, must be positive (within 10 is reasonable)
 - action_noise - value in [0,1] that indicates randomness of action selection (0.5 is good)
+
 **OracleRRT**:
 - state_noise - probability to sample feasible state uniformly rather than from oracle (should be quite small)
+
 **SliceOracleRRT**:
 - do_slice_ball_projection - indiciates whether to project a sampled slice to reachable slice in the extension step
 - max_pushing_distance - maximum distance an object can be pushed (set in Oracle)
