@@ -542,21 +542,29 @@ bool OracleRearrangementRRT::extend(mps::planner::ompl::planning::essentials::Mo
     static const std::string log_prefix("[mps::planner::pushing::algorithm::OracleRearrangementRRT::extend]");
     logging::logDebug("Attempting to extend search tree", log_prefix);
     std::vector<const ::ompl::control::Control*> controls;
-    // first only move the robot TODO: This often pushes the object away from us
-    _oracle_sampler->steerRobot(controls, start->getState(), dest);
-    if (controls.empty()) {
-        logging::logErr("OracleControlSampler provided no controls at all", log_prefix);
-        return false;
-    }
-    bool extension_success = false;
     bool b_goal = false;
-    extendStep(controls, start, last_motion, pb, extension_success, b_goal);
-    // next, if the active object is not the robot, try a push
-    if (extension_success and active_obj_id != pb.robot_id and not b_goal) {
-        logging::logDebug("Steering robot to feasible state successful, attempting push", log_prefix);
-        controls.clear();
-        _oracle_sampler->steerPush(controls, last_motion->getState(), dest, active_obj_id, pb.pq.action_randomness);
-        extendStep(controls, last_motion, last_motion, pb, extension_success, b_goal);
+    bool extension_success = false;
+    float random_die = _rng->uniform01();
+    if (random_die < pb.pq.action_randomness) {
+        logging::logDebug("Sampling random action sequence", log_prefix);
+        // sample random action
+        _oracle_sampler->randomControl(controls);
+         extendStep(controls, start, last_motion, pb, extension_success, b_goal);
+    } else { // these are our primitives
+        // first only move the robot TODO: This often pushes the object away from us
+        _oracle_sampler->steerRobot(controls, start->getState(), dest);
+        if (controls.empty()) {
+            logging::logErr("OracleControlSampler provided no controls at all", log_prefix);
+            return false;
+        }
+        extendStep(controls, start, last_motion, pb, extension_success, b_goal);
+        // next, if the active object is not the robot, try a push
+        if (extension_success and active_obj_id != pb.robot_id and not b_goal) {
+            logging::logDebug("Steering robot to feasible state successful, attempting push", log_prefix);
+            controls.clear();
+            _oracle_sampler->steerPush(controls, last_motion->getState(), dest, active_obj_id);
+            extendStep(controls, last_motion, last_motion, pb, extension_success, b_goal);
+        }
     }
     return b_goal;
 }
