@@ -242,6 +242,15 @@ void OraclePushPlanner::generateData(const std::string& file_name,
     _data_generator->generateData(file_name, num_samples, annotation, deterministic);
 }
 
+void OraclePushPlanner::evaluateOracle(mps::planner::ompl::state::goal::RelocationGoalSpecification goal,
+                                       const std::string& file_name,
+                                       unsigned int num_samples,
+                                       const std::string& annotation) {
+    auto oracle_rrt = std::dynamic_pointer_cast<algorithm::OracleRearrangementRRT>(_algorithm);
+    auto oracle_sampler = oracle_rrt->getOracleSampler();
+    _data_generator->evaluateOracle(goal, oracle_sampler, _state_space, file_name, num_samples, annotation);
+}
+
 void OraclePushPlanner::dummyTest() {
     // TODO can put manual tests here
     ::ompl::base::StateSamplerPtr state_sampler = _space_information->allocStateSampler();
