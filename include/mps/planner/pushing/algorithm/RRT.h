@@ -396,6 +396,142 @@ namespace mps {
                 // private:
                 // };
 
+                //////////////////////////////////////////////////////////////////////////////////////
+                /////////////////////////////// Shortcutting algorithms //////////////////////////////
+                //////////////////////////////////////////////////////////////////////////////////////
+                class Shortcutter {
+                    /***
+                     * A shortcutter takes a path found by a RearrangementRRT and shortcuts it, i.e. it tries 
+                     * to remove unneccessary actions from the solutions.
+                     */
+                    public:
+                        struct ShortcutQuery {
+                            ompl::state::goal::ObjectsRelocationGoalPtr goal_region; // goal region
+                            ::ompl::base::OptimizationObjectivePtr shortcut_objective; // objective for shortcutting
+                            std::string robot_name;
+                            ShortcutQuery(ompl::state::goal::ObjectsRelocationGoalPtr goal_region_in,
+                                          ::ompl::base::OptimizationObjectivePtr shortcut_objective_in,
+                                          std::string robot_name);
+                        };
+                        Shortcutter(::ompl::control::SpaceInformationPtr si);
+                        virtual ~Shortcutter() = 0;
+
+                        /**
+                         *  Shortcut the given path.
+                         * @param path - a path created by a rearrangement RRT. If the path is invalid,
+                         *               the path remains unchanged, else the path is shortcut.
+                         * @param pq - shortcut query
+                         * @max_time - maximal duration this function is allowed to run (in seconds)
+                         */
+                        virtual void shortcut(mps::planner::ompl::planning::essentials::PathPtr path,
+                                              ShortcutQuery& pq,
+                                              float max_time) = 0;
+                        virtual std::string getName() const = 0;
+                    protected:
+                        ::ompl::control::SpaceInformationPtr _si;
+                        mps::planner::ompl::control::SimEnvStatePropagatorPtr _state_propagator;
+                        mps::planner::util::time::Timer _timer;
+                        // Methods
+                        mps::planner::ompl::planning::essentials::MotionPtr getNewMotion();
+                        void cacheMotion(mps::planner::ompl::planning::essentials::MotionPtr ptr);
+                        void cacheMotions(std::vector<mps::planner::ompl::planning::essentials::MotionPtr>& motions);
+                        mps::planner::ompl::planning::essentials::PathPtr getNewPath();
+                        // caches the given path, if clear_id >= 0, the motions with id >= clear_id are also cached
+                        void cachePath(mps::planner::ompl::planning::essentials::PathPtr ptr, int clear_id=-1);
+                        /***
+                         * Forward propagates the action stored in new_wp and from there on all actions
+                         * in old_path starting at index old_path_continuation. The resulting states
+                         * are added as new motions to path. The propagation starts from the last state stored
+                         * in path.
+                         */
+                        bool forwardPropagatePath(mps::planner::ompl::planning::essentials::PathPtr path,
+                                                  std::vector<mps::planner::ompl::planning::essentials::MotionPtr>& new_motions,
+                                                  mps::planner::ompl::planning::essentials::PathPtr old_path,
+                                                  unsigned int old_path_continuation,
+                                                  ShortcutQuery& sq);
+                    private:
+                        std::stack<mps::planner::ompl::planning::essentials::MotionPtr> _motions_cache;
+                        std::stack<mps::planner::ompl::planning::essentials::PathPtr> _path_cache;
+                };
+                typedef std::shared_ptr<Shortcutter> ShortcutterPtr;
+                typedef std::shared_ptr<const Shortcutter> ShortcutterConstPtr;
+                typedef std::weak_ptr<Shortcutter> ShortcutterWeakPtr;
+                typedef std::weak_ptr<const Shortcutter> ShortcutterWeakConstPtr;
+
+                class NaiveShortcutter : public Shortcutter, public std::enable_shared_from_this<NaiveShortcutter>  {
+                    /**
+                     * A NaiveShortCutter attempts to shortcut a path by steering the robot between two randomly 
+                     * sampled states (x_i, x_j), j > i + 1, and checking whether the subsequent actions from 
+                     * state x_j still lead to success.
+                     */
+                    public:
+                        NaiveShortcutter(::ompl::control::SpaceInformationPtr si,
+                                         mps::planner::pushing::oracle::RobotOraclePtr robot_oracle);
+                        virtual ~NaiveShortcutter();
+                        void shortcut(mps::planner::ompl::planning::essentials::PathPtr path,
+                                      ShortcutQuery& pq,
+                                      float max_time) override;
+                        std::string getName() const override;
+                    protected:
+                        void computeRobotActions(std::vector<mps::planner::ompl::planning::essentials::MotionPtr>& motions,
+                                                ::ompl::base::State* start_state,
+                                                ::ompl::base::State* end_state,
+                                                unsigned int robot_id);
+                    private:
+                        mps::planner::pushing::oracle::RobotOraclePtr _robot_oracle;
+                };
+                typedef std::shared_ptr<NaiveShortcutter> NaiveShortCutterPtr;
+                typedef std::shared_ptr<const NaiveShortcutter> NaiveShortCutterConstPtr;
+                typedef std::weak_ptr<NaiveShortcutter> NaiveShortCutterWeakPtr;
+                typedef std::weak_ptr<const NaiveShortcutter> NaiveShortCutterWeakConstPtr;
+
+                class OracleShortcutter : public Shortcutter, public std::enable_shared_from_this<OracleShortcutter>  {
+                    /**
+                     * A OracleShortcutter attempts to shortcut a path by using the oracle to move between two randomly 
+                     * sampled states (x_i, x_j), j > i + 1, and checking whether the subsequent actions from 
+                     * state x_j still lead to success. In contrast to the NaiveShortCutter, this shortcutter attempts
+                     * to push an object towards its respective state in x_j before steering the robot to its state.
+                     */
+                    public:
+                        OracleShortcutter(::ompl::control::SpaceInformationPtr si,
+                                          mps::planner::pushing::oracle::RobotOraclePtr robot_oracle,
+                                          mps::planner::pushing::oracle::PushingOraclePtr pushing_oracle);
+                        virtual ~OracleShortcutter();
+                        void shortcut(mps::planner::ompl::planning::essentials::PathPtr path,
+                                      ShortcutQuery& pq,
+                                      float max_time) override;
+                        std::string getName() const override;
+                    private:
+                        mps::planner::pushing::oracle::RobotOraclePtr _robot_oracle;
+                        mps::planner::pushing::oracle::PushingOraclePtr _pushing_oracle;
+                };
+                typedef std::shared_ptr<OracleShortcutter> OracleShortcutterPtr;
+                typedef std::shared_ptr<const OracleShortcutter> OracleShortcutterConstPtr;
+                typedef std::weak_ptr<OracleShortcutter> OracleShortcutterWeakPtr;
+                typedef std::weak_ptr<const OracleShortcutter> OracleShortcutterWeakConstPtr;
+
+                class ShortcutComparer: public Shortcutter, public std::enable_shared_from_this<ShortcutComparer>  {
+                    /**
+                     * ShortCutComparer keeps a list of different shortcutting algorithms and uses all of them to shortcut
+                     * the same path. The stats on how well each algorithm performed is kept. The shortcut
+                     * function returns the solutions that is best.
+                     */
+                    public:
+                        ShortcutComparer(::ompl::control::SpaceInformationPtr si,
+                                         std::vector<ShortcutterPtr>& short_cutters);
+                        virtual ~ShortcutComparer();
+                        void shortcut(mps::planner::ompl::planning::essentials::PathPtr path,
+                                      ShortcutQuery& pq,
+                                      float max_time) override;
+                        std::string getName() const override;
+                    private:
+                        std::vector<ShortcutterPtr> _short_cutters;
+                };
+                typedef std::shared_ptr<ShortcutComparer> ShortcutComparerPtr;
+                typedef std::shared_ptr<const ShortcutComparer> ShortcutComparerConstPtr;
+                typedef std::weak_ptr<ShortcutComparer> ShortcutComparerWeakPtr;
+                typedef std::weak_ptr<const ShortcutComparer> ShortcutComparerWeakConstPtr;
+
                 class DebugDrawer : public std::enable_shared_from_this<DebugDrawer> {
                     // TODO this class may be overfit to a 2d planning case.
                 public:

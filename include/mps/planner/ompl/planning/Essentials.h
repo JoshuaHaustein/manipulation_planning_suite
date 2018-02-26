@@ -57,6 +57,15 @@ namespace mps {
                          * @param motion - motion to append to this path.
                          */
                         void append(MotionPtr motion);
+
+                        /**
+                         *  Concatenates the first n waypoints of the given path to this path.
+                         *  None of the Motions are copied.
+                         *  @param path - other path
+                         *  @param n  - number of motions to add. if not specified the full path is concatenated
+                         */
+                        void concat(std::shared_ptr<Path> other, unsigned int n = std::numeric_limits<unsigned int>::max());
+
                         /**
                          * Resets this path and initializes this path by backtracking the path leading
                          * to motion. None of the motions are copied!
@@ -70,6 +79,10 @@ namespace mps {
                         unsigned int getNumMotions() const;
                         MotionPtr getMotion(unsigned int i);
                         MotionConstPtr getConstMotion(unsigned int i) const;
+                        /**
+                         * Constructs a deep copy of this path.
+                         */
+                        std::shared_ptr<Path> deepCopy() const;
                         //TODO could also define iterator for this
 
                     private:

@@ -77,6 +77,8 @@ PlanningProblem::PlanningProblem(sim_env::WorldPtr world, sim_env::RobotPtr robo
     sdf_error_threshold = 0.1f;
     debug = false;
     num_control_samples = 10;
+    shortcut = true;
+    shortcut_type = ShortcutType::NaiveShortcut;
     stopping_condition = [](){return false;};
     collision_policy.setStaticCollisions(true);
     collision_policy.setStaticCollisions(robot->getName(), false);
@@ -135,7 +137,7 @@ bool OraclePushPlanner::setup(PlanningProblem& problem) {
     prepareDistanceWeights();
     _space_information->setStatePropagator(_state_propagator);
     _space_information->setup();
-    _algorithm = createAlgorithm();
+    createAlgorithm(); // sets _algorithm and _shortcutter
     _data_generator = std::make_shared<oracle::DataGenerator>(_space_information, _state_propagator,
                                                               _planning_problem.world, _planning_problem.robot->getName(),
                                                               _planning_problem.relocation_goals.at(0).object_name);
@@ -195,6 +197,10 @@ bool OraclePushPlanner::solve(PlanningSolution& solution) {
     // before planning. let's save the state of the world
     auto world_state = _planning_problem.world->getWorldState();
     solution.solved = _algorithm->plan(pq, solution.path, solution.stats);
+    // shortcut query
+    // TODO
+    // algorithm::Shortcutter::ShortcutQuery sq(goal_region, //TODO, _planning_problem.robot->getName());
+    // TODO call shortcut algorithm
     // make sure the state of the world is the same as before
     _planning_problem.world->setWorldState(world_state);
     _state_space->freeState(start_state);
@@ -386,13 +392,16 @@ void OraclePushPlanner::prepareDistanceWeights() {
     }
 }
 
-mps::planner::pushing::algorithm::RearrangementRRTPtr OraclePushPlanner::createAlgorithm() {
+void OraclePushPlanner::createAlgorithm() {
     static const std::string log_prefix("[mps::planner::pushing::OraclePushPlanner::createAlgorithm]");
-    mps::planner::pushing::algorithm::RearrangementRRTPtr algo;
     if (_planning_problem.algorithm_type == PlanningProblem::AlgorithmType::Naive)
     {
-        algo = std::make_shared<algorithm::NaiveRearrangementRRT>(_space_information);
+        _algorithm = std::make_shared<algorithm::NaiveRearrangementRRT>(_space_information);
         util::logging::logDebug("Using naive algorithm, i.e. no oracle at all", log_prefix);
+        if (_planning_problem.shortcut) {
+            util::logging::logWarn("Selected naive planner in combination with shortcutting."
+                                    "Shortcutting not supported in this setting", log_prefix);
+        }
     } else {
         // all other algorithms need an oracle
         auto robot_state_space = _state_space->getObjectStateSpace(_planning_problem.robot->getName());
@@ -453,7 +462,7 @@ mps::planner::pushing::algorithm::RearrangementRRTPtr OraclePushPlanner::createA
         switch (_planning_problem.algorithm_type) {
             case PlanningProblem::AlgorithmType::OracleRRT:
             {
-                algo = std::make_shared<algorithm::OracleRearrangementRRT>(_space_information,
+                _algorithm = std::make_shared<algorithm::OracleRearrangementRRT>(_space_information,
                                                                            pushing_oracle,
                                                                            robot_oracle,
                                                                            _planning_problem.robot->getName());
@@ -462,7 +471,7 @@ mps::planner::pushing::algorithm::RearrangementRRTPtr OraclePushPlanner::createA
             }
             case PlanningProblem::AlgorithmType ::SliceOracleRRT:
             {
-                algo = std::make_shared<algorithm::SliceBasedOracleRRT>(_space_information,
+                _algorithm = std::make_shared<algorithm::SliceBasedOracleRRT>(_space_information,
                                                                         pushing_oracle,
                                                                         robot_oracle,
                                                                         _planning_problem.robot->getName());
@@ -471,7 +480,7 @@ mps::planner::pushing::algorithm::RearrangementRRTPtr OraclePushPlanner::createA
             }
             case PlanningProblem::AlgorithmType::HybridActionRRT:
             {
-                algo = std::make_shared<algorithm::HybridActionRRT>(_space_information,
+                _algorithm = std::make_shared<algorithm::HybridActionRRT>(_space_information,
                                                                     pushing_oracle,
                                                                     robot_oracle, _planning_problem.robot->getName());
                 util::logging::logInfo("Using HybridActionRRT", log_prefix);
@@ -493,7 +502,45 @@ mps::planner::pushing::algorithm::RearrangementRRTPtr OraclePushPlanner::createA
                 throw std::runtime_error("Invalid algorithm configuration encountered");
             }
         }
+        if (_planning_problem.shortcut) {
+            createShortcutAlgorithm(pushing_oracle, robot_oracle);
+        }
     }
-    return algo;
+}
+
+void OraclePushPlanner::createShortcutAlgorithm(oracle::PushingOraclePtr pushing_oracle,
+                                                oracle::RobotOraclePtr robot_oracle)
+{
+    std::string log_prefix("[OraclePushPlanner::createShortcutAlgorithm]");
+    switch(_planning_problem.shortcut_type) {
+        case PlanningProblem::ShortcutType::NaiveShortcut:
+        {
+            util::logging::logDebug("Setting up naive shortcutter", log_prefix);
+            _shortcutter = std::make_shared<algorithm::NaiveShortcutter>(_space_information, robot_oracle);
+            break;
+        }
+        case PlanningProblem::ShortcutType::OracleShortcut:
+        {
+            util::logging::logDebug("Setting up oracle shortcutter", log_prefix);
+            _shortcutter = std::make_shared<algorithm::OracleShortcutter>(_space_information, robot_oracle, pushing_oracle);
+            break;
+        }
+        case PlanningProblem::ShortcutType::CompareShortcut:
+        {
+            util::logging::logDebug("Setting up compare shortcutter", log_prefix);
+            std::vector<algorithm::ShortcutterPtr> shortcutters;
+            shortcutters.push_back(std::make_shared<algorithm::NaiveShortcutter>(_space_information,
+                                                                                 robot_oracle));
+            shortcutters.push_back(std::make_shared<algorithm::OracleShortcutter>(_space_information,
+                                                                                  robot_oracle, pushing_oracle));
+            _shortcutter = std::make_shared<algorithm::ShortcutComparer>(_space_information, shortcutters);
+            break;
+        }
+        default:
+        {
+            util::logging::logErr("Invalid shortcut configuration encountered.", log_prefix);
+            throw std::runtime_error("Invalid shortcut configuration encountered");
+        }
+    }
 }
 

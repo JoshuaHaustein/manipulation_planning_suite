@@ -12,7 +12,7 @@ find_package(catkin REQUIRED
 
 ## System dependencies are found with CMake's conventions
 # find_package(Boost REQUIRED COMPONENTS system)
-find_package(Eigen3 3.3 REQUIRED)
+find_package(Eigen 3.2 REQUIRED)
 find_package(OMPL REQUIRED)
 # find_package(Protobuf REQUIRED)
 
@@ -35,7 +35,7 @@ catkin_package(
   INCLUDE_DIRS include
   LIBRARIES ${PROJECT_NAME} proto
   CATKIN_DEPENDS sim_env
-  DEPENDS EIGEN3 OMPL
+  DEPENDS EIGEN OMPL
 )
 
 ###########

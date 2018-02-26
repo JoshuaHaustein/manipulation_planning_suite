@@ -16,6 +16,7 @@
 #include <mps/planner/pushing/algorithm/RRT.h>
 #include <mps/planner/pushing/oracle/DataGenerator.h>
 #include <mps/planner/pushing/oracle/ElasticBandRampComputer.h>
+#include <mps/planner/pushing/oracle/Oracle.h>
 
 namespace mps {
     namespace planner {
@@ -36,6 +37,10 @@ namespace mps {
                 enum AlgorithmType {
                     Naive = 0, OracleRRT = 1, SliceOracleRRT = 2, GNATSamplingSliceOracleRRT = 3,
                     SemanticGNATSamplingSliceOracleRRT = 4, HybridActionRRT = 5
+                };
+
+                enum ShortcutType {
+                    NaiveShortcut = 0, OracleShortcut = 1, CompareShortcut = 2
                 };
                 // world related parameters
                 sim_env::WorldPtr world;
@@ -63,6 +68,7 @@ namespace mps {
                 OracleType oracle_type;
                 AlgorithmType algorithm_type;
                 LocalPlanner local_planner_type;
+                ShortcutType shortcut_type;
                 unsigned int num_control_samples;
                 float goal_bias;
                 float robot_bias;
@@ -76,6 +82,7 @@ namespace mps {
                 float sdf_resolution;
                 float sdf_error_threshold;
                 // TODO more parameters, like distance weights, goal region
+                bool shortcut;
 
                 /**
                  *  Constructor of a planning problem.
@@ -158,12 +165,15 @@ namespace mps {
                 mps::planner::ompl::control::SimEnvStatePropagatorPtr _state_propagator;
                 PlanningProblem _planning_problem;
                 mps::planner::pushing::algorithm::RearrangementRRTPtr _algorithm;
+                mps::planner::pushing::algorithm::ShortcutterPtr _shortcutter;
                 mps::planner::pushing::oracle::ElasticBandRampComputerPtr _eb_computer;
                 mps::planner::pushing::algorithm::DebugDrawerPtr _rrt_debug_drawer;
                 mps::planner::pushing::oracle::EBDebugDrawerPtr _eb_debug_drawer;
                 std::vector<float> _distance_weights;
                 void prepareDistanceWeights();
-                mps::planner::pushing::algorithm::RearrangementRRTPtr createAlgorithm();
+                void createAlgorithm(); // sets _algorithm and _shortcutter
+                void createShortcutAlgorithm(oracle::PushingOraclePtr pushing_oracle,
+                                             oracle::RobotOraclePtr robot_oracle);
 //                ::ompl::control::DirectedControlSamplerPtr allocateDirectedControlSampler(const ::ompl::control::SpaceInformation* si);
                 mps::planner::pushing::oracle::DataGeneratorPtr _data_generator;
             };

@@ -144,6 +144,13 @@ void Path::append(MotionPtr motion) {
     _motions.push_back(motion);
 }
 
+void Path::concat(std::shared_ptr<Path> other, unsigned int n) {
+    unsigned int last_wp_id = std::min(other->getNumMotions(), n);
+    for (unsigned int i = 0; i < last_wp_id; ++i) {
+        append(other->getMotion(i));
+    }
+}
+
 void Path::initBacktrackMotion(MotionPtr motion) {
     clear();
     _motions.push_back(motion);
@@ -170,4 +177,3 @@ MotionPtr Path::getMotion(unsigned int i) {
 MotionConstPtr Path::getConstMotion(unsigned int i) const {
     return _motions.at(i);
 }
-
