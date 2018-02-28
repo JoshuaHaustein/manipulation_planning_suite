@@ -79,7 +79,7 @@ PlanningProblem::PlanningProblem(sim_env::WorldPtr world, sim_env::RobotPtr robo
     debug = false;
     num_control_samples = 10;
     shortcut = true;
-    shortcut_type = ShortcutType::NaiveShortcut;
+    shortcut_type = ShortcutType::OracleShortcut;
     max_shortcut_time = 5.0f;
     stopping_condition = [](){return false;};
     collision_policy.setStaticCollisions(true);
@@ -528,7 +528,8 @@ void OraclePushPlanner::createShortcutAlgorithm(oracle::PushingOraclePtr pushing
         case PlanningProblem::ShortcutType::OracleShortcut:
         {
             util::logging::logDebug("Setting up oracle shortcutter", log_prefix);
-            _shortcutter = std::make_shared<algorithm::OracleShortcutter>(_space_information, robot_oracle, pushing_oracle);
+            _shortcutter = std::make_shared<algorithm::OracleShortcutter>(_space_information, robot_oracle, pushing_oracle,
+                                                                          _planning_problem.robot->getName());
             break;
         }
         case PlanningProblem::ShortcutType::CompareShortcut:
@@ -538,7 +539,8 @@ void OraclePushPlanner::createShortcutAlgorithm(oracle::PushingOraclePtr pushing
             shortcutters.push_back(std::make_shared<algorithm::NaiveShortcutter>(_space_information,
                                                                                  robot_oracle));
             shortcutters.push_back(std::make_shared<algorithm::OracleShortcutter>(_space_information,
-                                                                                  robot_oracle, pushing_oracle));
+                                                                                  robot_oracle, pushing_oracle,
+                                                                                  _planning_problem.robot->getName()));
             _shortcutter = std::make_shared<algorithm::ShortcutComparer>(_space_information, shortcutters);
             break;
         }

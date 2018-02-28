@@ -80,6 +80,7 @@ namespace mps {
                         void clear();
                         unsigned int getNumMotions() const;
                         MotionPtr getMotion(unsigned int i);
+                        MotionPtr last();
                         MotionConstPtr getConstMotion(unsigned int i) const;
                         /**
                          * Constructs a deep copy of this path.

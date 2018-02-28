@@ -502,15 +502,34 @@ namespace mps {
                     public:
                         OracleShortcutter(::ompl::control::SpaceInformationPtr si,
                                           mps::planner::pushing::oracle::RobotOraclePtr robot_oracle,
-                                          mps::planner::pushing::oracle::PushingOraclePtr pushing_oracle);
+                                          mps::planner::pushing::oracle::PushingOraclePtr pushing_oracle,
+                                          const std::string& robot_name);
                         virtual ~OracleShortcutter();
                         void shortcut(mps::planner::ompl::planning::essentials::PathPtr path,
                                       ShortcutQuery& pq,
                                       float max_time) override;
                         std::string getName() const override;
+                    protected:
+                        typedef std::deque<std::pair<unsigned int, unsigned int> > PairQueue;
+                        typedef std::vector<unsigned int> ObjectIds;
+                        typedef std::unordered_map<std::pair<unsigned int, unsigned int>, ObjectIds, boost::hash<std::pair<unsigned int, unsigned int> > > PairMap;
                     private:
-                        mps::planner::pushing::oracle::RobotOraclePtr _robot_oracle;
-                        mps::planner::pushing::oracle::PushingOraclePtr _pushing_oracle;
+                        mps::planner::pushing::oracle::OracleControlSamplerPtr _oracle_sampler;
+                        // Selects which object to push for shortcutting and updates pair data structures
+                        unsigned int selectObject(mps::planner::ompl::planning::essentials::PathPtr current_path,
+                                                std::pair<unsigned int, unsigned int>& current_pair,
+                                                PairMap& pair_to_objects, PairQueue& pair_queue, 
+                                                unsigned int robot_id) const;
+                        // computes the actual shortcut and extends new_path
+                        bool computeShortcut(mps::planner::ompl::planning::essentials::PathPtr new_path,
+                                             mps::planner::ompl::planning::essentials::PathPtr current_path,
+                                             unsigned int target_id, unsigned int robot_id, unsigned int object_id,
+                                             ShortcutQuery& sq);
+                        void fillPairQueue(PairQueue& all_pairs, unsigned int n) const;
+                        bool extendPath(mps::planner::ompl::planning::essentials::PathPtr path,
+                                        const std::vector<const ::ompl::control::Control*>& controls,
+                                        bool& goal_reached,
+                                        ShortcutQuery& sq);
                 };
                 typedef std::shared_ptr<OracleShortcutter> OracleShortcutterPtr;
                 typedef std::shared_ptr<const OracleShortcutter> OracleShortcutterConstPtr;

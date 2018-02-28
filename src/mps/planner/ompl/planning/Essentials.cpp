@@ -174,6 +174,10 @@ MotionPtr Path::getMotion(unsigned int i) {
     return _motions.at(i);
 }
 
+MotionPtr Path::last() {
+    return _motions.at(getNumMotions() - 1);
+}
+
 MotionConstPtr Path::getConstMotion(unsigned int i) const {
     return _motions.at(i);
 }
