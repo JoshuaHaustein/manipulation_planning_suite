@@ -4,6 +4,7 @@
 
 #include <ompl/base/samplers/UniformValidStateSampler.h>
 #include <mps/planner/pushing/OraclePushPlanner.h>
+#include <mps/planner/pushing/Costs.h>
 #include <mps/planner/util/Serialize.h>
 #include <mps/planner/ompl/state/goal/ObjectsRelocationGoal.h>
 #include <mps/planner/pushing/oracle/OracleControlSampler.h>
@@ -79,6 +80,7 @@ PlanningProblem::PlanningProblem(sim_env::WorldPtr world, sim_env::RobotPtr robo
     num_control_samples = 10;
     shortcut = true;
     shortcut_type = ShortcutType::NaiveShortcut;
+    max_shortcut_time = 5.0f;
     stopping_condition = [](){return false;};
     collision_policy.setStaticCollisions(true);
     collision_policy.setStaticCollisions(robot->getName(), false);
@@ -196,11 +198,15 @@ bool OraclePushPlanner::solve(PlanningSolution& solution) {
     solution.path = std::make_shared<mps::planner::ompl::planning::essentials::Path>(_space_information);
     // before planning. let's save the state of the world
     auto world_state = _planning_problem.world->getWorldState();
+    // PLAAAAAAANNN
     solution.solved = _algorithm->plan(pq, solution.path, solution.stats);
-    // shortcut query
-    // TODO
-    // algorithm::Shortcutter::ShortcutQuery sq(goal_region, //TODO, _planning_problem.robot->getName());
-    // TODO call shortcut algorithm
+    // optionally shortcut query
+    if (_planning_problem.shortcut) {
+        auto cost_fn = std::make_shared<costs::ActionDurationCost>();
+        algorithm::Shortcutter::ShortcutQuery sq(goal_region, cost_fn, _planning_problem.robot->getName());
+        assert(_shortcutter);
+        _shortcutter->shortcut(solution.path, sq, _planning_problem.max_shortcut_time);
+    }
     // make sure the state of the world is the same as before
     _planning_problem.world->setWorldState(world_state);
     _state_space->freeState(start_state);

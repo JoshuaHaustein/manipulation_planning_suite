@@ -69,6 +69,7 @@ namespace mps {
                 AlgorithmType algorithm_type;
                 LocalPlanner local_planner_type;
                 ShortcutType shortcut_type;
+                float max_shortcut_time;
                 unsigned int num_control_samples;
                 float goal_bias;
                 float robot_bias;

@@ -177,3 +177,30 @@ MotionPtr Path::getMotion(unsigned int i) {
 MotionConstPtr Path::getConstMotion(unsigned int i) const {
     return _motions.at(i);
 }
+
+PathPtr Path::deepCopy() const {
+    PathPtr new_path = std::make_shared<Path>(_sic);
+    for (auto motion : _motions) {
+        auto new_motion = std::make_shared<Motion>(_sic);
+        _sic->copyState(new_motion->getState(), motion->getState());
+        _sic->copyControl(new_motion->getControl(), motion->getControl());
+        new_path->append(new_motion);
+    }
+    return new_path;
+}
+
+CostFunction::~CostFunction() = default;
+
+double CostFunction::cost(PathPtr path) {
+    double value = 0.0;
+    unsigned int num_motions = path->getNumMotions();
+    if (num_motions <= 1) return 0.0;
+    auto prev_motion = path->getMotion(0);
+    // run over path and accumulate cost
+    for (unsigned int i = 0; i < num_motions; ++i) {
+        auto current_motion = path->getMotion(i);
+        value += cost(prev_motion, current_motion);
+        prev_motion = current_motion;
+    }
+    return value;
+}

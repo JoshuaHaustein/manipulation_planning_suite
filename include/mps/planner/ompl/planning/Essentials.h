@@ -48,7 +48,9 @@ namespace mps {
                         ~Path();
 
                         double length() const override;
+                        // DO NOT USE THIS FUNCTION - NOT IMPLEMENTED
                         ::ompl::base::Cost cost(const ::ompl::base::OptimizationObjectivePtr& oo) const override;
+
                         bool check() const override;
                         void print(std::ostream& out) const override;
 
@@ -81,9 +83,10 @@ namespace mps {
                         MotionConstPtr getConstMotion(unsigned int i) const;
                         /**
                          * Constructs a deep copy of this path.
+                         * The deep copy copies all motions stored in this path, but not the space 
+                         * information pointer
                          */
                         std::shared_ptr<Path> deepCopy() const;
-                        //TODO could also define iterator for this
 
                     private:
                         ::ompl::control::SpaceInformationPtr _sic;
@@ -95,6 +98,27 @@ namespace mps {
                     typedef std::shared_ptr<const Path> PathConstPtr;
                     typedef std::weak_ptr<Path> PathWeakPtr;
                     typedef std::weak_ptr<const Path> PathWeakConstPtr;
+
+                    class CostFunction {
+                        public: 
+                            virtual ~CostFunction() = 0;
+                            /**
+                             *  Returns the cost taking the action stored in second
+                             *  from the state stored in first that will result in the state in second.
+                             */
+                            virtual double cost(MotionPtr first, MotionPtr second) = 0;
+
+                            /**
+                             * Returns the cost for a path. Default implementation accumulates
+                             * cost between individual motions in path.
+                             */
+                            virtual double cost(PathPtr path);
+                    };
+
+                    typedef std::shared_ptr<CostFunction> CostFunctionPtr;
+                    typedef std::shared_ptr<const CostFunction> CostFunctionConstPtr;
+                    typedef std::weak_ptr<CostFunction> CostFunctionWeakPtr;
+                    typedef std::weak_ptr<const CostFunction> CostFunctionWeakConstPtr;
                 }
             }
         }

@@ -80,6 +80,7 @@ set(PLANNER_H
         include/mps/planner/ompl/state/goal/ObjectsRelocationGoal.h
         include/mps/planner/ompl/planning/Essentials.h
         include/mps/planner/pushing/OraclePushPlanner.h
+        include/mps/planner/pushing/Costs.h
         include/mps/planner/pushing/oracle/OracleControlSampler.h
         include/mps/planner/pushing/oracle/Oracle.h
         include/mps/planner/pushing/oracle/LearnedOracle.h
@@ -118,6 +119,7 @@ set(PLANNER_SRC
         src/mps/planner/util/Math.cpp
         src/mps/planner/util/yaml/OracleParsing.cpp
         src/mps/planner/pushing/OraclePushPlanner.cpp
+        src/mps/planner/pushing/Costs.cpp
         src/mps/planner/pushing/oracle/OracleControlSampler.cpp
         src/mps/planner/pushing/oracle/Oracle.cpp
         src/mps/planner/pushing/oracle/LearnedOracle.cpp

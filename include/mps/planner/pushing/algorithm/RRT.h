@@ -407,11 +407,16 @@ namespace mps {
                     public:
                         struct ShortcutQuery {
                             ompl::state::goal::ObjectsRelocationGoalPtr goal_region; // goal region
-                            ::ompl::base::OptimizationObjectivePtr shortcut_objective; // objective for shortcutting
+                            ompl::planning::essentials::CostFunctionPtr cost_function; // objective for shortcutting
                             std::string robot_name;
                             ShortcutQuery(ompl::state::goal::ObjectsRelocationGoalPtr goal_region_in,
-                                          ::ompl::base::OptimizationObjectivePtr shortcut_objective_in,
-                                          std::string robot_name);
+                                          ompl::planning::essentials::CostFunctionPtr cost_function_in,
+                                          std::string robot_name_in) 
+                            {
+                                goal_region = goal_region_in;
+                                cost_function = cost_function_in;
+                                robot_name = robot_name_in;
+                            }
                         };
                         Shortcutter(::ompl::control::SpaceInformationPtr si);
                         virtual ~Shortcutter() = 0;
