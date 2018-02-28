@@ -482,6 +482,8 @@ namespace mps {
                                                 ::ompl::base::State* start_state,
                                                 ::ompl::base::State* end_state,
                                                 unsigned int robot_id);
+                        // creates all pairs of waypoints
+                        void createAllPairs(std::vector<std::pair<unsigned int, unsigned int> >& all_pairs, unsigned int n) const;
                     private:
                         mps::planner::pushing::oracle::RobotOraclePtr _robot_oracle;
                 };

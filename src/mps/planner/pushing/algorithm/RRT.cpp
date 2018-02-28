@@ -1060,55 +1060,54 @@ void NaiveShortcutter::shortcut(mps::planner::ompl::planning::essentials::PathPt
                                 float max_time) {
     const std::string log_prefix("[NaiveShortcutter::shortcut]");
     logging::logDebug("Shortcutting path with naive shortcutter", log_prefix);
-    std::unordered_map<std::pair<unsigned int, unsigned int>, bool,
-                        boost::hash< std::pair< unsigned int, unsigned int> > > previous_pairs;
+    std::vector<std::pair<unsigned int, unsigned int> > all_pairs;
     bool finished = iopath->getNumMotions() <= 2;
     if (finished) return;
     auto current_path = iopath->deepCopy(); // first copy the io path
-    auto rnd_gen = mps::planner::util::random::getDefaultRandomGenerator();
     double current_path_cost = sq.cost_function->cost(current_path);
     double initial_cost = current_path_cost;
     auto world_state_space = std::dynamic_pointer_cast<mps_state::SimEnvWorldStateSpace>(_si->getStateSpace());
     unsigned int robot_id = world_state_space->getObjectIndex(sq.robot_name);
-    _timer.startTimer(max_time);
+    _timer.startTimer(max_time); // now start the timer
+    // run over all nodes in the path and try to shortcut
     while (!_timer.timeOutExceeded() && !finished) {
-        // sample a random pair TODO: there are probably better ways to do this 
-        auto num_motions = current_path->getNumMotions();
-        unsigned int start_id = rnd_gen->uniformInt(0, num_motions - 3); 
-        unsigned int end_id = rnd_gen->uniformInt(start_id + 2, num_motions - 1);
-        auto id_pair = std::make_pair(start_id, end_id);
-        auto pair_iter = previous_pairs.find(id_pair);
-        if (pair_iter != previous_pairs.end()) { 
-            finished = previous_pairs.size() == (num_motions - 1) * (num_motions -1); // we tried all pairs
-            continue; // we already tried this pair
-        } else {
-            previous_pairs[id_pair] = true;
+        // create all pairs
+        createAllPairs(all_pairs, current_path->getNumMotions());
+        auto pair_iter = all_pairs.begin();
+        // try to shortcut
+        while (!_timer.timeOutExceeded() && pair_iter != all_pairs.end()) {
+            // gets indices to try shortcutting between
+            auto start_id = pair_iter->first;
+            auto end_id = pair_iter->second;
+            // get motions
+            // a motion is (action, state) where the action leads to the state
+            auto first_wp = current_path->getMotion(start_id); // contains state from which to start shortcut
+            auto snd_wp = current_path->getMotion(end_id); // contains state we would like to move to
+            std::vector<MotionPtr> new_motions; // will contain new actions
+            auto new_path = getNewPath(); // will contain new path
+            // concat all waypoints up to start_id (incl)
+            new_path->concat(current_path, start_id + 1);
+            // do the actual shortcutting by computing robot actions that steer the robot
+            computeRobotActions(new_motions, first_wp->getState(), snd_wp->getState(), robot_id);
+            // test whether we still achieve the goal
+            bool successful_path = forwardPropagatePath(new_path, new_motions, current_path, end_id + 1, sq);
+            double new_cost = sq.cost_function->cost(new_path);
+            if (successful_path and (new_cost < current_path_cost)) {  
+                // replace path if new one is better
+                logging::logDebug(boost::format("Found a shortcut. Old cost: %f, new cost %f") % current_path_cost % new_cost,
+                                log_prefix);
+                cachePath(current_path, start_id + 1);
+                current_path = new_path;
+                current_path_cost = new_cost;
+                finished = current_path->getNumMotions() <= 2;
+                break;
+            } else {
+                cachePath(new_path);
+                cacheMotions(new_motions);
+            }
+            ++pair_iter;
         }
-        // shortcut
-        // a motion is (action, state) where the action leads to the state
-        auto first_wp = current_path->getMotion(start_id); // contains state from which to start shortcut
-        auto snd_wp = current_path->getMotion(end_id); // contains state we would like to move to
-        std::vector<MotionPtr> new_motions; // will contain new actions
-        auto new_path = getNewPath(); // will contain new path
-        // concat all waypoints up to start_id (incl)
-        new_path->concat(current_path, start_id + 1);
-        // do the actual shortcutting by computing robot actions that steer the robot
-        computeRobotActions(new_motions, first_wp->getState(), snd_wp->getState(), robot_id);
-        // test whether we still achieve the goal
-        bool successful_path = forwardPropagatePath(new_path, new_motions, current_path, end_id + 1, sq);
-        double new_cost = sq.cost_function->cost(new_path);
-        if (successful_path and (new_cost < current_path_cost)) {  // replace path if new one is better
-            logging::logDebug(boost::format("Found a shortcut. Old cost: %f, new cost %f") % current_path_cost % new_cost,
-                              log_prefix);
-            cachePath(current_path, start_id + 1);
-            current_path = new_path;
-            current_path_cost = new_cost;
-            previous_pairs.clear();
-            finished = current_path->getNumMotions() <= 2;
-        } else {
-            cachePath(new_path);
-            cacheMotions(new_motions);
-        }
+        finished |= pair_iter == all_pairs.end(); // we are finished if we tried all pairs
     }
     // finally, we need to save the current path in iopath
     iopath->clear();
@@ -1142,6 +1141,22 @@ void NaiveShortcutter::computeRobotActions(std::vector<mps::planner::ompl::plann
     }
 }
 
+void NaiveShortcutter::createAllPairs(std::vector< std::pair<unsigned int, unsigned int> >& all_pairs,
+                                      unsigned int n) const 
+{
+    all_pairs.clear();
+    if (n <= 2) return; // nothing to do in this case
+    all_pairs.reserve((n * n -  3 * n + 2) / 2); // number of pairs (skipping immediate neighbors)
+    for (unsigned int i = 0; i < n - 2; ++i) {
+        for (unsigned int j = i + 2; j < n; ++j) {
+            all_pairs.push_back(std::make_pair(i, j));
+        }
+    }
+    // Now shuffle the pairs 
+    std::random_device rd;
+    std::mt19937 g(rd()); // TODO can we do this somehow with ompl's rng?
+    std::shuffle(all_pairs.begin(), all_pairs.end(), g);
+}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////// OracleShortcutter /////////////////////////////////////////
