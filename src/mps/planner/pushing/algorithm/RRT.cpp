@@ -955,6 +955,11 @@ Shortcutter::Shortcutter(::ompl::control::SpaceInformationPtr si):
 
 Shortcutter::~Shortcutter() = default;
 
+void Shortcutter::setDebugDrawer(mps::planner::pushing::algorithm::DebugDrawerPtr debug_drawer) 
+{
+    _debug_drawer = debug_drawer;
+}
+
 MotionPtr Shortcutter::getNewMotion() {
     if (not _motions_cache.empty()) {
         MotionPtr ptr = _motions_cache.top();
@@ -1044,6 +1049,20 @@ bool Shortcutter::forwardPropagatePath(mps::planner::ompl::planning::essentials:
     return false; // if we reached this point, it means we are not reaching a goal anymore
 }
 
+void Shortcutter::showState(::ompl::base::State* state, const std::string& msg) {
+    std::stringstream ss;
+    auto* world_state = dynamic_cast<mps_state::SimEnvWorldState*>(state);
+    ss.str("");
+    ss << msg;
+    world_state->print(ss);
+    logging::logDebug(ss.str(), "[Shortcutter::printState]");
+    #ifdef DEBUG_VISUALIZE
+    if (_debug_drawer) {
+        auto state_space = std::dynamic_pointer_cast<mps_state::SimEnvWorldStateSpace>(_si->getStateSpace());
+        _debug_drawer->showState(world_state, state_space);
+    }
+    #endif
+}
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////// NaiveShortcutter //////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1070,12 +1089,12 @@ void NaiveShortcutter::shortcut(mps::planner::ompl::planning::essentials::PathPt
     unsigned int robot_id = world_state_space->getObjectIndex(sq.robot_name);
     _timer.startTimer(max_time); // now start the timer
     // run over all nodes in the path and try to shortcut
-    while (!_timer.timeOutExceeded() && !finished) {
+    while (!_timer.timeOutExceeded() && !finished && !sq.stopping_condition()) {
         // create all pairs
         createAllPairs(all_pairs, current_path->getNumMotions());
         auto pair_iter = all_pairs.begin();
         // try to shortcut
-        while (!_timer.timeOutExceeded() && pair_iter != all_pairs.end()) {
+        while (!_timer.timeOutExceeded() && pair_iter != all_pairs.end() && !sq.stopping_condition()) {
             // gets indices to try shortcutting between
             auto start_id = pair_iter->first;
             auto end_id = pair_iter->second;
@@ -1189,18 +1208,26 @@ void OracleShortcutter::shortcut(mps::planner::ompl::planning::essentials::PathP
     unsigned int robot_id = world_state_space->getObjectIndex(sq.robot_name);
     _timer.startTimer(max_time); // now start the timer
     // run over all nodes in the path and try to shortcut
-    while (!_timer.timeOutExceeded() && !finished) {
+    while (!_timer.timeOutExceeded() && !finished && !sq.stopping_condition()) {
         // create all pairs
         fillPairQueue(all_pairs, current_path->getNumMotions());
         pair_to_objects.clear();
         // try to shortcut
-        while (!_timer.timeOutExceeded() && !all_pairs.empty()) {
+        while (!_timer.timeOutExceeded() && !all_pairs.empty() && !sq.stopping_condition()) {
             auto current_pair = all_pairs.front();
             all_pairs.pop_front();
             // gets indices to try shortcutting between
             auto start_id = current_pair.first;
             auto end_id = current_pair.second;
-            // get motions
+            // print motions
+            #ifdef DEBUG_PRINTOUTS
+            {
+                auto first_mtn = current_path->getMotion(start_id);
+                auto snd_mtn = current_path->getMotion(end_id);
+                showState(first_mtn->getState(), "Shortcut attempt starts from state ");
+                showState(snd_mtn->getState(), "And goes to state ");
+            }
+            #endif
             // pick which object to push and also update pair data structures
             unsigned int object_id = selectObject(current_path, current_pair, pair_to_objects, all_pairs, robot_id);
             auto new_path = getNewPath(); // will contain new path
@@ -1273,7 +1300,7 @@ unsigned int OracleShortcutter::selectObject(mps::planner::ompl::planning::essen
             auto snd_state = dynamic_cast<mps_state::SimEnvWorldState*>(snd_mtn->getState());
             float dist = state_space->getSubspace(i)->distance(first_state->getObjectState(i),
                                                                snd_state->getObjectState(i));
-            distances.push_back(std::make_pair(i, dist));
+            if (dist > 0.0f) distances.push_back(std::make_pair(i, dist));
         }
         // sort distances with objects that have largest distance last
         std::sort(distances.begin(), distances.end(),
@@ -1319,7 +1346,7 @@ bool OracleShortcutter::computeShortcut(mps::planner::ompl::planning::essentials
     if (object_id != robot_id) { // we plan to push object object_id
         // first sample a feasible state
         auto feasible_state_mtn = getNewMotion();
-        _si->copyState(feasible_state_mtn->getState(), destination->getState());
+        _si->copyState(feasible_state_mtn->getState(), start->getState());
         _oracle_sampler->sampleFeasibleState(feasible_state_mtn->getState(),
                                              destination->getState(),
                                              object_id);
@@ -1335,6 +1362,12 @@ bool OracleShortcutter::computeShortcut(mps::planner::ompl::planning::essentials
         controls.clear();
         if (!propagation_success) return false;
         if (goal_reached) return true;
+        #ifdef DEBUG_PRINTOUTS
+        {
+            showState(new_path->last()->getState(), "Reached feasible state");
+        }
+        #endif
+
         // next attempt to push
         _oracle_sampler->steerPush(controls, new_path->last()->getState(),
                                    destination->getState(), object_id);
@@ -1343,6 +1376,11 @@ bool OracleShortcutter::computeShortcut(mps::planner::ompl::planning::essentials
         controls.clear();
         if (!propagation_success) return false;
         if (goal_reached) return true;
+        #ifdef DEBUG_PRINTOUTS
+        {
+            showState(new_path->last()->getState(), "Pushing outcome");
+        }
+        #endif
     } // else only move the robot
     //  move the robot to the state where it has to be for the remaining path
     _oracle_sampler->steerRobot(controls, new_path->last()->getState(),
@@ -1350,6 +1388,11 @@ bool OracleShortcutter::computeShortcut(mps::planner::ompl::planning::essentials
     propagation_success = extendPath(new_path, controls, goal_reached, sq);
     controls.clear();
     if (!propagation_success) return false;
+    #ifdef DEBUG_PRINTOUTS
+    {
+        showState(new_path->last()->getState(), "Robot steered to its original position");
+    }
+    #endif
     if (goal_reached) return true;
     // forward propagate the remaining path
     // first copy controls
@@ -1377,13 +1420,18 @@ bool OracleShortcutter::extendPath(PathPtr path,
                                                          new_motion->getControl(),
                                                          new_motion->getState());
         if (not extension_success) { // we failed, no shortcut
-            logging::logDebug("A control provided by the oracle failed. ", log_prefix);
+            logging::logDebug("Exending path failed", log_prefix);
             cacheMotion(new_motion);
             return false;
         }
         // extension is successful, add this to the new path
         path->append(new_motion);
-        prev_motion = new_motion;
+        #ifdef DEBUG_PRINTOUTS
+        {
+            showState(new_motion->getState(), "new motion");
+        }
+        #endif
+
         if (sq.goal_region->isSatisfied(new_motion->getState())) {
             // we reached a goal!
             goal_reached = true;

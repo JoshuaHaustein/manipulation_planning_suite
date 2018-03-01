@@ -158,6 +158,7 @@ bool OraclePushPlanner::setup(PlanningProblem& problem) {
             _rrt_debug_drawer->setTargetIds(target_object_ids);
         }
         _algorithm->setDebugDrawer(_rrt_debug_drawer);
+        _shortcutter->setDebugDrawer(_rrt_debug_drawer);
     }
     // TODO we probably don't need to reconstruct everything all the time
     _is_initialized = true;
@@ -201,9 +202,10 @@ bool OraclePushPlanner::solve(PlanningSolution& solution) {
     // PLAAAAAAANNN
     solution.solved = _algorithm->plan(pq, solution.path, solution.stats);
     // optionally shortcut query
-    if (_planning_problem.shortcut) {
+    if (_planning_problem.shortcut && solution.solved) {
         auto cost_fn = std::make_shared<costs::ActionDurationCost>();
         algorithm::Shortcutter::ShortcutQuery sq(goal_region, cost_fn, _planning_problem.robot->getName());
+        sq.stopping_condition = _planning_problem.stopping_condition;
         assert(_shortcutter);
         _shortcutter->shortcut(solution.path, sq, _planning_problem.max_shortcut_time);
     }
@@ -551,4 +553,3 @@ void OraclePushPlanner::createShortcutAlgorithm(oracle::PushingOraclePtr pushing
         }
     }
 }
-

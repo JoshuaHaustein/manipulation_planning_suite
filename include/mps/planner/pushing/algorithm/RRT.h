@@ -409,10 +409,12 @@ namespace mps {
                             ompl::state::goal::ObjectsRelocationGoalPtr goal_region; // goal region
                             ompl::planning::essentials::CostFunctionPtr cost_function; // objective for shortcutting
                             std::string robot_name;
+                            std::function<bool()> stopping_condition; // optionally a customized stopping condition
                             ShortcutQuery(ompl::state::goal::ObjectsRelocationGoalPtr goal_region_in,
                                           ompl::planning::essentials::CostFunctionPtr cost_function_in,
                                           std::string robot_name_in) 
                             {
+                                stopping_condition = []() {return false;};
                                 goal_region = goal_region_in;
                                 cost_function = cost_function_in;
                                 robot_name = robot_name_in;
@@ -420,6 +422,8 @@ namespace mps {
                         };
                         Shortcutter(::ompl::control::SpaceInformationPtr si);
                         virtual ~Shortcutter() = 0;
+
+                        void setDebugDrawer(mps::planner::pushing::algorithm::DebugDrawerPtr debug_drawer);
 
                         /**
                          *  Shortcut the given path.
@@ -454,6 +458,8 @@ namespace mps {
                                                   mps::planner::ompl::planning::essentials::PathPtr old_path,
                                                   unsigned int old_path_continuation,
                                                   ShortcutQuery& sq);
+                        void showState(::ompl::base::State* state, const std::string& msg);
+                        mps::planner::pushing::algorithm::DebugDrawerPtr _debug_drawer;
                     private:
                         std::stack<mps::planner::ompl::planning::essentials::MotionPtr> _motions_cache;
                         std::stack<mps::planner::ompl::planning::essentials::PathPtr> _path_cache;
