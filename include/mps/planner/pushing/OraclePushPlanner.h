@@ -40,7 +40,7 @@ namespace mps {
                 };
 
                 enum ShortcutType {
-                    NaiveShortcut = 0, OracleShortcut = 1, CompareShortcut = 2
+                    NaiveShortcut = 0, OracleShortcut = 1, NoShortcut = 2, LocalShortcut = 3
                 };
                 // world related parameters
                 sim_env::WorldPtr world;
@@ -83,7 +83,6 @@ namespace mps {
                 float sdf_resolution;
                 float sdf_error_threshold;
                 // TODO more parameters, like distance weights, goal region
-                bool shortcut;
 
                 /**
                  *  Constructor of a planning problem.
@@ -143,6 +142,14 @@ namespace mps {
                                     const std::string& annotation);
                 void dummyTest();
 
+                /***
+                 * Verifies that the provided solutions is a solution to the current PlanningProblem.
+                 * Returns false if the provided solution is not a reproducable solution,
+                 * i.e. forward propagating it does not lead to a goal state while satisfying 
+                 * all collision constraints.
+                 */
+                bool verifySolution(PlanningSolution& solution);
+
                 /**
                  * This function allows to evaluate the oracle used by the current planning algorithm.
                  * If the planner is not setup or does not use an oracle,
@@ -177,6 +184,7 @@ namespace mps {
                                              oracle::RobotOraclePtr robot_oracle);
 //                ::ompl::control::DirectedControlSamplerPtr allocateDirectedControlSampler(const ::ompl::control::SpaceInformation* si);
                 mps::planner::pushing::oracle::DataGeneratorPtr _data_generator;
+                ompl::state::goal::ObjectsRelocationGoalPtr _goal_region;
             };
 
         }

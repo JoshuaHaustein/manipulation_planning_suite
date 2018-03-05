@@ -131,7 +131,7 @@ void HumanOracle::predictAction(const Eigen::VectorXf &current_robot_state,
     } else {
         mps_logging::logWarn("HumanOracle was asked to provide an action for non-translational push. "
                              "This oracle is not capable of dealing with this, returning null action", log_prefix);
-        control.setZero(4);
+        control.setZero(5);
     }
 }
 

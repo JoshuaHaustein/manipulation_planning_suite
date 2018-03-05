@@ -20,6 +20,8 @@
 using namespace mps::planner::pushing;
 namespace mps_state = mps::planner::ompl::state;
 namespace mps_control = mps::planner::ompl::control;
+namespace mps_essentials = mps::planner::ompl::planning::essentials;
+namespace mps_logging = mps::planner::util::logging;
 
 PlanningProblem::PlanningProblem() :
         control_limits(Eigen::VectorXf(), Eigen::VectorXf(), Eigen::Array2f())
@@ -78,8 +80,7 @@ PlanningProblem::PlanningProblem(sim_env::WorldPtr world, sim_env::RobotPtr robo
     sdf_error_threshold = 0.1f;
     debug = false;
     num_control_samples = 10;
-    shortcut = true;
-    shortcut_type = ShortcutType::OracleShortcut;
+    shortcut_type = ShortcutType::LocalShortcut;
     max_shortcut_time = 5.0f;
     stopping_condition = [](){return false;};
     collision_policy.setStaticCollisions(true);
@@ -158,7 +159,7 @@ bool OraclePushPlanner::setup(PlanningProblem& problem) {
             _rrt_debug_drawer->setTargetIds(target_object_ids);
         }
         _algorithm->setDebugDrawer(_rrt_debug_drawer);
-        _shortcutter->setDebugDrawer(_rrt_debug_drawer);
+        if (_shortcutter) _shortcutter->setDebugDrawer(_rrt_debug_drawer);
     }
     // TODO we probably don't need to reconstruct everything all the time
     _is_initialized = true;
@@ -177,11 +178,10 @@ bool OraclePushPlanner::solve(PlanningSolution& solution) {
     _state_space->extractState(_planning_problem.world,
                                dynamic_cast<ompl::state::SimEnvWorldStateSpace::StateType *>(start_state));
     // goal
-    ompl::state::goal::ObjectsRelocationGoalPtr goal_region =
-            std::make_shared<ompl::state::goal::ObjectsRelocationGoal>(_space_information,
-                                                                       _planning_problem.relocation_goals);
+    _goal_region = std::make_shared<ompl::state::goal::ObjectsRelocationGoal>(_space_information,
+                                                                              _planning_problem.relocation_goals);
     // planning query
-    algorithm::RearrangementRRT::PlanningQuery pq(goal_region,
+    algorithm::RearrangementRRT::PlanningQuery pq(_goal_region,
                                                   start_state,
                                                   _planning_problem.planning_time_out,
                                                   _planning_problem.robot->getName());
@@ -201,13 +201,24 @@ bool OraclePushPlanner::solve(PlanningSolution& solution) {
     auto world_state = _planning_problem.world->getWorldState();
     // PLAAAAAAANNN
     solution.solved = _algorithm->plan(pq, solution.path, solution.stats);
+    bool solution_valid = false;
+    if (solution.solved) {
+        solution_valid = verifySolution(solution);
+        solution.stats.reproducible = solution_valid;
+        if (!solution_valid) {
+            mps_logging::logWarn("Planner produced a non-reproducible solution", "[OraclePushPlanner::solve");
+        }
+    }
     // optionally shortcut query
-    if (_planning_problem.shortcut && solution.solved) {
+    if (_planning_problem.shortcut_type != PlanningProblem::ShortcutType::NoShortcut &&
+        solution.solved && solution_valid) {
         auto cost_fn = std::make_shared<costs::ActionDurationCost>();
-        algorithm::Shortcutter::ShortcutQuery sq(goal_region, cost_fn, _planning_problem.robot->getName());
+        algorithm::Shortcutter::ShortcutQuery sq(_goal_region, cost_fn, _planning_problem.robot->getName());
         sq.stopping_condition = _planning_problem.stopping_condition;
         assert(_shortcutter);
         _shortcutter->shortcut(solution.path, sq, _planning_problem.max_shortcut_time);
+        solution.stats.cost_before_shortcut = sq.cost_before_shortcut;
+        solution.stats.cost_after_shortcut = sq.cost_after_shortcut;
     }
     // make sure the state of the world is the same as before
     _planning_problem.world->setWorldState(world_state);
@@ -327,6 +338,29 @@ void OraclePushPlanner::dummyTest() {
     _space_information->freeControl(control);
 }
 
+bool OraclePushPlanner::verifySolution(PlanningSolution& solution) {
+    // first make sure we actually have a path
+    if (!solution.path) return false;
+    if (solution.path->getNumMotions() <= 2) return false;
+    // now we verify that it is actually valid and leading to a goal
+    bool extension_success = true;
+    auto my_motion = std::make_shared<mps_essentials::Motion>(_space_information);
+    _state_space->copyState(my_motion->getState(), solution.path->getMotion(0)->getState());
+    // first propagate new_motions
+    for (unsigned int m = 1; m < solution.path->getNumMotions(); ++m) {
+        auto current_motion = solution.path->getMotion(m);
+        _control_space->copyControl(my_motion->getControl(), current_motion->getConstControl());
+        extension_success = _state_propagator->propagate(my_motion->getState(),
+                                                         my_motion->getControl(),
+                                                         my_motion->getState());
+        if (not extension_success) {
+            return false;
+        }
+    }
+    // if we reached this point, the path is valid. Let's check whether it also led to a goal
+    return _goal_region->isSatisfied(my_motion->getState());
+}
+
 mps::planner::ompl::planning::essentials::PathPtr OraclePushPlanner::testOracle(const ompl::state::goal::RelocationGoalSpecification& goal) const
 {
     ///////////////////////////////////// First make sure everything is set up properly /////////////////////////////
@@ -406,7 +440,7 @@ void OraclePushPlanner::createAlgorithm() {
     {
         _algorithm = std::make_shared<algorithm::NaiveRearrangementRRT>(_space_information);
         util::logging::logDebug("Using naive algorithm, i.e. no oracle at all", log_prefix);
-        if (_planning_problem.shortcut) {
+        if (_planning_problem.shortcut_type != PlanningProblem::ShortcutType::NoShortcut) {
             util::logging::logWarn("Selected naive planner in combination with shortcutting."
                                     "Shortcutting not supported in this setting", log_prefix);
         }
@@ -510,7 +544,7 @@ void OraclePushPlanner::createAlgorithm() {
                 throw std::runtime_error("Invalid algorithm configuration encountered");
             }
         }
-        if (_planning_problem.shortcut) {
+        if (_planning_problem.shortcut_type != PlanningProblem::ShortcutType::NoShortcut) {
             createShortcutAlgorithm(pushing_oracle, robot_oracle);
         }
     }
@@ -523,27 +557,26 @@ void OraclePushPlanner::createShortcutAlgorithm(oracle::PushingOraclePtr pushing
     switch(_planning_problem.shortcut_type) {
         case PlanningProblem::ShortcutType::NaiveShortcut:
         {
-            util::logging::logDebug("Setting up naive shortcutter", log_prefix);
+            util::logging::logInfo("Setting up naive shortcutter", log_prefix);
             _shortcutter = std::make_shared<algorithm::NaiveShortcutter>(_space_information, robot_oracle);
+            break;
+        }
+        case PlanningProblem::ShortcutType::LocalShortcut:
+        {
+            util::logging::logInfo("Setting up local shortcutter", log_prefix);
+            _shortcutter = std::make_shared<algorithm::LocalShortcutter>(_space_information, robot_oracle);
             break;
         }
         case PlanningProblem::ShortcutType::OracleShortcut:
         {
-            util::logging::logDebug("Setting up oracle shortcutter", log_prefix);
+            util::logging::logInfo("Setting up oracle shortcutter", log_prefix);
             _shortcutter = std::make_shared<algorithm::OracleShortcutter>(_space_information, robot_oracle, pushing_oracle,
                                                                           _planning_problem.robot->getName());
             break;
         }
-        case PlanningProblem::ShortcutType::CompareShortcut:
+        case PlanningProblem::ShortcutType::NoShortcut:
         {
-            util::logging::logDebug("Setting up compare shortcutter", log_prefix);
-            std::vector<algorithm::ShortcutterPtr> shortcutters;
-            shortcutters.push_back(std::make_shared<algorithm::NaiveShortcutter>(_space_information,
-                                                                                 robot_oracle));
-            shortcutters.push_back(std::make_shared<algorithm::OracleShortcutter>(_space_information,
-                                                                                  robot_oracle, pushing_oracle,
-                                                                                  _planning_problem.robot->getName()));
-            _shortcutter = std::make_shared<algorithm::ShortcutComparer>(_space_information, shortcutters);
+            util::logging::logInfo("No shortcutting selected.", log_prefix);
             break;
         }
         default:

@@ -195,9 +195,10 @@ PathPtr Path::deepCopy() const {
 
 CostFunction::~CostFunction() = default;
 
-double CostFunction::cost(PathPtr path) {
+double CostFunction::cost(PathPtr path, unsigned int limit) {
     double value = 0.0;
     unsigned int num_motions = path->getNumMotions();
+    if (limit > 0)  num_motions = std::min(limit + 1, num_motions);
     if (num_motions <= 1) return 0.0;
     auto prev_motion = path->getMotion(0);
     // run over path and accumulate cost

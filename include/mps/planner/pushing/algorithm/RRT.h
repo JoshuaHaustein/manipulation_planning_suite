@@ -42,6 +42,9 @@ namespace mps {
                     unsigned int num_nearest_neighbor_queries;
                     float runtime;
                     bool success;
+                    float cost_before_shortcut;
+                    float cost_after_shortcut;
+                    bool reproducible;
 
                     void print(std::ostream& os) const{
                         os << "Planning statistics: \n";
@@ -51,11 +54,14 @@ namespace mps {
                         os << "     num_nearest_neighbor_queries: " << num_nearest_neighbor_queries;
                         os << "     run_time: " << std::fixed << runtime << std::setprecision(3);
                         os << "     success: " << success;
+                        os << "     reproducible: " << reproducible;
+                        os << "     cost_before_shortcut: " << cost_before_shortcut << std::setprecision(3);
+                        os << "     cost_after_shortcut: " << cost_after_shortcut << std::setprecision(3);
                         os << std::endl;
                     }
 
                     void printCVSHeader(std::ostream& os) const {
-                        os << "#iterations,#propagations,#samples,#nn_queries,runtime,success" << std::endl;
+                        os << "#iterations,#propagations,#samples,#nn_queries,runtime,success,reproducible,cost_before_shortcut,cost_after_shortcut" << std::endl;
                     }
 
                     void printCVS(std::ostream& os) const {
@@ -64,7 +70,10 @@ namespace mps {
                            << num_samples << ", "
                            << num_nearest_neighbor_queries << ", "
                            << runtime << ", "
-                           << success << std::endl;
+                           << success << ", "
+                           << reproducible << ", " 
+                           << cost_before_shortcut << ", " 
+                           << cost_after_shortcut << std::endl;
                     }
 
                     std::string to_string() const{
@@ -80,8 +89,12 @@ namespace mps {
                         num_samples = 0;
                         runtime = 0.0;
                         success = false;
+                        reproducible = false;
+                        cost_before_shortcut = 0.0f;
+                        cost_after_shortcut = 0.0f;
                     }
                 };
+
                 // TODO we could inherit from ::ompl::base::Planner or could define our own planner interface, if needed
                 /**
                  * This class implements a semi-dynamic RRT algorithm for non-prehensile rearrangement.
@@ -410,6 +423,8 @@ namespace mps {
                             ompl::planning::essentials::CostFunctionPtr cost_function; // objective for shortcutting
                             std::string robot_name;
                             std::function<bool()> stopping_condition; // optionally a customized stopping condition
+                            float cost_before_shortcut;
+                            float cost_after_shortcut;
                             ShortcutQuery(ompl::state::goal::ObjectsRelocationGoalPtr goal_region_in,
                                           ompl::planning::essentials::CostFunctionPtr cost_function_in,
                                           std::string robot_name_in) 
@@ -497,6 +512,24 @@ namespace mps {
                 typedef std::shared_ptr<const NaiveShortcutter> NaiveShortCutterConstPtr;
                 typedef std::weak_ptr<NaiveShortcutter> NaiveShortCutterWeakPtr;
                 typedef std::weak_ptr<const NaiveShortcutter> NaiveShortCutterWeakConstPtr;
+
+                class LocalShortcutter : public Shortcutter {
+                    public:
+                        LocalShortcutter(::ompl::control::SpaceInformationPtr si,
+                                         mps::planner::pushing::oracle::RobotOraclePtr robot_oracle);
+                        virtual ~LocalShortcutter();
+                        void shortcut(mps::planner::ompl::planning::essentials::PathPtr path,
+                                      ShortcutQuery& pq,
+                                      float max_time) override;
+                        std::string getName() const override;
+                    protected:
+                        void computeRobotActions(std::vector<mps::planner::ompl::planning::essentials::MotionPtr>& motions,
+                                                ::ompl::base::State* start_state,
+                                                ::ompl::base::State* end_state,
+                                                unsigned int robot_id);
+                    private:
+                        mps::planner::pushing::oracle::RobotOraclePtr _robot_oracle;
+                };
 
                 class OracleShortcutter : public Shortcutter, public std::enable_shared_from_this<OracleShortcutter>  {
                     /**

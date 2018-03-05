@@ -510,6 +510,21 @@ namespace mps {
                      */
                     bool isValidIntermediate() const;
 
+                    /**
+                     * Checks whether the state of the underlying sim_env::World is a valid intermediate state
+                     * during action execution. In contrast to isValidIntermediate() no additional collision checks
+                     * are performed. Instead, only state bounds are checked and it is checked whether the provided
+                     * contacts are legal. This allows reducing unecessary collision checks after physics propagation
+                     * and also invalidate collisions that only occurred during a propagation step.
+                     * @contacts - list of contacts ocurring in the current state or in the transition that led to the current state.
+                     * @return true iff the current state of the underlying sim_env::World is a valid intermediate state
+                     *          and all contacts in contacts are permitted.
+                     */
+                    bool isValidIntermediate(std::vector<sim_env::Contact>& contacts) const;
+
+                    /**
+                     * Checks whether a given contact is permitted.
+                     */
                     bool checkContact(const sim_env::Contact&) const;
                     /**
                      * Public access to collision policy

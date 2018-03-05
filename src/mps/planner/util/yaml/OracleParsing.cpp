@@ -42,6 +42,20 @@ std::string mps::planner::util::yaml::algorithmTypeToString(mps::planner::pushin
     return "UNDEFINED";
 }
 
+std::string mps::planner::util::yaml::shortcutTypeToString(mps::planner::pushing::PlanningProblem::ShortcutType shortcut_type) {
+    switch(shortcut_type) {
+        case mps::planner::pushing::PlanningProblem::ShortcutType::NoShortcut:
+            return "NoShortcut";
+        case mps::planner::pushing::PlanningProblem::ShortcutType::NaiveShortcut:
+            return "NaiveShortcut";
+        case mps::planner::pushing::PlanningProblem::ShortcutType::OracleShortcut:
+            return "OracleShortcut";
+        case mps::planner::pushing::PlanningProblem::ShortcutType::LocalShortcut:
+            return "LocalShortcut";
+    }
+    return "UNDEFINED";
+}
+
 mps::planner::pushing::PlanningProblem::OracleType mps::planner::util::yaml::stringToOracleType(const std::string& str) {
     if (str.compare("Human") == 0) {
         return mps::planner::pushing::PlanningProblem::OracleType::Human;
@@ -80,6 +94,20 @@ mps::planner::pushing::PlanningProblem::LocalPlanner mps::planner::util::yaml::s
     }
 }
 
+mps::planner::pushing::PlanningProblem::ShortcutType mps::planner::util::yaml::stringToShortcutType(const std::string& str) {
+    if (str.compare("NoShortcut") == 0) {
+        return mps::planner::pushing::PlanningProblem::ShortcutType::NoShortcut;
+    } else if (str.compare("NaiveShortcut") == 0) {
+        return mps::planner::pushing::PlanningProblem::ShortcutType::NaiveShortcut;
+    } else if (str.compare("LocalShortcut") == 0) {
+        return mps::planner::pushing::PlanningProblem::ShortcutType::LocalShortcut;
+    } else if (str.compare("OracleShortcut") == 0) {
+        return mps::planner::pushing::PlanningProblem::ShortcutType::OracleShortcut;
+    } else {
+        throw std::runtime_error("Unknown shortcut type encountered: " + str);
+    }
+}
+
 void mps::planner::util::yaml::configurePlanningProblem(mps::planner::pushing::PlanningProblem &problem,
                                                         const OraclePlanningProblemDesc &problem_desc) {
     // load control limits
@@ -107,12 +135,14 @@ void mps::planner::util::yaml::configurePlanningProblem(mps::planner::pushing::P
     problem.algorithm_type = problem_desc.algorithm_type;
     problem.oracle_type = problem_desc.oracle_type;
     problem.local_planner_type = problem_desc.local_planner_type;
+    problem.shortcut_type = problem_desc.shortcut_type;
     problem.goal_bias = problem_desc.goal_bias;
     problem.robot_bias = problem_desc.robot_bias;
     problem.target_bias = problem_desc.target_bias;
     problem.action_noise = problem_desc.action_noise;
     problem.state_noise = problem_desc.state_noise;
     problem.do_slice_ball_projection = problem_desc.do_slice_ball_projection;
+    problem.max_shortcut_time = problem_desc.shortcut_timeout;
     // TODO b_semi_dynamic
     // Collisions policy
     problem.collision_policy.setStaticCollisions(problem_desc.collision_policy.static_collisions_allowed);

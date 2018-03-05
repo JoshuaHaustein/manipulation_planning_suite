@@ -1221,17 +1221,22 @@ bool SimEnvValidityChecker::CollisionPolicy::collisionAllowed(const std::string&
 }
 
 bool SimEnvValidityChecker::CollisionPolicy::collisionAllowed(sim_env::ObjectConstPtr obj1, sim_env::ObjectConstPtr obj2) const {
+    static const std::string log_prefix("[mps::planner::ompl::state::SimEnvValidityChecker::CollisionPolicy::collisionAllowed]");
     if (obj1->isStatic() and obj2->isStatic()) {
         mps_logging::logWarn("Request made whether two static objects are allowed to contact each other.",
-                             "[mps::planner::ompl::state::SimEnvValidityChecker::CollisionPolicy::collisionAllowed]");
+                             log_prefix);
     }
+    bool collision_permitted = false;
     if (obj1->isStatic()) {
-        return staticCollisionsAllowed(obj2->getName());
+        collision_permitted = staticCollisionsAllowed(obj2->getName());
+    } else if (obj2->isStatic()) {
+        collision_permitted = staticCollisionsAllowed(obj1->getName());
+    } else {
+        collision_permitted = collisionAllowed(obj1->getName(), obj2->getName());
     }
-    if (obj2->isStatic()) {
-        return staticCollisionsAllowed(obj1->getName());
-    }
-    return collisionAllowed(obj1->getName(), obj2->getName());
+    mps_logging::logDebug(boost::format("Collision between %1% and %2% is permitted: %3%") 
+                          % obj1->getName() % obj2->getName() % collision_permitted, log_prefix);
+    return collision_permitted;
 }
 
 std::size_t SimEnvValidityChecker::CollisionPolicy::PairHash::operator()(
@@ -1350,6 +1355,27 @@ bool SimEnvValidityChecker::isValidIntermediate() const {
                                       "[mps::planner::ompl::state::SimEnvValidityChecker::isValidIntermediate]");
                 return false;
             }
+        }
+    }
+    return true;
+}
+
+bool SimEnvValidityChecker::isValidIntermediate(std::vector<sim_env::Contact>& contacts) const {
+    _world_space->extractState(_world, _world_state);
+    // TODO do we need to check physical feasibility here, too?
+    // first check whether the current state is within bounds
+    bool bounds_valid = _world_space->satisfiesBounds(_world_state);
+    if (!bounds_valid) {
+        mps_logging::logDebug("State bounds violated. Rejecting state.",
+                              "[mps::planner::ompl::state::SimEnvValidityChecker::isValidIntermediate]");
+        return false;
+    }
+    for (auto contact : contacts) {
+        bool contact_ok = checkContact(contact);
+        if (!contact_ok) {
+            mps_logging::logDebug("Rejecting state due to violation of contact constraints.",
+                                  "[mps::planner::ompl::state::SimEnvValidityChecker::isValidIntermediate]");
+            return false;
         }
     }
     return true;

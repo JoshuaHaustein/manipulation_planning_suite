@@ -1135,6 +1135,8 @@ void NaiveShortcutter::shortcut(mps::planner::ompl::planning::essentials::PathPt
     }
     logging::logInfo(boost::format("Shortcut path from cost %f to %f.") % initial_cost % current_path_cost,
                     log_prefix);
+    sq.cost_before_shortcut = initial_cost;
+    sq.cost_after_shortcut = current_path_cost;
 }
 
 std::string NaiveShortcutter::getName() const {
@@ -1175,6 +1177,124 @@ void NaiveShortcutter::createAllPairs(std::vector< std::pair<unsigned int, unsig
     std::random_device rd;
     std::mt19937 g(rd()); // TODO can we do this somehow with ompl's rng?
     std::shuffle(all_pairs.begin(), all_pairs.end(), g);
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////// LocalShortcutter //////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+LocalShortcutter::LocalShortcutter(::ompl::control::SpaceInformationPtr si,
+                                   mps::planner::pushing::oracle::RobotOraclePtr robot_oracle) :
+    Shortcutter(si), _robot_oracle(robot_oracle)
+{
+}
+
+LocalShortcutter::~LocalShortcutter() = default;
+
+void LocalShortcutter::shortcut(mps::planner::ompl::planning::essentials::PathPtr iopath,
+                                ShortcutQuery& sq,
+                                float max_time) {
+    const std::string log_prefix("[LocalShortcutter::shortcut]");
+    logging::logDebug("Shortcutting path with local shortcutter", log_prefix);
+    bool finished = iopath->getNumMotions() <= 2;
+    if (finished) return;
+    auto current_path = iopath->deepCopy(); // first copy the io path
+    auto trailing_path = getNewPath(); // will contain new trailing path
+    double current_path_cost = sq.cost_function->cost(current_path);
+    double initial_cost = current_path_cost;
+    auto world_state_space = std::dynamic_pointer_cast<mps_state::SimEnvWorldStateSpace>(_si->getStateSpace());
+    unsigned int robot_id = world_state_space->getObjectIndex(sq.robot_name);
+    unsigned int stride = 2;
+    _timer.startTimer(max_time); // now start the timer 
+
+    // repeat until we either tried everything, ran out of time, or the user interrupted
+    while (!_timer.timeOutExceeded() && !finished && !sq.stopping_condition()) {
+        // try to shortcut with current stride
+        unsigned int start_id = 0;
+        while (start_id + stride < current_path->getNumMotions() &&
+               !_timer.timeOutExceeded() &&
+               !sq.stopping_condition()) 
+        {
+            // gets indices to try shortcutting between
+            auto end_id = start_id + stride;
+            // get motions
+            // a motion is (action, state) where the action leads to the state
+            auto first_wp = current_path->getMotion(start_id); // contains state from which to start shortcut
+            auto snd_wp = current_path->getMotion(end_id); // contains state we would like to move to
+            #ifdef DEBUG_PRINTOUTS
+            {
+                showState(first_wp->getState(), "Start state of shortcut");
+                showState(snd_wp->getState(), "Target state of shortcut");
+            }
+            #endif
+            std::vector<MotionPtr> new_motions; // will contain new actions
+            trailing_path->clear();
+            trailing_path->append(first_wp);
+            // do the actual shortcutting by computing robot actions that steer the robot
+            computeRobotActions(new_motions, first_wp->getState(), snd_wp->getState(), robot_id);
+            // test whether we still achieve the goal
+            bool successful_path = forwardPropagatePath(trailing_path, new_motions, current_path, end_id + 1, sq);
+            #ifdef DEBUG_PRINTOUTS
+            {
+                showState(trailing_path->last()->getState(), "Shortcut resulting final state");
+            }
+            #endif
+            double new_cost = sq.cost_function->cost(current_path, start_id) + sq.cost_function->cost(trailing_path);
+            if (successful_path and (new_cost < current_path_cost)) {  
+                // concat all waypoints up to start_id (incl)
+                auto new_path = getNewPath();
+                new_path->concat(current_path, start_id + 1);
+                // concat all waypoints of trailing path
+                new_path->concat(trailing_path);
+                // replace path if new one is better
+                logging::logDebug(boost::format("Found a shortcut. Old cost: %f, new cost %f") % current_path_cost % new_cost,
+                                  log_prefix);
+                cachePath(current_path, start_id + 1);
+                current_path = new_path;
+                current_path_cost = new_cost;
+                finished = current_path->getNumMotions() <= 2;
+                // start_id = (unsigned int) std::max(0, (int)start_id + 1 - (int)stride);
+                ++start_id;
+            } else {
+                cacheMotions(new_motions);
+                ++start_id; 
+            }
+        }
+        ++stride;
+        finished = stride >= current_path->getNumMotions(); // we are finished if we tried all pairs
+    }
+    // finally, we need to save the current path in iopath
+    iopath->clear();
+    for (unsigned int i = 0; i < current_path->getNumMotions(); ++i)  {
+        iopath->append(current_path->getMotion(i));
+    }
+    logging::logInfo(boost::format("Shortcut path from cost %f to %f.") % initial_cost % current_path_cost,
+                    log_prefix);
+    sq.cost_after_shortcut = current_path_cost;
+    sq.cost_before_shortcut = initial_cost;
+}
+
+std::string LocalShortcutter::getName() const {
+    return "LocalShortcutter";
+}
+
+void LocalShortcutter::computeRobotActions(std::vector<mps::planner::ompl::planning::essentials::MotionPtr>& motions,
+                                          ::ompl::base::State* start_state,
+                                          ::ompl::base::State* end_state,
+                                          unsigned int robot_id) 
+{
+    auto sim_env_start_state = dynamic_cast<mps_state::SimEnvWorldState*>(start_state);
+    auto sim_env_end_state = dynamic_cast<mps_state::SimEnvWorldState*>(end_state);
+    auto current_robot_state = sim_env_start_state->getObjectState(robot_id);
+    auto target_robot_state = sim_env_end_state->getObjectState(robot_id);
+    std::vector<Eigen::VectorXf> control_params;
+    _robot_oracle->steer(current_robot_state, target_robot_state, sim_env_start_state, control_params);
+    for (auto& control_param : control_params) {
+        auto new_motion = getNewMotion();
+        auto control = dynamic_cast<mps_control::RealValueParameterizedControl*>(new_motion->getControl());
+        control->setParameters(control_param);
+        motions.push_back(new_motion);
+    }
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1259,6 +1379,8 @@ void OracleShortcutter::shortcut(mps::planner::ompl::planning::essentials::PathP
     }
     logging::logInfo(boost::format("Shortcut path from cost %f to %f.") % initial_cost % current_path_cost,
                     log_prefix);
+    sq.cost_before_shortcut = initial_cost;
+    sq.cost_after_shortcut = current_path_cost;
 }
 
 std::string OracleShortcutter::getName() const {

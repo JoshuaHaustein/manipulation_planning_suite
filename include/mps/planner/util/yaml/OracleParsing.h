@@ -61,16 +61,20 @@ namespace mps {
                     mps::planner::pushing::PlanningProblem::OracleType oracle_type;
                     mps::planner::pushing::PlanningProblem::AlgorithmType algorithm_type;
                     mps::planner::pushing::PlanningProblem::LocalPlanner local_planner_type;
+                    mps::planner::pushing::PlanningProblem::ShortcutType shortcut_type;
+                    float shortcut_timeout;
                     unsigned int num_control_samples;
                 };
 
                 std::string oracleTypeToString(mps::planner::pushing::PlanningProblem::OracleType oracle_type);
                 std::string localPlannerTypeToString(mps::planner::pushing::PlanningProblem::LocalPlanner local_type);
-                std::string algorithmTypeToString(mps::planner::pushing::PlanningProblem::AlgorithmType oracle_type);
+                std::string algorithmTypeToString(mps::planner::pushing::PlanningProblem::AlgorithmType algo_type);
+                std::string shortcutTypeToString(mps::planner::pushing::PlanningProblem::ShortcutType shortcut_type);
 
                 mps::planner::pushing::PlanningProblem::AlgorithmType stringToAlgorithmType(const std::string& str);
                 mps::planner::pushing::PlanningProblem::OracleType stringToOracleType(const std::string& str);
                 mps::planner::pushing::PlanningProblem::LocalPlanner stringToLocalPlannerType(const std::string& str);
+                mps::planner::pushing::PlanningProblem::ShortcutType stringToShortcutType(const std::string& str);
 
                 void configurePlanningProblem(mps::planner::pushing::PlanningProblem& problem,
                                               const OraclePlanningProblemDesc& problem_desc);
@@ -164,6 +168,8 @@ namespace YAML {
             node["oracle_type"] = mps::planner::util::yaml::oracleTypeToString(problem_desc.oracle_type);
             node["algorithm_type"] = mps::planner::util::yaml::algorithmTypeToString(problem_desc.algorithm_type);
             node["local_planner_type"] = mps::planner::util::yaml::localPlannerTypeToString(problem_desc.local_planner_type);
+            node["shortcut_type"] = mps::planner::util::yaml::shortcutTypeToString(problem_desc.shortcut_type);
+            node["shortcut_timeout"] = problem_desc.shortcut_timeout;
             node["num_control_samples"] = problem_desc.num_control_samples;
             node["action_noise"] = problem_desc.action_noise;
             node["state_noise"] = problem_desc.state_noise;
@@ -195,6 +201,11 @@ namespace YAML {
             }
             problem_desc.oracle_type = mps::planner::util::yaml::stringToOracleType(node["oracle_type"].as<std::string>());
             problem_desc.algorithm_type = mps::planner::util::yaml::stringToAlgorithmType(node["algorithm_type"].as<std::string>());
+            if (node["shortcut_type"]) {
+                problem_desc.shortcut_type = mps::planner::util::yaml::stringToShortcutType(node["shortcut_type"].as<std::string>());
+            } else {
+                problem_desc.shortcut_type = mps::planner::pushing::PlanningProblem::ShortcutType::NoShortcut;
+            }
             if (node["local_planner_type"]) {
                 problem_desc.local_planner_type = mps::planner::util::yaml::stringToLocalPlannerType(node["local_planner_type"].as<std::string>());
             } else {
@@ -222,6 +233,11 @@ namespace YAML {
                 problem_desc.do_slice_ball_projection = node["do_slice_ball_projection"].as<bool>();
             } else {
                 problem_desc.do_slice_ball_projection = true;
+            }
+            if (node["shortcut_timeout"]) {
+                problem_desc.shortcut_timeout = node["shortcut_timeout"].as<float>();
+            } else {
+                problem_desc.shortcut_timeout = 5.0f;
             }
             return true;
         }

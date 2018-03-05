@@ -64,12 +64,14 @@ bool SimEnvStatePropagator::propagate(const ::ompl::base::State* state, ::ompl::
     bool propagation_success = true;
     assert (_world->getPhysicsTimeStep() > 0.0f);
     Eigen::VectorXf vel(_controller->getTargetDimension());
+    std::vector<sim_env::Contact> contacts;
     while (time < velocity_control->getMaxDuration() and propagation_success) {
         velocity_control->getVelocity(time, vel);
         _controller->setTargetVelocity(vel);
-        _world->stepPhysics();
+        _world->stepPhysics(contacts);
         time += _world->getPhysicsTimeStep();
-        propagation_success = _validity_checker->isValidIntermediate();
+        propagation_success = _validity_checker->isValidIntermediate(contacts);
+        contacts.clear();
     }
 
     // in case we have a semi dynamic propagation, continue propagating until rest
@@ -82,9 +84,10 @@ bool SimEnvStatePropagator::propagate(const ::ompl::base::State* state, ::ompl::
         _controller->setTargetVelocity(vel); // constant zero target velocity
         // propagate until either t_max is reached, or the world is at rest
         while (resting_time <= _t_max and not _world->atRest() and propagation_success) {
-            _world->stepPhysics(1);
+            _world->stepPhysics(contacts);
             resting_time += _world->getPhysicsTimeStep();
-            propagation_success = _validity_checker->isValidIntermediate();
+            propagation_success = _validity_checker->isValidIntermediate(contacts);
+            contacts.clear();
         }
         semi_dyn_control->setRestTime(resting_time);
         propagation_success = resting_time <= _t_max and _world->atRest() and propagation_success;
@@ -94,7 +97,7 @@ bool SimEnvStatePropagator::propagate(const ::ompl::base::State* state, ::ompl::
     }
 
     state_space->extractState(_world, result_world_state);
-    propagation_success = propagation_success and _validity_checker->isValid(result_world_state);
+    propagation_success = propagation_success and _validity_checker->isValid(result_world_state); // TODO isValid produces some unnecessary overhead here
     _world->restoreState();
     // TODO there are currently no validity checks performed here, i.e. is the outcoming state physicaly feasible
     // TODO (remember squeezing issue).
