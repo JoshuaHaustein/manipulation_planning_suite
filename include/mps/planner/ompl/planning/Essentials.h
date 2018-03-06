@@ -112,10 +112,10 @@ namespace mps {
                             /**
                              * Returns the cost for a path. Default implementation accumulates
                              * cost between individual motions in path.
-                             * @param limit - if > 0, computes the cost from the beginning until motion 
-                             *        with id limit only
+                             * @param limit - if >= 0, computes the cost from the beginning until motion 
+                             *        with id limit only (limit == 0 => returns 0.0)
                              */
-                            virtual double cost(PathPtr path, unsigned int limit = 0);
+                            virtual double cost(PathPtr path, int limit = -1);
                     };
 
                     typedef std::shared_ptr<CostFunction> CostFunctionPtr;

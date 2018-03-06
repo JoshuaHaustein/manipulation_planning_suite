@@ -59,6 +59,12 @@ bool SimEnvStatePropagator::propagate(const ::ompl::base::State* state, ::ompl::
     _world->saveState();
     // set the world to the start state
     state_space->setToState(_world, world_state);
+    // reset resting time in case we have a semi-dynamic action
+    if (_semi_dynamic) {
+        auto* semi_dyn_control = dynamic_cast<control::SemiDynamicVelocityControl*>(velocity_control);
+        assert(semi_dyn_control);
+        semi_dyn_control->setRestTime(0.0f);
+    }
     // now propagate for the duration of action
     float time = 0.0f;
     bool propagation_success = true;

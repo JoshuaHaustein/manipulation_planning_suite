@@ -1241,10 +1241,10 @@ void LocalShortcutter::shortcut(mps::planner::ompl::planning::essentials::PathPt
             #endif
             double new_cost = sq.cost_function->cost(current_path, start_id) + sq.cost_function->cost(trailing_path);
             if (successful_path and (new_cost < current_path_cost)) {  
-                // concat all waypoints up to start_id (incl)
+                // concat all waypoints up to start_id (excl)
                 auto new_path = getNewPath();
-                new_path->concat(current_path, start_id + 1);
-                // concat all waypoints of trailing path
+                new_path->concat(current_path, start_id);
+                // concat all waypoints of trailing path (starts at start_id)
                 new_path->concat(trailing_path);
                 // replace path if new one is better
                 logging::logDebug(boost::format("Found a shortcut. Old cost: %f, new cost %f") % current_path_cost % new_cost,
