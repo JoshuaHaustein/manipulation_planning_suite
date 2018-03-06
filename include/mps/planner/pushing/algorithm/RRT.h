@@ -45,6 +45,7 @@ namespace mps {
                     float cost_before_shortcut;
                     float cost_after_shortcut;
                     bool reproducible;
+                    bool reproducible_after_shortcut;
 
                     void print(std::ostream& os) const{
                         os << "Planning statistics: \n";
@@ -57,11 +58,12 @@ namespace mps {
                         os << "     reproducible: " << reproducible;
                         os << "     cost_before_shortcut: " << cost_before_shortcut << std::setprecision(3);
                         os << "     cost_after_shortcut: " << cost_after_shortcut << std::setprecision(3);
+                        os << "     reproducible_after_shortcut: " << reproducible_after_shortcut;
                         os << std::endl;
                     }
 
                     void printCVSHeader(std::ostream& os) const {
-                        os << "#iterations,#propagations,#samples,#nn_queries,runtime,success,reproducible,cost_before_shortcut,cost_after_shortcut" << std::endl;
+                        os << "#iterations,#propagations,#samples,#nn_queries,runtime,success,reproducible,cost_before_shortcut,cost_after_shortcut,reproducible_after_shortcut" << std::endl;
                     }
 
                     void printCVS(std::ostream& os) const {
@@ -73,7 +75,8 @@ namespace mps {
                            << success << ", "
                            << reproducible << ", " 
                            << cost_before_shortcut << ", " 
-                           << cost_after_shortcut << std::endl;
+                           << cost_after_shortcut << ", " 
+                           << reproducible_after_shortcut << std::endl;
                     }
 
                     std::string to_string() const{
@@ -92,6 +95,7 @@ namespace mps {
                         reproducible = false;
                         cost_before_shortcut = 0.0f;
                         cost_after_shortcut = 0.0f;
+                        reproducible_after_shortcut = false;
                     }
                 };
 
@@ -463,16 +467,42 @@ namespace mps {
                         // caches the given path, if clear_id >= 0, the motions with id >= clear_id are also cached
                         void cachePath(mps::planner::ompl::planning::essentials::PathPtr ptr, int clear_id=-1);
                         /***
+                         *  Forward propagates the actions stored in new_motions starting from the last state stored in path.
+                         *  All successive states are added to path.  Aborts execution if any intermediate state is invalid or a goal
+                         *  Returns pair <b_success, b_goal>, where b_success is true iff all propagations were valid
+                         *      and b_goal is true iff path->last() is a goal.
+                         */
+                        std::pair<bool, bool> forwardPropagatePath(mps::planner::ompl::planning::essentials::PathPtr path,
+                                                                   std::vector<mps::planner::ompl::planning::essentials::MotionPtr>& new_motions,
+                                                                   ShortcutQuery& sq);
+                        std::pair<bool, bool> forwardPropagatePath(mps::planner::ompl::planning::essentials::PathPtr path,
+                                                                   const std::vector<const ::ompl::control::Control*>& controls,
+                                                                   ShortcutQuery& sq);
+                        /***
+                         *  Forward propagates the actions stored in old_path starting from the state
+                         *  stored with id old_path_continuation.
+                         *  All successive states are added to path.  
+                         *  Aborts execution if any intermediate state is invalid or a goal
+                         *  Returns pair <b_success, b_goal>, where b_success is true iff all propagations were valid
+                         *      and b_goal is true iff path->last() is a goal.
+                         */
+                        std::pair<bool, bool> forwardPropagatePath(mps::planner::ompl::planning::essentials::PathPtr path,
+                                                  mps::planner::ompl::planning::essentials::PathPtr old_path,
+                                                  unsigned int old_path_continuation,
+                                                  ShortcutQuery& sq);
+                        /***
                          * Forward propagates the action stored in new_wp and from there on all actions
                          * in old_path starting at index old_path_continuation. The resulting states
                          * are added as new motions to path. The propagation starts from the last state stored
                          * in path.
+                         *  Returns pair <b_success, b_goal>, where b_success is true iff all propagations were valid
+                         *      and b_goal is true iff path->last() is a goal.
                          */
-                        bool forwardPropagatePath(mps::planner::ompl::planning::essentials::PathPtr path,
-                                                  std::vector<mps::planner::ompl::planning::essentials::MotionPtr>& new_motions,
-                                                  mps::planner::ompl::planning::essentials::PathPtr old_path,
-                                                  unsigned int old_path_continuation,
-                                                  ShortcutQuery& sq);
+                        std::pair<bool, bool> forwardPropagatePath(mps::planner::ompl::planning::essentials::PathPtr path,
+                                                                   std::vector<mps::planner::ompl::planning::essentials::MotionPtr>& new_motions,
+                                                                   mps::planner::ompl::planning::essentials::PathPtr old_path,
+                                                                   unsigned int old_path_continuation,
+                                                                   ShortcutQuery& sq);
                         void showState(::ompl::base::State* state, const std::string& msg);
                         mps::planner::pushing::algorithm::DebugDrawerPtr _debug_drawer;
                     private:
@@ -516,20 +546,52 @@ namespace mps {
                 class LocalShortcutter : public Shortcutter {
                     public:
                         LocalShortcutter(::ompl::control::SpaceInformationPtr si,
-                                         mps::planner::pushing::oracle::RobotOraclePtr robot_oracle);
+                                         mps::planner::pushing::oracle::RobotOraclePtr robot_oracle,
+                                         const std::string& robot_name);
                         virtual ~LocalShortcutter();
                         void shortcut(mps::planner::ompl::planning::essentials::PathPtr path,
                                       ShortcutQuery& pq,
                                       float max_time) override;
                         std::string getName() const override;
                     protected:
+                        /** Computes a shortcut from the state in prefix_path->last() to end_state and extends prefix_path
+                         * with the respective motions.
+                         * @return boolean pair (extension_success, path->last() is a goal)
+                        */ 
+                        virtual std::pair<bool, bool> computeShortcut(mps::planner::ompl::planning::essentials::PathPtr prefix_path,
+                                                     ::ompl::base::State* end_state, ShortcutQuery& pq);
                         void computeRobotActions(std::vector<mps::planner::ompl::planning::essentials::MotionPtr>& motions,
-                                                ::ompl::base::State* start_state,
-                                                ::ompl::base::State* end_state,
-                                                unsigned int robot_id);
+                                                 ::ompl::base::State* start_state,
+                                                 ::ompl::base::State* end_state);
+                        unsigned int _robot_id;
                     private:
                         mps::planner::pushing::oracle::RobotOraclePtr _robot_oracle;
                 };
+
+                class LocalOracleShortcutter: public LocalShortcutter {
+                    public:
+                        LocalOracleShortcutter(::ompl::control::SpaceInformationPtr si,
+                                               mps::planner::pushing::oracle::RobotOraclePtr robot_oracle,
+                                               mps::planner::pushing::oracle::PushingOraclePtr pushing_oracle,
+                                               const std::string& robot_name);
+                        virtual ~LocalOracleShortcutter();
+                        std::string getName() const override;
+
+                    protected:
+                        // computes which object the shortcutting between start_state and end_state should focus on.
+                        // both states are assumend to be SimEnvWorldStates
+                        unsigned int selectObject(::ompl::base::State* start_state, ::ompl::base::State* end_state);
+                        std::pair<bool, bool> computeShortcut(mps::planner::ompl::planning::essentials::PathPtr prefix_path,
+                                                     ::ompl::base::State* end_state, ShortcutQuery& pq) override;
+                    
+                    private:
+                        mps::planner::pushing::oracle::OracleControlSamplerPtr _oracle_sampler;
+                };
+
+                typedef std::shared_ptr<LocalOracleShortcutter> LocalOracleShortcutterPtr;
+                typedef std::shared_ptr<const LocalOracleShortcutter> LocalOracleShortcutterConstPtr;
+                typedef std::weak_ptr<LocalOracleShortcutter> LocalOracleShortcutterWeakPtr;
+                typedef std::weak_ptr<const LocalOracleShortcutter> LocalOracleShortcutterWeakConstPtr;
 
                 class OracleShortcutter : public Shortcutter, public std::enable_shared_from_this<OracleShortcutter>  {
                     /**
@@ -575,27 +637,6 @@ namespace mps {
                 typedef std::weak_ptr<OracleShortcutter> OracleShortcutterWeakPtr;
                 typedef std::weak_ptr<const OracleShortcutter> OracleShortcutterWeakConstPtr;
 
-                class ShortcutComparer: public Shortcutter, public std::enable_shared_from_this<ShortcutComparer>  {
-                    /**
-                     * ShortCutComparer keeps a list of different shortcutting algorithms and uses all of them to shortcut
-                     * the same path. The stats on how well each algorithm performed is kept. The shortcut
-                     * function returns the solutions that is best.
-                     */
-                    public:
-                        ShortcutComparer(::ompl::control::SpaceInformationPtr si,
-                                         std::vector<ShortcutterPtr>& short_cutters);
-                        virtual ~ShortcutComparer();
-                        void shortcut(mps::planner::ompl::planning::essentials::PathPtr path,
-                                      ShortcutQuery& pq,
-                                      float max_time) override;
-                        std::string getName() const override;
-                    private:
-                        std::vector<ShortcutterPtr> _short_cutters;
-                };
-                typedef std::shared_ptr<ShortcutComparer> ShortcutComparerPtr;
-                typedef std::shared_ptr<const ShortcutComparer> ShortcutComparerConstPtr;
-                typedef std::weak_ptr<ShortcutComparer> ShortcutComparerWeakPtr;
-                typedef std::weak_ptr<const ShortcutComparer> ShortcutComparerWeakConstPtr;
 
                 class DebugDrawer : public std::enable_shared_from_this<DebugDrawer> {
                     // TODO this class may be overfit to a 2d planning case.

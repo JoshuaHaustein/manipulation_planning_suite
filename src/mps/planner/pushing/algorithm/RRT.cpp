@@ -999,11 +999,9 @@ void Shortcutter::cachePath(PathPtr ptr, int clear_id) {
     _path_cache.push(ptr);
 }
 
-bool Shortcutter::forwardPropagatePath(mps::planner::ompl::planning::essentials::PathPtr path,
-                                       std::vector<mps::planner::ompl::planning::essentials::MotionPtr>& new_motions,
-                                       mps::planner::ompl::planning::essentials::PathPtr old_path,
-                                       unsigned int old_path_continuation,
-                                       ShortcutQuery& sq) 
+std::pair<bool, bool> Shortcutter::forwardPropagatePath(mps::planner::ompl::planning::essentials::PathPtr path,
+                                                        std::vector<mps::planner::ompl::planning::essentials::MotionPtr>& new_motions,
+                                                        ShortcutQuery& sq) 
 {
     bool goal_satisfied = false;
     bool extension_success = true;
@@ -1011,21 +1009,46 @@ bool Shortcutter::forwardPropagatePath(mps::planner::ompl::planning::essentials:
     assert(not new_motions.empty());
     // start with prev_motion as last motion of path
     auto prev_motion = path->getMotion(path->getNumMotions() - 1); 
-    // first propagate new_motions
+    // propagate new_motions
     for (auto& new_motion : new_motions) {
         extension_success = _state_propagator->propagate(prev_motion->getState(),
                                                          new_motion->getControl(),
                                                          new_motion->getState());
         if (not extension_success) {
-            return false;
+            return std::make_pair(false, false);
         }
         prev_motion = new_motion;
         path->append(new_motion);
         goal_satisfied = sq.goal_region->isSatisfied(new_motion->getState());
-        if (goal_satisfied) return true;
+        if (goal_satisfied) return std::make_pair(true, true);
     }
-    // next finish propagating remaining actions from old path
+    return std::make_pair(extension_success, goal_satisfied);
+}
+
+std::pair<bool, bool> Shortcutter::forwardPropagatePath(mps::planner::ompl::planning::essentials::PathPtr path,
+                                                        const std::vector<const ::ompl::control::Control*>& controls,
+                                                        ShortcutQuery& sq) 
+{
+    std::vector<MotionPtr> motions;
+    // first copy controls
+    for (auto control : controls) {
+        auto new_motion = getNewMotion();
+        _si->copyControl(new_motion->getControl(), control);
+        motions.push_back(new_motion);
+    }
+    return forwardPropagatePath(path, motions, sq);
+}
+
+std::pair<bool, bool> Shortcutter::forwardPropagatePath(mps::planner::ompl::planning::essentials::PathPtr path,
+                                                        mps::planner::ompl::planning::essentials::PathPtr old_path,
+                                                        unsigned int old_path_continuation,
+                                                        ShortcutQuery& sq) 
+{
+    bool extension_success = true;
+    bool goal_satisfied = false;
     unsigned int current_idx = old_path_continuation;
+    assert(path->getNumMotions() > 0);
+    auto prev_motion = path->last();
     // as long as we have propagation success and there are actions in the old path left
     while (extension_success && current_idx < old_path->getNumMotions()) {
         auto new_motion = getNewMotion();
@@ -1041,12 +1064,27 @@ bool Shortcutter::forwardPropagatePath(mps::planner::ompl::planning::essentials:
             ++current_idx; // proceed in old path
             // check whether we reached a goal
             goal_satisfied = sq.goal_region->isSatisfied(new_motion->getState());
-            if (goal_satisfied) return true; // if yes we are done
+            if (goal_satisfied) return std::make_pair(true, true); // if yes we are done
         } else { // gonna abort
             cacheMotion(new_motion);
         }
     }
-    return false; // if we reached this point, it means we are not reaching a goal anymore
+    return std::make_pair(extension_success, goal_satisfied); 
+}
+
+std::pair<bool, bool> Shortcutter::forwardPropagatePath(mps::planner::ompl::planning::essentials::PathPtr path,
+                                                        std::vector<mps::planner::ompl::planning::essentials::MotionPtr>& new_motions,
+                                                        mps::planner::ompl::planning::essentials::PathPtr old_path,
+                                                        unsigned int old_path_continuation,
+                                                        ShortcutQuery& sq) 
+{
+    bool propagation_success = false;
+    bool goal_reached = false;
+    std::tie(propagation_success, goal_reached) = forwardPropagatePath(path, new_motions, sq);
+    if (propagation_success && !goal_reached) {
+        std::tie(propagation_success, goal_reached) = forwardPropagatePath(path, old_path, old_path_continuation, sq);
+    }
+    return std::make_pair(propagation_success, goal_reached);
 }
 
 void Shortcutter::showState(::ompl::base::State* state, const std::string& msg) {
@@ -1109,7 +1147,8 @@ void NaiveShortcutter::shortcut(mps::planner::ompl::planning::essentials::PathPt
             // do the actual shortcutting by computing robot actions that steer the robot
             computeRobotActions(new_motions, first_wp->getState(), snd_wp->getState(), robot_id);
             // test whether we still achieve the goal
-            bool successful_path = forwardPropagatePath(new_path, new_motions, current_path, end_id + 1, sq);
+            bool successful_path = false;
+            std::tie(std::ignore, successful_path) = forwardPropagatePath(new_path, new_motions, current_path, end_id + 1, sq);
             double new_cost = sq.cost_function->cost(new_path);
             if (successful_path and (new_cost < current_path_cost)) {  
                 // replace path if new one is better
@@ -1184,9 +1223,12 @@ void NaiveShortcutter::createAllPairs(std::vector< std::pair<unsigned int, unsig
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 LocalShortcutter::LocalShortcutter(::ompl::control::SpaceInformationPtr si,
-                                   mps::planner::pushing::oracle::RobotOraclePtr robot_oracle) :
+                                   mps::planner::pushing::oracle::RobotOraclePtr robot_oracle,
+                                   const std::string& robot_name) :
     Shortcutter(si), _robot_oracle(robot_oracle)
 {
+    auto world_state_space = std::dynamic_pointer_cast<mps_state::SimEnvWorldStateSpace>(_si->getStateSpace());
+    _robot_id = world_state_space->getObjectIndex(robot_name);
 }
 
 LocalShortcutter::~LocalShortcutter() = default;
@@ -1202,8 +1244,6 @@ void LocalShortcutter::shortcut(mps::planner::ompl::planning::essentials::PathPt
     auto trailing_path = getNewPath(); // will contain new trailing path
     double current_path_cost = sq.cost_function->cost(current_path);
     double initial_cost = current_path_cost;
-    auto world_state_space = std::dynamic_pointer_cast<mps_state::SimEnvWorldStateSpace>(_si->getStateSpace());
-    unsigned int robot_id = world_state_space->getObjectIndex(sq.robot_name);
     unsigned int stride = 2;
     _timer.startTimer(max_time); // now start the timer 
 
@@ -1230,10 +1270,14 @@ void LocalShortcutter::shortcut(mps::planner::ompl::planning::essentials::PathPt
             std::vector<MotionPtr> new_motions; // will contain new actions
             trailing_path->clear();
             trailing_path->append(first_wp);
-            // do the actual shortcutting by computing robot actions that steer the robot
-            computeRobotActions(new_motions, first_wp->getState(), snd_wp->getState(), robot_id);
-            // test whether we still achieve the goal
-            bool successful_path = forwardPropagatePath(trailing_path, new_motions, current_path, end_id + 1, sq);
+            // compute shortcut by appending actions to trailing_path that lead to snd_wp->getState()
+            bool goal_path = false;
+            bool valid_path = false; 
+            std::tie(valid_path, goal_path) = computeShortcut(trailing_path, snd_wp->getState(), sq);
+            if (valid_path && !goal_path) { // if this worked and we haven't reached a goal yet, forward propagate rest of current_path
+                std::tie(valid_path, goal_path) = forwardPropagatePath(trailing_path, current_path, end_id + 1, sq);
+            }
+            bool successful_path = valid_path && goal_path;
             #ifdef DEBUG_PRINTOUTS
             {
                 showState(trailing_path->last()->getState(), "Shortcut resulting final state");
@@ -1278,15 +1322,24 @@ std::string LocalShortcutter::getName() const {
     return "LocalShortcutter";
 }
 
+std::pair<bool, bool> LocalShortcutter::computeShortcut(mps::planner::ompl::planning::essentials::PathPtr prefix_path,
+                                                        ::ompl::base::State* end_state, ShortcutQuery& sq) {
+    auto first_wp = prefix_path->last();
+    std::vector<MotionPtr> new_motions;
+    // do the actual shortcutting by computing robot actions that steer the robot
+    computeRobotActions(new_motions, first_wp->getState(), end_state);
+    // test whether we still achieve the goal
+    return forwardPropagatePath(prefix_path, new_motions, sq);
+}
+
 void LocalShortcutter::computeRobotActions(std::vector<mps::planner::ompl::planning::essentials::MotionPtr>& motions,
                                           ::ompl::base::State* start_state,
-                                          ::ompl::base::State* end_state,
-                                          unsigned int robot_id) 
+                                          ::ompl::base::State* end_state) 
 {
     auto sim_env_start_state = dynamic_cast<mps_state::SimEnvWorldState*>(start_state);
     auto sim_env_end_state = dynamic_cast<mps_state::SimEnvWorldState*>(end_state);
-    auto current_robot_state = sim_env_start_state->getObjectState(robot_id);
-    auto target_robot_state = sim_env_end_state->getObjectState(robot_id);
+    auto current_robot_state = sim_env_start_state->getObjectState(_robot_id);
+    auto target_robot_state = sim_env_end_state->getObjectState(_robot_id);
     std::vector<Eigen::VectorXf> control_params;
     _robot_oracle->steer(current_robot_state, target_robot_state, sim_env_start_state, control_params);
     for (auto& control_param : control_params) {
@@ -1295,6 +1348,106 @@ void LocalShortcutter::computeRobotActions(std::vector<mps::planner::ompl::plann
         control->setParameters(control_param);
         motions.push_back(new_motion);
     }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////// LocalOracleShortcutter ////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////
+LocalOracleShortcutter::LocalOracleShortcutter(::ompl::control::SpaceInformationPtr si,
+                                               mps::planner::pushing::oracle::RobotOraclePtr robot_oracle,
+                                               mps::planner::pushing::oracle::PushingOraclePtr pushing_oracle,
+                                               const std::string& robot_name) :
+    LocalShortcutter(si, robot_oracle, robot_name)
+{
+    _oracle_sampler = std::make_shared<mps::planner::pushing::oracle::OracleControlSampler>(si, pushing_oracle, robot_oracle, robot_name);
+}
+
+LocalOracleShortcutter::~LocalOracleShortcutter() = default;
+
+std::string LocalOracleShortcutter::getName() const {
+    return "LocalOracleShortcutter";
+}
+
+unsigned int LocalOracleShortcutter::selectObject(::ompl::base::State* start_state,
+                                                  ::ompl::base::State* end_state) 
+{
+    auto start_world_state = dynamic_cast<mps_state::SimEnvWorldState*>(start_state);
+    auto end_world_state = dynamic_cast<mps_state::SimEnvWorldState*>(end_state);
+    auto state_space = std::dynamic_pointer_cast<mps_state::SimEnvWorldStateSpace>(_si->getStateSpace());
+    unsigned int object_id = _robot_id;
+    float max_distance = 0.0f;
+    for (unsigned int i = 0; i < state_space->getNumObjects(); ++i) {
+        if (i == _robot_id) continue; // not interested in the robot
+        float dist = state_space->getSubspace(i)->distance(start_world_state->getObjectState(i),
+                                                           end_world_state->getObjectState(i));
+        if (dist > max_distance) {
+            max_distance = dist;
+            object_id = i;
+        } 
+    }
+    return object_id;
+}
+
+std::pair<bool, bool> LocalOracleShortcutter::computeShortcut(
+                    mps::planner::ompl::planning::essentials::PathPtr prefix_path,
+                    ::ompl::base::State* end_state, ShortcutQuery& sq) 
+{
+    static const std::string log_prefix("[LocalOracleShortcutter::computeShortcut]");
+    std::vector<const ::ompl::control::Control*> controls; // stores controls computed by the oracle
+    bool propagation_success = false; // stores whether propagations succeeed
+    auto start = prefix_path->last();
+    bool goal_reached = false;
+    unsigned int object_id = selectObject(start->getState(), end_state);
+    if (object_id != _robot_id) { // we plan to push object object_id
+        // first sample a feasible state
+        auto feasible_state_mtn = getNewMotion();
+        _si->copyState(feasible_state_mtn->getState(), start->getState());
+        _oracle_sampler->sampleFeasibleState(feasible_state_mtn->getState(),
+                                             end_state,
+                                             object_id);
+        // steer robot to feasible state
+        _oracle_sampler->steerRobot(controls, start->getState(), feasible_state_mtn->getState());
+        cacheMotion(feasible_state_mtn);
+        if (controls.empty()) {
+            logging::logErr("OracleControlSampler provided no controls at all", log_prefix);
+            return std::make_pair(false, false);
+        }
+        // forward simulate this
+        std::tie(propagation_success, goal_reached) = forwardPropagatePath(prefix_path, controls, sq);
+        controls.clear();
+        if (!propagation_success) return std::make_pair(false, false);
+        if (goal_reached) return std::make_pair(true, true);
+        #ifdef DEBUG_PRINTOUTS
+        {
+            showState(prefix_path->last()->getState(), "Reached feasible state");
+        }
+        #endif
+
+        // next attempt to push
+        _oracle_sampler->steerPush(controls, prefix_path->last()->getState(),
+                                   end_state, object_id);
+        // forward propagate these controls
+        std::tie(propagation_success, goal_reached) = forwardPropagatePath(prefix_path, controls, sq);
+        controls.clear();
+        if (!propagation_success) return std::make_pair(false, false);
+        if (goal_reached) return std::make_pair(true, true);
+        #ifdef DEBUG_PRINTOUTS
+        {
+            showState(prefix_path->last()->getState(), "Pushing outcome");
+        }
+        #endif
+    } // else only move the robot
+    //  move the robot to the state where it has to be for the remaining path
+    _oracle_sampler->steerRobot(controls, prefix_path->last()->getState(),
+                                end_state);
+    std::tie(propagation_success, goal_reached) = forwardPropagatePath(prefix_path, controls, sq);
+    controls.clear();
+    #ifdef DEBUG_PRINTOUTS
+    {
+        showState(prefix_path->last()->getState(), "Robot steered to its original position");
+    }
+    #endif
+    return std::make_pair(propagation_success, goal_reached);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1565,27 +1718,7 @@ bool OracleShortcutter::extendPath(PathPtr path,
     return extension_success;
 }
 
-////////////////////////////////////////////////////////////////////////////////////////////////////
-//////////////////////////////////////// ShortCutComparer //////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////////////////////////
-ShortcutComparer::ShortcutComparer(::ompl::control::SpaceInformationPtr si,
-                                    std::vector<ShortcutterPtr>& short_cutters) :
-    Shortcutter(si),
-    _short_cutters(short_cutters)
-{
-}
 
-ShortcutComparer::~ShortcutComparer() = default;
-
-void ShortcutComparer::shortcut(mps::planner::ompl::planning::essentials::PathPtr,
-                                ShortcutQuery& sq,
-                                float max_time) 
-{
-}
-
-std::string ShortcutComparer::getName() const {
-    return "ShortcutComparer";
-}
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////// DebugDrawer ///////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////

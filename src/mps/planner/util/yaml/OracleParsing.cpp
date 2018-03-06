@@ -52,6 +52,8 @@ std::string mps::planner::util::yaml::shortcutTypeToString(mps::planner::pushing
             return "OracleShortcut";
         case mps::planner::pushing::PlanningProblem::ShortcutType::LocalShortcut:
             return "LocalShortcut";
+        case mps::planner::pushing::PlanningProblem::ShortcutType::LocalOracleShortcut:
+            return "LocalOracleShortcut";
     }
     return "UNDEFINED";
 }
@@ -101,6 +103,8 @@ mps::planner::pushing::PlanningProblem::ShortcutType mps::planner::util::yaml::s
         return mps::planner::pushing::PlanningProblem::ShortcutType::NaiveShortcut;
     } else if (str.compare("LocalShortcut") == 0) {
         return mps::planner::pushing::PlanningProblem::ShortcutType::LocalShortcut;
+    } else if (str.compare("LocalOracleShortcut") == 0) {
+        return mps::planner::pushing::PlanningProblem::ShortcutType::LocalOracleShortcut;
     } else if (str.compare("OracleShortcut") == 0) {
         return mps::planner::pushing::PlanningProblem::ShortcutType::OracleShortcut;
     } else {

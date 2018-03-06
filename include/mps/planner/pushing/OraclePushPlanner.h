@@ -40,7 +40,7 @@ namespace mps {
                 };
 
                 enum ShortcutType {
-                    NaiveShortcut = 0, OracleShortcut = 1, NoShortcut = 2, LocalShortcut = 3
+                    NaiveShortcut = 0, OracleShortcut = 1, NoShortcut = 2, LocalShortcut = 3, LocalOracleShortcut = 4
                 };
                 // world related parameters
                 sim_env::WorldPtr world;

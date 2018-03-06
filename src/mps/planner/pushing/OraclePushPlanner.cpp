@@ -201,17 +201,16 @@ bool OraclePushPlanner::solve(PlanningSolution& solution) {
     auto world_state = _planning_problem.world->getWorldState();
     // PLAAAAAAANNN
     solution.solved = _algorithm->plan(pq, solution.path, solution.stats);
-    bool solution_valid = false;
     if (solution.solved) {
-        solution_valid = verifySolution(solution);
-        solution.stats.reproducible = solution_valid;
-        if (!solution_valid) {
+        solution.stats.reproducible = verifySolution(solution);
+        if (!solution.stats.reproducible) {
             mps_logging::logWarn("Planner produced a non-reproducible solution", "[OraclePushPlanner::solve");
         }
     }
-    // optionally shortcut query
+    // optionally shortcut query, TODO: shortcutting will likely fail if solution is not reproducible
     if (_planning_problem.shortcut_type != PlanningProblem::ShortcutType::NoShortcut &&
-        solution.solved && solution_valid) {
+        solution.solved)
+    {
         auto cost_fn = std::make_shared<costs::ActionDurationCost>();
         algorithm::Shortcutter::ShortcutQuery sq(_goal_region, cost_fn, _planning_problem.robot->getName());
         sq.stopping_condition = _planning_problem.stopping_condition;
@@ -219,6 +218,7 @@ bool OraclePushPlanner::solve(PlanningSolution& solution) {
         _shortcutter->shortcut(solution.path, sq, _planning_problem.max_shortcut_time);
         solution.stats.cost_before_shortcut = sq.cost_before_shortcut;
         solution.stats.cost_after_shortcut = sq.cost_after_shortcut;
+        solution.stats.reproducible_after_shortcut = verifySolution(solution);
     }
     // make sure the state of the world is the same as before
     _planning_problem.world->setWorldState(world_state);
@@ -564,7 +564,15 @@ void OraclePushPlanner::createShortcutAlgorithm(oracle::PushingOraclePtr pushing
         case PlanningProblem::ShortcutType::LocalShortcut:
         {
             util::logging::logInfo("Setting up local shortcutter", log_prefix);
-            _shortcutter = std::make_shared<algorithm::LocalShortcutter>(_space_information, robot_oracle);
+            _shortcutter = std::make_shared<algorithm::LocalShortcutter>(_space_information, robot_oracle, 
+                                                                         _planning_problem.robot->getName());
+            break;
+        }
+        case PlanningProblem::ShortcutType::LocalOracleShortcut:
+        {
+            util::logging::logInfo("Setting up local oracle shortcutter", log_prefix);
+            _shortcutter = std::make_shared<algorithm::LocalOracleShortcutter>(_space_information, robot_oracle, pushing_oracle,
+                                                                               _planning_problem.robot->getName());
             break;
         }
         case PlanningProblem::ShortcutType::OracleShortcut:
