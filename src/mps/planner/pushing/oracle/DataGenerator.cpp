@@ -59,6 +59,7 @@ void DataGenerator::generateData(const std::string& file_name,
                                  unsigned int num_noise_samples)
 {
     ::ompl::control::ControlSamplerPtr control_sampler = _space_information->allocControlSampler();
+    auto state_space = std::dynamic_pointer_cast<mps::planner::ompl::state::SimEnvWorldStateSpace>(_space_information->getStateSpace());
     auto state_sampler = _space_information->getStateSpace()->allocStateSampler();
     auto validity_checker = _space_information->getStateValidityChecker();
     ::ompl::base::State* mean_state = _space_information->allocState();
@@ -86,6 +87,12 @@ void DataGenerator::generateData(const std::string& file_name,
             if (not deterministic) {
                 applyNoise(mean_state, noisy_state);
                 modifyDynamics();
+            }
+            auto world_state = static_cast<mps::planner::ompl::state::SimEnvWorldState*>(noisy_state);
+            state_space->setToState(_world, world_state);
+            if (!_world->isPhysicallyFeasible()) {
+                _world->getLogger()->logErr("The start state is now physically infeasible....", "[Fuck this]");
+                continue;
             }
             bool success = _state_propagator->propagate(noisy_state, control, new_state);
             if (not deterministic) {
