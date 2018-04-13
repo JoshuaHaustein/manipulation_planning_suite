@@ -361,7 +361,7 @@ bool OraclePushPlanner::verifySolution(PlanningSolution& solution) {
     return _goal_region->isSatisfied(my_motion->getState());
 }
 
-mps::planner::ompl::planning::essentials::PathPtr OraclePushPlanner::testOracle(const ompl::state::goal::RelocationGoalSpecification& goal) const
+mps::planner::ompl::planning::essentials::PathPtr OraclePushPlanner::testOracle(const ompl::state::goal::RelocationGoalSpecification& goal, bool approach) const
 {
     ///////////////////////////////////// First make sure everything is set up properly /////////////////////////////
     const static std::string log_prefix("[mps::planner::pushing::OraclePushPlanner]");
@@ -400,7 +400,16 @@ mps::planner::ompl::planning::essentials::PathPtr OraclePushPlanner::testOracle(
     if (target_id == robot_id) {
         success = oracle_sampler->steerRobot(oracle_controls, start_motion->getState(), target_state);
     } else {
-        success = oracle_sampler->steerPush(oracle_controls, dynamic_cast<ompl::state::SimEnvWorldState*>(start_motion->getState()), target_state, target_id);
+        // check whether we want to move to a pushing state or 
+        if (approach) {
+            auto pushing_state =  dynamic_cast<mps::planner::ompl::state::SimEnvWorldState*>(_state_space->allocState());
+            _state_space->copyState(pushing_state, start_motion->getState());
+            oracle_sampler->sampleFeasibleState(pushing_state, target_state, target_id);
+            success = oracle_sampler->steerRobot(oracle_controls, start_motion->getState(), pushing_state);
+            _state_space->freeState(pushing_state);
+        } else {
+            success = oracle_sampler->steerPush(oracle_controls, dynamic_cast<ompl::state::SimEnvWorldState*>(start_motion->getState()), target_state, target_id);
+        }
     }
     // Done, cleanup
     _state_space->freeState(target_state);
