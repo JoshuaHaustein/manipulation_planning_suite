@@ -227,14 +227,16 @@ bool OraclePushPlanner::solve(PlanningSolution& solution) {
 }
 
 void OraclePushPlanner::playback(const PlanningSolution& solution,
-                                 const std::function<bool()>& interrupt_callback) {
+                                 const std::function<bool()>& interrupt_callback,
+                                 bool force_synch) {
     if (solution.solved) {
         clearVisualizations();
         mps::planner::util::playback::playPath(_planning_problem.world,
                                                _planning_problem.robot_controller,
                                                _state_space,
                                                solution.path,
-                                               interrupt_callback);
+                                               interrupt_callback,
+                                               force_synch);
     }
 }
 

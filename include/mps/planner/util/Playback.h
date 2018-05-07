@@ -23,12 +23,14 @@ namespace mps {
                  * @param state space - State space of the states in path. Required to interpret states.
                  * @param path - a path consisting of motions that store tuples (SimEnvWorldState, VelocityControl)
                  * @param interrupt_callback - a function that returns true if the playback should be interrupted
+                 * @param bool  force_synch - if true, synchronizes the world state with the state in the path after each action
                  */
                 void playPath(sim_env::WorldPtr world,
                               sim_env::RobotVelocityControllerPtr controller,
                               mps::planner::ompl::state::SimEnvWorldStateSpaceConstPtr state_space,
                               const mps::planner::ompl::planning::essentials::PathConstPtr& path,
-                              const std::function<bool()>& interrupt_callback);
+                              const std::function<bool()>& interrupt_callback,
+                              bool force_synch);
             }
         }
     }

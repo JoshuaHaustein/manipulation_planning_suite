@@ -128,7 +128,9 @@ namespace mps {
                 bool setup(PlanningProblem& problem);
                 bool solve(PlanningSolution& solution);
                 // TODO should we move this playback function somewhere else?
-                void playback(const PlanningSolution& solution, const std::function<bool()>& interrupt_callback=[](){return false;});
+                void playback(const PlanningSolution& solution,
+                              const std::function<bool()>& interrupt_callback=[](){return false;},
+                              bool force_synch=false);
                 void setSliceDrawer(algorithm::SliceDrawerInterfacePtr slice_drawer);
                 void renderSDF(float resolution);
                 void clearVisualizations();

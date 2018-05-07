@@ -19,7 +19,8 @@ void mps::planner::util::playback::playPath(sim_env::WorldPtr world,
                                             sim_env::RobotVelocityControllerPtr controller,
                                             mps::planner::ompl::state::SimEnvWorldStateSpaceConstPtr state_space,
                                             const mps::planner::ompl::planning::essentials::PathConstPtr &path,
-                                            const std::function<bool()>& interrupt_callback) {
+                                            const std::function<bool()>& interrupt_callback,
+                                            bool force_synch) {
     const std::string log_prefix("[mps::planner::util::playback::playPath]");
     if (!path or path->getNumMotions() == 0) {
         logging::logWarn("The given path is empty or does not exist. Nothing to playback.",
@@ -32,7 +33,9 @@ void mps::planner::util::playback::playPath(sim_env::WorldPtr world,
     state_space->setToState(world, current_sim_env_state);
     unsigned int time_step_ms((unsigned int)(world->getPhysicsTimeStep() * 1000.0f));
     for (unsigned int idx = 0; idx < path->getNumMotions(); ++idx) {
-        const ::ompl::control::Control* control = path->getConstMotion(idx)->getConstControl();
+        auto current_motion = path->getConstMotion(idx);
+        current_sim_env_state = dynamic_cast<mps_state::SimEnvWorldState const*>(current_motion->getConstState());
+        const ::ompl::control::Control* control = current_motion->getConstControl();
         auto* current_control = dynamic_cast<const mps_control::VelocityControl*>(control);
         float time = 0.0f;
         while (time < current_control->getMaxDuration()) {
@@ -42,6 +45,7 @@ void mps::planner::util::playback::playPath(sim_env::WorldPtr world,
             std::this_thread::sleep_for(std::chrono::milliseconds(time_step_ms));
             time += world->getPhysicsTimeStep();
         }
+        if (force_synch) state_space->setToState(world, current_sim_env_state);
     }
 }
 
