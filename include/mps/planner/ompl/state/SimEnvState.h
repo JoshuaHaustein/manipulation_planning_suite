@@ -85,7 +85,9 @@ namespace mps {
                         Eigen::VectorXf getConfiguration() const;
                         void getConfiguration(Eigen::VectorXf& vec) const;
                         void setConfiguration(const Eigen::VectorXf& config);
-                        void serializeInNumbers(std::ostream& ostream) const;
+                        void serializeInNumbers(std::ostream& ostream) const override;
+                        void deserializeFromNumbers(std::istream& istream) override;
+                        unsigned int getNumNumbers() const override;
                         std::string toString() const;
                     private:
                         const std::vector<internal::SubstateTypeDescription> _state_descriptions;
@@ -157,7 +159,9 @@ namespace mps {
                         Eigen::VectorXf getVelocity() const;
                         void getVelocity(Eigen::VectorXf& vec) const;
                         void setVelocity(const Eigen::VectorXf& vel);
-                        void serializeInNumbers(std::ostream& ostream) const;
+                        void serializeInNumbers(std::ostream& ostream) const override;
+                        void deserializeFromNumbers(std::istream& istream) override;
+                        unsigned int getNumNumbers() const override;
                         std::string toString() const;
                     private:
                         const std::vector<internal::SubstateTypeDescription> _state_descriptions;
@@ -245,7 +249,9 @@ namespace mps {
                         void getVelocity(Eigen::VectorXf& vec) const;
                         SimEnvObjectVelocity* getVelocityState() const;
                         void setVelocity(const Eigen::VectorXf& vec);
-                        void serializeInNumbers(std::ostream& ostream) const;
+                        void serializeInNumbers(std::ostream& ostream) const override;
+                        void deserializeFromNumbers(std::istream& istream) override;
+                        unsigned int getNumNumbers() const override;
                         void print(std::ostream& out) const;
                         std::string toString() const;
                     private:
@@ -283,6 +289,7 @@ namespace mps {
                     ::ompl::base::State* allocState() const override;
                     void freeState(::ompl::base::State* state) const override;
                     sim_env::ObjectConstPtr getObject() const;
+                    bool hasVelocities() const;
 
                 private:
                     sim_env::ObjectConstWeakPtr _object;
@@ -319,7 +326,9 @@ namespace mps {
 
                         unsigned int getNumObjects() const;
                         SimEnvObjectState* getObjectState(unsigned int i) const;
-                        void serializeInNumbers(std::ostream& ostream) const;
+                        void serializeInNumbers(std::ostream& ostream) const override;
+                        void deserializeFromNumbers(std::istream& istream) override;
+                        unsigned int getNumNumbers() const override;
                         void print(std::ostream& out) const;
                         std::string toString() const;
 
@@ -389,6 +398,8 @@ namespace mps {
                     void setDistanceMeasure(StateDistanceMeasureConstPtr measure);
                     StateDistanceMeasureConstPtr getDistanceMeasure();
 
+                    bool hasVelocities() const;
+
                     /** Overrides from CompoundStateSpace */
                     ::ompl::base::State* allocState() const override;
                     void freeState(::ompl::base::State* state) const override;
@@ -401,6 +412,7 @@ namespace mps {
                     std::unordered_map<std::string, std::shared_ptr<SimEnvObjectStateSpace> > _state_space_map;
                     std::vector<std::string> _object_names;
                     StateDistanceMeasureConstPtr _distance_measure;
+                    const bool _position_only;
 
                     void constructLimits(sim_env::ObjectConstPtr object, const PlanningSceneBounds& bounds,
                                          Eigen::ArrayX2f& position_limits, Eigen::ArrayX2f& velocity_limits) const;

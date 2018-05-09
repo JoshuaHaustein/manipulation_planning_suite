@@ -50,6 +50,7 @@ namespace mps {
                     void setParameters(const Eigen::VectorXf& parameters) override;
                     Eigen::VectorXf getParameters() const override;
                     void getParameters(Eigen::VectorXf& params) const override;
+                    unsigned int getNumParameters() const override;
 
                     /**
                      * Returns the maximal velocities set for this action.
@@ -77,6 +78,7 @@ namespace mps {
                     float _plateau_duration;
                     float _acceleration_duration;
                     float _rest_time;
+                    unsigned int _num_dofs;
 
                     void computeRamp();
                 };
@@ -145,6 +147,7 @@ namespace mps {
                     void printControl(const ::ompl::control::Control* control, std::ostream& out) const override;
                     void printSettings(std::ostream& out) const override;
                     void setup() override;
+                    unsigned int getNumParameters() const; // TODO this function is probably doing the same as getSerializationLength() is intended for
                     // TODO not implemented
                     unsigned int getSerializationLength() const override;
                     // TODO not implemented

@@ -18,6 +18,7 @@
 #include <mps/planner/ompl/state/goal/ObjectsRelocationGoal.h>
 #include <mps/planner/util/Random.h>
 #include <mps/planner/util/Time.h>
+#include <mps/planner/util/Logging.h>
 #include <mps/sdf/SDF.h>
 // stl
 #include <stack>
@@ -77,6 +78,26 @@ namespace mps {
                            << cost_before_shortcut << ", " 
                            << cost_after_shortcut << ", " 
                            << reproducible_after_shortcut << std::endl;
+                    }
+
+                    void readCVS(std::istream& is) {
+                        std::vector<std::string> splits;
+                        std::string line;
+                        std::getline(is, line);
+                        mps::planner::util::serialize::splitString(line, splits);
+                        if (splits.size() != 10) {
+                            mps::planner::util::logging::logErr("Could not read stats.", "[PlanningStatistics::readCVS]");
+                        }
+                        num_iterations = std::stoul(splits[0]);
+                        num_state_propagations = std::stoul(splits[1]);
+                        num_samples = std::stoul(splits[2]);
+                        num_nearest_neighbor_queries = std::stoul(splits[3]);
+                        runtime = std::stof(splits[4]);
+                        success = std::stoul(splits[5]);
+                        reproducible = std::stoul(splits[6]);
+                        cost_before_shortcut = std::stof(splits[7]);
+                        cost_after_shortcut = std::stof(splits[8]);
+                        reproducible_after_shortcut = std::stoul(splits[9]);
                     }
 
                     std::string to_string() const{

@@ -4,12 +4,24 @@
 #include <mps/planner/util/Serialize.h>
 #include <fstream>
 #include <sim_env/SimEnv.h>
+#include <string>
 
 using namespace mps::planner::util::serialize;
 
 RealValueSerializable::~RealValueSerializable() {}
 
 Eigen::IOFormat RealValueSerializable::eigen_format(Eigen::StreamPrecision, 0, ", ");
+
+void mps::planner::util::serialize::splitString(const std::string& text, std::vector<std::string>& splits, char delim) 
+{
+    splits.clear();
+    std::stringstream ss(text);
+    while (!ss.eof()) {
+        std::string part_str;
+        std::getline(ss, part_str, delim);
+        splits.push_back(part_str);
+    }
+}
 
 OracleDataDumper::OracleDataDumper() : _file_valid(false) {}
 

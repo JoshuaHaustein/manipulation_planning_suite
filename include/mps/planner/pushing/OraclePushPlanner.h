@@ -96,6 +96,7 @@ namespace mps {
                                 sim_env::RobotPtr robot,
                                 sim_env::RobotVelocityControllerPtr controller,
                                 const ompl::state::goal::RelocationGoalSpecification& goal);
+                PlanningProblem(const PlanningProblem& other);
             protected:
                 // constructor that doesn't force you to provide mandatory arguments - used internally
                 PlanningProblem();
@@ -131,6 +132,22 @@ namespace mps {
                 void playback(const PlanningSolution& solution,
                               const std::function<bool()>& interrupt_callback=[](){return false;},
                               bool force_synch=false);
+                /**
+                 * Saves the given solution under the specified filename.
+                 * The solution needs to be a solution to the currently setup planning problem, else
+                 * this function will fail and return false.
+                 * @param solution - a solution to the current planning problem
+                 * @param filename - filename where to store the solution
+                 * @return true if storing the solution was successful, else false 
+                 */
+                bool saveSolution(const PlanningSolution& solution, const std::string& filename);
+                /***
+                 * Loads a solution from file. The solution stored in the file needs to be compatible
+                 * to the current setup planning problem, the function fails otherwise.
+                 * @param filename - filename to load the solution from
+                 * @return true if loading successful, else false
+                 */
+                bool loadSolution(PlanningSolution& solution, const std::string& filename);
                 void setSliceDrawer(algorithm::SliceDrawerInterfacePtr slice_drawer);
                 void renderSDF(float resolution);
                 void clearVisualizations();

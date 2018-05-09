@@ -15,6 +15,8 @@ RampVelocityControl::RampVelocityControl(RampVelocityControlSpaceConstPtr contro
     _rest_time = 0.0f;
     _plateau_duration = 0.0f;
     _acceleration_duration = 0.0f;
+    _num_dofs = control_space->getDimension();
+    assert(_num_dofs > 0);
 }
 
 RampVelocityControl::~RampVelocityControl() {
@@ -27,8 +29,8 @@ void RampVelocityControl::setMaxVelocities(const Eigen::VectorXf &max_velocities
 }
 
 void RampVelocityControl::setParameters(const Eigen::VectorXf& parameters) {
-    assert(parameters.size() > 2);
-    Eigen::VectorXf velocities(parameters.size() - 2);
+    assert(parameters.size() == _num_dofs + 1);
+    Eigen::VectorXf velocities(_num_dofs - 1);
     for (size_t i = 0; i < velocities.size(); ++i) {
         velocities[i] = parameters[i];
     }
@@ -44,12 +46,16 @@ Eigen::VectorXf RampVelocityControl::getParameters() const {
 }
 
 void RampVelocityControl::getParameters(Eigen::VectorXf& params) const {
-    params.resize(_max_velocities.size() + 2);
+    params.resize(getNumParameters());
     for (size_t i = 0; i < _max_velocities.size(); ++i) {
         params[i] = _max_velocities[i];
     }
     params[params.size() - 2] = _plateau_duration;
     params[params.size() - 1] = _rest_time;
+}
+
+unsigned int RampVelocityControl::getNumParameters() const {
+    return  _num_dofs + 1; // velocity_dofs + duration + waiting time
 }
 
 Eigen::VectorXf RampVelocityControl::getMaxVelocities() const {
@@ -216,6 +222,11 @@ void RampVelocityControlSpace::printSettings(std::ostream &out) const {
 void RampVelocityControlSpace::setup() {
     omc::ControlSpace::setup();
 }
+
+// TODO this function is probably doing the same as getSerializationLength() is intended for
+unsigned int RampVelocityControlSpace::getNumParameters() const {
+    return getDimension() + 1; // includes resting time
+} 
 
 unsigned int RampVelocityControlSpace::getSerializationLength() const {
     throw std::logic_error("[mps::planner::ompl::RampVelocityControlSapce::getSerializeationLength]"

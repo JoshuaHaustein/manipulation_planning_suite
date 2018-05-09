@@ -28,6 +28,8 @@ PlanningProblem::PlanningProblem() :
 {
 }
 
+PlanningProblem::PlanningProblem(const PlanningProblem& other) = default;
+
 PlanningProblem::PlanningProblem(sim_env::WorldPtr world, sim_env::RobotPtr robot,
                                  sim_env::RobotVelocityControllerPtr controller,
                                  const ompl::state::goal::RelocationGoalSpecification& goal) :
@@ -167,7 +169,7 @@ bool OraclePushPlanner::setup(PlanningProblem& problem) {
 }
 
 bool OraclePushPlanner::solve(PlanningSolution& solution) {
-    // TODO run planning algorithm, extract solution and return it
+    if (!_is_initialized) throw std::logic_error("[OraclePushPlanner::solve] Planner not initialized. Can not plan.");
     if (_rrt_debug_drawer) {
         // TODO this is ugly to do like this
         auto slice_drawer = _rrt_debug_drawer->getSliceDrawer();
@@ -238,6 +240,130 @@ void OraclePushPlanner::playback(const PlanningSolution& solution,
                                                interrupt_callback,
                                                force_synch);
     }
+}
+
+bool OraclePushPlanner::saveSolution(const PlanningSolution& solution, const std::string& filename) 
+{
+    if (!_is_initialized) throw std::logic_error("[OraclePushPlanner::saveSolution] Planner not initialized. Can not save solution.");
+    static const std::string log_prefix("[OraclePushPlanner::saveSolution]");
+    std::setlocale(LC_NUMERIC, "en_US.UTF-8");
+    // first open the file
+    std::fstream file_stream(filename.c_str(), std::fstream::out);
+    if (!file_stream.is_open()) {
+        mps_logging::logErr("Could not access file " + filename, log_prefix);
+        return false;
+    }
+    // TODO save some header information, e.g. number of objects, semi-dynamic, DoFs of objects, DoFs action space
+    // first save some information about the state and action space
+    // first line contains state space information (#object, has_velocities, #dofs_obj1, #dofs_obj2, ...)
+    file_stream << _state_space->getNumObjects() << ",";
+    file_stream << _state_space->hasVelocities() << ",";
+    for (unsigned int i = 0; i < _state_space->getNumObjects(); ++i) {
+        file_stream << _state_space->getSubspace(i)->getDimension();
+        if (i < _state_space->getNumObjects() - 1) file_stream << ",";
+    }
+    // second line contains action space information
+    file_stream << "\n" << _control_space->getNumParameters() << "\n";
+    // third line contains stats
+    solution.stats.printCVS(file_stream);
+    // run over path and store it
+    file_stream << solution.path->getNumMotions() << "\n";
+    for (unsigned int wp = 0; wp < solution.path->getNumMotions(); ++wp) {
+       auto motion = solution.path->getConstMotion(wp);
+       auto state = dynamic_cast<const mps_state::SimEnvWorldState*>(motion->getConstState());
+       state->serializeInNumbers(file_stream);
+       file_stream << "\n";
+       auto control = dynamic_cast<const mps::planner::util::serialize::RealValueSerializable*>(motion->getConstControl());
+       control->serializeInNumbers(file_stream);
+       file_stream << "\n";
+    }
+    file_stream.close();
+    return true;
+}
+
+bool OraclePushPlanner::loadSolution(PlanningSolution& solution, const std::string& filename) 
+{
+    if (!_is_initialized) throw std::logic_error("[OraclePushPlanner::loadSolution] Planner not initialized. Can not load solution.");
+    static const std::string log_prefix("[OraclePushPlanner::loadSolution]");
+    std::setlocale(LC_NUMERIC, "en_US.UTF-8");
+
+    // Try opening the file first
+    std::fstream file_stream(filename.c_str(), std::fstream::in);
+    if (!file_stream.is_open()) {
+        mps_logging::logErr("Could not access file " + filename, log_prefix);
+        return false;
+    }
+    // Read in header and compare if it is compatible to the set state and control space
+    mps_logging::logDebug("Reading in header", log_prefix);
+    std::string line;
+    std::getline(file_stream, line);
+    std::vector<std::string> comma_seperated_values;
+    mps::planner::util::serialize::splitString(line, comma_seperated_values);
+    if (comma_seperated_values.size() < 3) {
+        mps_logging::logErr("Could not load solution. Invalid header!", log_prefix);
+    }
+    if (std::stoul(comma_seperated_values[0]) != _state_space->getNumObjects()) {
+        mps_logging::logErr("Could not load solution. Invalid number of objects in state space.", log_prefix);
+        return false;
+    }
+    // read in whether it has velocities or not
+    bool has_velocities = std::stoul(comma_seperated_values[1]);
+    if ((has_velocities && !_state_space->hasVelocities()) ||
+        (!has_velocities && _state_space->hasVelocities())) {
+        mps_logging::logErr("Could not load solution. Semi-dynamic flag is incompatible.", log_prefix);
+        return false;
+    }
+    if (comma_seperated_values.size() != _state_space->getNumObjects() + 2) {
+        mps_logging::logErr("Could not load solution. Incorrect number of object DoFs in header", log_prefix);
+        return false;
+    }
+    // check remaining object spaces for sanity
+    for (unsigned int i = 0; i < _state_space->getNumObjects(); ++i) {
+        unsigned int dof = std::stoul(comma_seperated_values[i + 2]);
+        if (dof != _state_space->getSubspace(i)->getDimension()) {
+            mps_logging::logErr(boost::format("Could not load solution. Dimension for object %i is incompatible.") % i,
+                                log_prefix);
+            return false;
+        }
+    }
+    // check action space dimension (new line)
+    std::getline(file_stream, line);
+    unsigned int control_num_params = stoul(line);
+    if (control_num_params != _control_space->getNumParameters()) {
+        mps_logging::logErr("Could not load solution. Action space is incompatible", log_prefix);
+        return false;
+    }
+    //*************** Read in stats **************//
+    mps_logging::logDebug("Reading in stats", log_prefix);
+    solution.stats.readCVS(file_stream);
+    //*************** Read in path **************//
+    mps_logging::logDebug("Reading in path", log_prefix);
+    std::getline(file_stream, line);
+    unsigned int num_motions = std::stoul(line);
+    if (solution.path) {
+        solution.path->clear();
+    } else {
+        solution.path = std::make_shared<mps_essentials::Path>(_space_information);
+    }
+    mps_logging::logDebug(boost::format("Reading in %i number of motions") % num_motions, log_prefix);
+    for (unsigned int i = 0; i < num_motions; ++i) {
+        auto new_motion = std::make_shared<mps_essentials::Motion>(_space_information);
+        std::getline(file_stream, line);
+        {
+            std::stringstream line_stream(line);
+            auto state = dynamic_cast<mps_state::SimEnvWorldState*>(new_motion->getState());
+            state->deserializeFromNumbers(line_stream);
+        }
+        std::getline(file_stream, line);
+        {
+            std::stringstream line_stream(line);
+            auto control = dynamic_cast<mps::planner::util::serialize::RealValueSerializable*>(new_motion->getControl());
+            control->deserializeFromNumbers(line_stream);
+        }
+        solution.path->append(new_motion);
+    }
+    solution.solved = true;
+    return true;
 }
 
 void OraclePushPlanner::setSliceDrawer(algorithm::SliceDrawerInterfacePtr slice_drawer) {

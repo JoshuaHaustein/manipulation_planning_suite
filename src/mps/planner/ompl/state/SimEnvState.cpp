@@ -149,6 +149,20 @@ void SimEnvObjectConfigurationSpace::StateType::serializeInNumbers(std::ostream 
     ostream << getConfiguration().transpose().format(eigen_format);
 }
 
+void SimEnvObjectConfigurationSpace::StateType::deserializeFromNumbers(std::istream &istream) {
+    auto config = getConfiguration();
+    for (unsigned int i = 0; i < _dimension; ++i) {
+        std::string next_number;
+        std::getline(istream, next_number, ',');
+        config[i] = std::stof(next_number);
+    }
+    setConfiguration(config);
+}
+
+unsigned int SimEnvObjectConfigurationSpace::StateType::getNumNumbers() const {
+    return _dimension;
+}
+
 std::string SimEnvObjectConfigurationSpace::StateType::toString() const {
     std::stringstream ss;
     serializeInNumbers(ss);
@@ -497,6 +511,20 @@ void SimEnvObjectVelocitySpace::StateType::serializeInNumbers(std::ostream& ostr
     ostream << getVelocity().transpose().format(eigen_format);
 }
 
+void SimEnvObjectVelocitySpace::StateType::deserializeFromNumbers(std::istream &istream) {
+    auto vel = getVelocity();
+    for (unsigned int i = 0; i < _dimension; ++i) {
+        std::string next_number;
+        std::getline(istream, next_number, ',');
+        vel[i] = std::stof(next_number);
+    }
+    setVelocity(vel);
+}
+
+unsigned int SimEnvObjectVelocitySpace::StateType::getNumNumbers() const {
+    return _dimension;
+}
+
 std::string SimEnvObjectVelocitySpace::StateType::toString() const {
     std::stringstream ss;
     serializeInNumbers(ss);
@@ -732,6 +760,25 @@ void SimEnvObjectStateSpace::StateType::serializeInNumbers(std::ostream& ostream
     }
 }
 
+void SimEnvObjectStateSpace::StateType::deserializeFromNumbers(std::istream &istream) {
+    auto* serializable_component = dynamic_cast<util::serialize::RealValueSerializable*>(components[0]);
+    serializable_component->deserializeFromNumbers(istream);
+    if (hasVelocity()) {
+        serializable_component = dynamic_cast<util::serialize::RealValueSerializable*>(components[1]);
+        serializable_component->deserializeFromNumbers(istream);
+    }
+}
+
+unsigned int SimEnvObjectStateSpace::StateType::getNumNumbers() const {
+    auto* serializable_component = dynamic_cast<util::serialize::RealValueSerializable*>(components[0]);
+    unsigned int num_params = serializable_component->getNumNumbers();
+    if (hasVelocity()) {
+        serializable_component = dynamic_cast<util::serialize::RealValueSerializable*>(components[1]);
+        num_params += serializable_component->getNumNumbers();
+    }
+    return num_params;
+}
+
 void SimEnvObjectStateSpace::StateType::print(std::ostream& ostream) const {
     // TODO do we want to print more here?
     serializeInNumbers(ostream);
@@ -782,6 +829,7 @@ SimEnvObjectStateSpace::~SimEnvObjectStateSpace() {
 SimEnvObjectConfigurationSpacePtr SimEnvObjectStateSpace::getConfigurationSpace() {
     return std::dynamic_pointer_cast<SimEnvObjectConfigurationSpace>(getSubspace(0));
 }
+
 SimEnvObjectVelocitySpacePtr SimEnvObjectStateSpace::getVelocitySpace() {
     if (not _position_only) {
         return std::dynamic_pointer_cast<SimEnvObjectVelocitySpace>(getSubspace(1));
@@ -851,6 +899,10 @@ sim_env::ObjectConstPtr SimEnvObjectStateSpace::getObject() const {
     return _object.lock();
 }
 
+bool SimEnvObjectStateSpace::hasVelocities() const {
+    return !_position_only;
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 //////////// SimEnvWorldState aka SimEnvWorldStateSpace::StateType//////////////
 ////////////////////////////////////////////////////////////////////////////////
@@ -883,6 +935,22 @@ void SimEnvWorldStateSpace::StateType::serializeInNumbers(std::ostream& ostream)
     }
 }
 
+void SimEnvWorldStateSpace::StateType::deserializeFromNumbers(std::istream& istream) {
+    for (unsigned int i = 0; i < getNumObjects(); i++) {
+        auto* state = getObjectState(i);
+        state->deserializeFromNumbers(istream);
+    }
+}
+
+unsigned int SimEnvWorldStateSpace::StateType::getNumNumbers() const {
+    unsigned int num_params = 0;
+    for (unsigned int i = 0; i < getNumObjects(); i++) {
+        auto* state = getObjectState(i);
+        num_params += state->getNumNumbers();
+    }
+    return num_params;
+}
+
 void SimEnvWorldStateSpace::StateType::print(std::ostream& ostream) const {
     for (unsigned int i = 0; i < getNumObjects(); i++) {
         auto* state = getObjectState(i);
@@ -905,7 +973,8 @@ SimEnvWorldStateSpace::SimEnvWorldStateSpace(sim_env::WorldConstPtr world,
                                              const PlanningSceneBounds& bounds,
                                              bool position_only,
                                              const WeightMap& weights):
-    _world(world)
+    _world(world),
+    _position_only(position_only)
 {
     std::vector<sim_env::ObjectConstPtr> objects;
     world->getObjects(objects, false);
@@ -1079,6 +1148,10 @@ void SimEnvWorldStateSpace::setDistanceMeasure(StateDistanceMeasureConstPtr meas
 
 StateDistanceMeasureConstPtr SimEnvWorldStateSpace::getDistanceMeasure() {
     return _distance_measure;
+}
+
+bool SimEnvWorldStateSpace::hasVelocities() const {
+    return !_position_only;
 }
 
 void SimEnvWorldStateSpace::constructLimits(sim_env::ObjectConstPtr object, const PlanningSceneBounds& bounds,
@@ -1285,7 +1358,7 @@ bool SimEnvValidityChecker::isValid(const ::ompl::base::State *state) const {
     bool bounds_valid = _world_space->satisfiesBounds(state);
     if (!bounds_valid) {
         mps_logging::logDebug("State bounds violated. Rejecting state.",
-                                      "[mps::planner::ompl::state::SimEnvValidityChecker::isValid]");
+                              "[mps::planner::ompl::state::SimEnvValidityChecker::isValid]");
         return false;
     }
     // next check, whether the state is valid in terms of collisions
@@ -1317,6 +1390,7 @@ bool SimEnvValidityChecker::isValid(const ::ompl::base::State *state) const {
     }
     // finally restore whatever state the world was in before
     _world->restoreState();
+    mps_logging::logDebug("The state " + world_state->toString() + " is valid.", "[SimEnvValidityChecker::isValid]");
     return true;
 }
 

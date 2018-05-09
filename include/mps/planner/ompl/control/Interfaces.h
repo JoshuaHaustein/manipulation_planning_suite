@@ -26,8 +26,12 @@ namespace mps {
                     virtual Eigen::VectorXf getParameters() const = 0;
                     virtual void getParameters(Eigen::VectorXf& params) const = 0;
                     virtual void setParameters(const Eigen::VectorXf& params) = 0;
+                    virtual unsigned int getNumParameters() const = 0;
+                    
                     // for oracle serialization
                     void serializeInNumbers(std::ostream& ostream) const override;
+                    void deserializeFromNumbers(std::istream& istream) override;
+                    unsigned int getNumNumbers() const override;
                 };
 
                 /**

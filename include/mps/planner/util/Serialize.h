@@ -31,13 +31,26 @@ namespace mps {
                      */
                     virtual void serializeInNumbers(std::ostream& ostream) const = 0;
                     /**
+                     * Deserialize this serializable from a sequence of comma separated 
+                     * real value numbers.
+                     */
+                    virtual void deserializeFromNumbers(std::istream& istream) = 0;
+                    /**
                      * Returns the number of numbers this serializable
                      * requires to be described.
-                     * @return
+                     * @return number of numbers needed to serialize this serializable
                      */
-//                    virtual unsigned int getNumNumbers() const = 0;
+                    virtual unsigned int getNumNumbers() const = 0;
                     static Eigen::IOFormat eigen_format;
                 };
+
+                /**
+                 * Splits the given string at every occurrance of the given delimiter.
+                 * @param text - string to split
+                 * @param splits - output list of substrings of text
+                 * @param delim - delimiter where to split text
+                 */
+                void splitString(const std::string& text, std::vector<std::string>& splits, char delim=',');
 
                 class OracleDataDumper {
                 public:
@@ -62,6 +75,7 @@ namespace mps {
                     std::ofstream _file_stream;
                 };
             }
+            
         }
     }
 }
