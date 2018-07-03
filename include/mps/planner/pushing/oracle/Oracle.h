@@ -119,6 +119,9 @@ namespace mps {
                     virtual void steer(const Eigen::VectorXf& current_robot_state,
                                        const Eigen::VectorXf& desired_robot_state,
                                        std::vector<Eigen::VectorXf>& control_params) const = 0;
+                    virtual void steer(const ompl::state::SimEnvObjectState* current_robot_state,
+                                       const ompl::state::SimEnvObjectState* desired_robot_state,
+                                       std::vector<::ompl::control::Control*>& controls) const = 0;
                     /**
                      * Computes a sequence of controls that attempt to move the robot from
                      * the current state to the desired state given the current state of the world.

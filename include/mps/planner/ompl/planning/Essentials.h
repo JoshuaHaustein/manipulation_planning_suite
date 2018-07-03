@@ -21,6 +21,11 @@ namespace mps {
                     typedef std::shared_ptr<Motion> MotionPtr;
                     typedef std::shared_ptr<const Motion> MotionConstPtr;
 
+                    /**
+                     * A Motion is a tuple of a control and a state.
+                     * The invariant here is that the state of this motion is the result
+                     * of the control of this motion applied to the state of the parent motion.
+                     */
                     class Motion {
                     public:
                         Motion() = delete;
@@ -84,7 +89,7 @@ namespace mps {
                         MotionConstPtr getConstMotion(unsigned int i) const;
                         /**
                          * Constructs a deep copy of this path.
-                         * The deep copy copies all motions stored in this path, but not the space 
+                         * The deep copy copies all motions stored in this path, but not the space
                          * information pointer
                          */
                         std::shared_ptr<Path> deepCopy() const;
@@ -101,7 +106,7 @@ namespace mps {
                     typedef std::weak_ptr<const Path> PathWeakConstPtr;
 
                     class CostFunction {
-                        public: 
+                        public:
                             virtual ~CostFunction() = 0;
                             /**
                              *  Returns the cost taking the action stored in second
@@ -112,7 +117,7 @@ namespace mps {
                             /**
                              * Returns the cost for a path. Default implementation accumulates
                              * cost between individual motions in path.
-                             * @param limit - if >= 0, computes the cost from the beginning until motion 
+                             * @param limit - if >= 0, computes the cost from the beginning until motion
                              *        with id limit only (limit == 0 => returns 0.0)
                              */
                             virtual double cost(PathPtr path, int limit = -1);

@@ -91,6 +91,20 @@ void mps::planner::pushing::oracle::RampComputer::steer(const Eigen::VectorXf &c
     }
 }
 
+
+void mps::planner::pushing::oracle::RampComputer::steer(const ompl::state::SimEnvObjectState* current_robot_state,
+                                   const ompl::state::SimEnvObjectState* desired_robot_state,
+                                   std::vector<::ompl::control::Control*>& controls) const
+{
+    std::vector<Eigen::VectorXf> control_params;
+    steer(current_robot_state->getConfiguration(), desired_robot_state->getConfiguration(), control_params);
+    for (auto& control_param : control_params) {
+        auto control = dynamic_cast<mps::planner::ompl::control::RampVelocityControl*>(_control_space->allocControl());
+        control->setParameters(control_param);
+        controls.push_back(control);
+    }
+}
+
 void mps::planner::pushing::oracle::RampComputer::steer(
                                     const ompl::state::SimEnvObjectState* current_robot_state,
                                     const ompl::state::SimEnvObjectState* desired_robot_state,
