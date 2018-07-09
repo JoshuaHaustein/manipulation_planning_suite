@@ -42,21 +42,16 @@ namespace mps {
                 // time out for planner
                 float planning_time_out;
                 std::function<bool()> stopping_condition;
-                // distance function
-                std::map<std::string, float> object_weights;
-                mps::planner::ompl::state::SimEnvWorldStateSpace::WeightMap weight_map;
                 // parameters restricting action space
                 mps::planner::ompl::control::RampVelocityControlSpace::ControlLimits control_limits;
                 std::vector<mps::planner::ompl::control::RampVelocityControlSpace::ControlSubspace> control_subspaces;
                 // parameters for semi-dynamic planning
-                bool b_semi_dynamic;
                 float t_max;
                 // goal region
-                // std::vector<ompl::state::goal::RelocationGoalSpecification> relocation_goals;
+                std::map<std::string, unsigned int> sorting_groups; // TODO this shouldn't be optional
                 // settings for control sampler
                 ValueFunctionType value_fn_type;
                 AlgorithmType algorithm_type;
-                float max_shortcut_time;
                 unsigned int num_control_samples;
                 // flag whether to enable debug info
                 bool debug;
