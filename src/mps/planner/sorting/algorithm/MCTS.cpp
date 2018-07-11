@@ -22,10 +22,12 @@ using namespace mps::planner::ompl::planning::essentials;
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 MCTSBase::PlanningQuery::PlanningQuery(ob::State *start_state,
                                        float time_out,
+                                       std::vector<unsigned int>& lgroups,
                                        const std::string& robot_name) :
     start_state(start_state),
     robot_name(robot_name),
-    time_out(time_out)
+    time_out(time_out),
+    groups(lgroups)
 {
     stopping_condition = []() {return false;};
     num_control_samples = 10;

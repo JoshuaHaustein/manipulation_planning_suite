@@ -18,7 +18,7 @@ std::string mps::planner::util::yaml::algorithmTypeToString(mps::planner::sortin
     switch(algo_type) {
         case mps::planner::sorting::PlanningProblem::AlgorithmType::DeterministicMCTS:
             return "DeterministicMCTS";
-        case mps::planner::pushing::PlanningProblem::AlgorithmType::NonDeterministicMCTS:
+        case mps::planner::sorting::PlanningProblem::AlgorithmType::NonDeterministicMCTS:
             return "NonDeterministicMCTS";
     }
     return "UNDEFINED";
@@ -38,7 +38,7 @@ mps::planner::sorting::PlanningProblem::AlgorithmType mps::planner::util::yaml::
     if (str.compare("DeterministicMCTS") == 0) {
         return mps::planner::sorting::PlanningProblem::AlgorithmType::DeterministicMCTS;
     } else if (str.compare("NonDeterministicMCTS") == 0) {
-        return mps::planner::sorting::PlanningProblem::AlgorithmType::NonDetereministicMCTS;
+        return mps::planner::sorting::PlanningProblem::AlgorithmType::NonDeterministicMCTS;
     } else {
         throw std::runtime_error("Unknown algorithm type encountered: " + str);
     }

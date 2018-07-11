@@ -28,45 +28,44 @@ namespace mps {
                 };
 
                 enum AlgorithmType {
-                    DeterministicMCTS = 0, NonDetereministicMCTS = 1
+                    DeterministicMCTS = 0, NonDeterministicMCTS = 1
                 };
 
-                // world related parameters
+                /// World related parameters, that are mandatory to be set manually ///
                 sim_env::WorldPtr world;
-                sim_env::RobotPtr robot;
                 sim_env::RobotVelocityControllerPtr robot_controller;
-                // restrictions on the world
-                std::map<std::string, Eigen::VectorXi> active_dofs;
-                mps::planner::ompl::state::PlanningSceneBounds workspace_bounds;
-                mps::planner::ompl::state::SimEnvValidityChecker::CollisionPolicy collision_policy;
-                // time out for planner
+                // The robot is initialized by calling init_robot()
+                sim_env::RobotPtr robot;
+
+                /// Parameters that are initialized with default values on construction ///
                 float planning_time_out;
-                std::function<bool()> stopping_condition;
+                float t_max; // maximum waiting time (semi dynamic planning)
+                mps::planner::ompl::state::PlanningSceneBounds workspace_bounds;
                 // parameters restricting action space
-                mps::planner::ompl::control::RampVelocityControlSpace::ControlLimits control_limits;
                 std::vector<mps::planner::ompl::control::RampVelocityControlSpace::ControlSubspace> control_subspaces;
-                // parameters for semi-dynamic planning
-                float t_max;
                 // goal region
-                std::map<std::string, unsigned int> sorting_groups; // TODO this shouldn't be optional
+                std::map<std::string, unsigned int> sorting_groups; 
                 // settings for control sampler
                 ValueFunctionType value_fn_type;
                 AlgorithmType algorithm_type;
+                bool debug; // flag whether to enable debug info
                 unsigned int num_control_samples;
-                // flag whether to enable debug info
-                bool debug;
+                std::function<bool()> stopping_condition;
+                mps::planner::ompl::state::SimEnvValidityChecker::CollisionPolicy collision_policy;
+                
+                /// Parameters initialized by init_control_limits() ///
+                // std::map<std::string, Eigen::VectorXi> active_dofs; // restictions on active degrees of freedom
+                mps::planner::ompl::control::RampVelocityControlSpace::ControlLimits control_limits;
+
+                PlanningProblem();
+                PlanningProblem(const PlanningProblem& other);
 
                 /**
-                 *  Constructor of a planning problem.
-                 *  Initializes all non-essential parameters with default values.
+                 * Initialize all parameters that are dependent on the robot.
+                 * The world and the robot_controller need to have been set before!
+                 * @return true if initialization successful
                  */
-                PlanningProblem(sim_env::WorldPtr world,
-                                sim_env::RobotPtr robot,
-                                sim_env::RobotVelocityControllerPtr controller);
-                PlanningProblem(const PlanningProblem& other);
-            protected:
-                // constructor that doesn't force you to provide mandatory arguments - used internally
-                PlanningProblem();
+                bool init_robot();
             };
 
             /**

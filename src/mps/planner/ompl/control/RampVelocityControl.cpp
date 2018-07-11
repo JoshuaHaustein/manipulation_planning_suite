@@ -148,6 +148,8 @@ RampVelocityControlSpace::ControlLimits::ControlLimits(const Eigen::VectorXf &ve
 {
 }
 
+RampVelocityControlSpace::ControlLimits::ControlLimits() = default;
+
 RampVelocityControlSpace::RampVelocityControlSpace(const ::ompl::base::StateSpacePtr &stateSpace,
                                                    const Eigen::VectorXf &velocity_limits,
                                                    const Eigen::VectorXf &acceleration_limits,

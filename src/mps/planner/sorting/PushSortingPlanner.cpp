@@ -16,20 +16,9 @@ namespace mps_control = mps::planner::ompl::control;
 namespace mps_essentials = mps::planner::ompl::planning::essentials;
 namespace mps_logging = mps::planner::util::logging;
 
-PlanningProblem::PlanningProblem() :
-        control_limits(Eigen::VectorXf(), Eigen::VectorXf(), Eigen::Array2f())
-{
-}
-
-PlanningProblem::PlanningProblem(const PlanningProblem& other) = default;
-
-PlanningProblem::PlanningProblem(sim_env::WorldPtr world, sim_env::RobotPtr robot,
-                                 sim_env::RobotVelocityControllerPtr controller) :
-        world(world), robot(robot), robot_controller(controller),
-        control_limits(Eigen::VectorXf(robot->getNumActiveDOFs()), Eigen::VectorXf(robot->getNumActiveDOFs()), Eigen::Array2f())
-{
+PlanningProblem::PlanningProblem() {
+    // set default values
     planning_time_out = 60.0f;
-    b_semi_dynamic = true;
     t_max = 8.0f;
     // create default workspace limits
     workspace_bounds.x_limits[0] = std::numeric_limits<float>::lowest();
@@ -43,14 +32,6 @@ PlanningProblem::PlanningProblem(sim_env::WorldPtr world, sim_env::RobotPtr robo
     // Create default control limits
     control_limits.duration_limits[0] = 0.1; // minimal duration of holding the maximum velocity in s
     control_limits.duration_limits[1] = 1.0; // maximal duration of holding the maximum velocity in s
-    Eigen::ArrayX2f acceleration_limits = robot->getDOFAccelerationLimits();
-    Eigen::ArrayX2f velocity_limits = robot->getDOFVelocityLimits();
-    assert(acceleration_limits.rows() == control_limits.acceleration_limits.rows());
-    assert(velocity_limits.rows() == acceleration_limits.rows());
-    for (unsigned int i = 0; i < acceleration_limits.rows(); ++i) {
-        control_limits.acceleration_limits[i] = std::min(std::abs(acceleration_limits(i, 0)), acceleration_limits(i, 1));
-        control_limits.velocity_limits[i] = std::min(std::abs(velocity_limits(i, 0)), velocity_limits(i, 1));
-    }
     // other default values
     value_fn_type = ValueFunctionType::Entropy;
     algorithm_type = AlgorithmType::DeterministicMCTS;
@@ -58,11 +39,26 @@ PlanningProblem::PlanningProblem(sim_env::WorldPtr world, sim_env::RobotPtr robo
     num_control_samples = 10;
     stopping_condition = [](){return false;};
     collision_policy.setStaticCollisions(false);
-    collision_policy.setStaticCollisions(robot->getName(), false);
+}
+
+PlanningProblem::PlanningProblem(const PlanningProblem& other) = default;
+
+bool PlanningProblem::init_robot() 
+{
+    if (!world || !robot_controller) return false;
+    robot = robot_controller->getRobot();
+    Eigen::ArrayX2f acceleration_limits = robot->getDOFAccelerationLimits();
+    Eigen::ArrayX2f velocity_limits = robot->getDOFVelocityLimits();
+    control_limits.acceleration_limits.resize(robot->getNumActiveDOFs());
+    control_limits.velocity_limits.resize(robot->getNumActiveDOFs());
+    for (unsigned int i = 0; i < acceleration_limits.rows(); ++i) {
+        control_limits.acceleration_limits[i] = std::min(std::abs(acceleration_limits(i, 0)), acceleration_limits(i, 1));
+        control_limits.velocity_limits[i] = std::min(std::abs(velocity_limits(i, 0)), velocity_limits(i, 1));
+    }
+    return true;
 }
 
 PlanningSolution::PlanningSolution() : path(nullptr), solved(false) {
-
 }
 
 PushSortingPlanner::PushSortingPlanner() {
@@ -84,8 +80,8 @@ bool PushSortingPlanner::setup(PlanningProblem& problem) {
     // This creates a SimEnvWorldStateSpace from the given world
     _state_space = std::make_shared<mps_state::SimEnvWorldStateSpace>(_planning_problem.world,
                                                                       _planning_problem.workspace_bounds,
-                                                                      _planning_problem.b_semi_dynamic,
-                                                                      _planning_problem.weight_map);
+                                                                      true,
+                                                                      mps_state::SimEnvWorldStateSpace::WeightMap());
     // This creates a RampVelocityControlSpace. This is an action space consisting of
     // velocitiies in a plane (x,y,theta) that follow a ramp shaped velocity profile.
     // In addition to its x,y,theta velocities, an action is characeterized by its duration.
@@ -112,7 +108,7 @@ bool PushSortingPlanner::setup(PlanningProblem& problem) {
             std::make_shared<mps::planner::ompl::control::SimEnvStatePropagator>(_space_information,
                                                                                  _planning_problem.world,
                                                                                  _planning_problem.robot_controller,
-                                                                                 _planning_problem.b_semi_dynamic,
+                                                                                 true,
                                                                                  _planning_problem.t_max);
     _space_information->setStatePropagator(_state_propagator);
     _space_information->setup();
@@ -127,9 +123,17 @@ bool PushSortingPlanner::solve(PlanningSolution& solution) {
     auto* start_state = _state_space->allocState(); // this creates a new state object
     _state_space->extractState(_planning_problem.world,
                                dynamic_cast<ompl::state::SimEnvWorldStateSpace::StateType *>(start_state));
+    if (_state_space->getNumObjects() <= 2) return true; // TODO: or should we return false?
+    // extract groups
+    std::vector<unsigned int> groups(_state_space->getNumObjects(), 0);
+    for (auto& element : _planning_problem.sorting_groups) {
+        auto idx = _state_space->getObjectIndex(element.first);
+        groups[idx] = element.second;
+    }
     // create a planning query object. this serves as input to the actual planning algorithm
     algorithm::MCTSBase::PlanningQuery pq(start_state,
                                           _planning_problem.planning_time_out,
+                                          groups,
                                           _planning_problem.robot->getName());
     pq.stopping_condition = _planning_problem.stopping_condition;
     pq.num_control_samples = _planning_problem.num_control_samples;
@@ -172,7 +176,7 @@ void PushSortingPlanner::createAlgorithm() {
             util::logging::logDebug("Using deterministic MCTS algorithm", log_prefix);
             break;
         }
-        case PlanningProblem::AlgorithmType ::NonDetereministicMCTS:
+        case PlanningProblem::AlgorithmType ::NonDeterministicMCTS:
         {
             // maybe we can also look into non-deterministic MCTS, so just in case
             _algorithm = std::make_shared<algorithm::NonDeterministicMCTS>(_space_information);

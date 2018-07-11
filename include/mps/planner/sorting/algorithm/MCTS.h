@@ -91,7 +91,7 @@ namespace mps {
                 };
 
                 /*
-                 * This class serves as base for you algorithms. You should encapsulate
+                 * This class serves as base for your algorithms. You should encapsulate
                  * all functionality that is common for different variants of MCTS in this
                  * class and provide specializations in the following subclasses.
                  * This allows you to reuse a lot of code without copy-paste and also allows
@@ -107,8 +107,10 @@ namespace mps {
                         float time_out; // time out in seconds
                         unsigned int num_control_samples; // number of control samples
                         std::function<bool()> stopping_condition; // optionally a customized stopping condition
+                        std::vector<unsigned int> groups; // an array saving the group for each object id. NOTE that this array also includes an entry for the robot, which should be ignored
                         PlanningQuery(::ompl::base::State* start_state,
                                       float time_out,
+                                      std::vector<unsigned int>& groups,
                                       const std::string& robot_name);
                         PlanningQuery(const PlanningQuery& other);
                         std::string toString() const;

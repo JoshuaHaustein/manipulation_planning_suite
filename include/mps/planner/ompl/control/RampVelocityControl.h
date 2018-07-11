@@ -107,6 +107,7 @@ namespace mps {
                         ControlLimits(const Eigen::VectorXf& velocity_limits,
                                       const Eigen::VectorXf& acceleration_limits,
                                       const Eigen::Array2f& duration_limits);
+                        ControlLimits(); // without initialization 
                     };
                     /**
                      * Defines a control subspace within the control space.
