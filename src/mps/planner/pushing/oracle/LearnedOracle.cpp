@@ -4,56 +4,46 @@
 // Modified by:
 // - Isac 28/9/17
 //
-#include <mps/planner/pushing/oracle/LearnedOracle.h>
-#include <proto/oracle.pb.h>
-#include <mps/planner/util/Logging.h>
+#include <csignal>
 #include <cstdlib>
 #include <fstream>
-#include <csignal>
 #include <iostream>
+#include <mps/planner/pushing/oracle/LearnedOracle.h>
+#include <mps/planner/util/Logging.h>
+#include <proto/oracle.pb.h>
 
 namespace mps_logging = mps::planner::util::logging;
 
-mps::planner::pushing::oracle::LearnedPipeOracle::LearnedPipeOracle(const std::vector<ObjectData>& object_data) :
-    _action_request_path(std::getenv("ORACLE_REQUEST_PIPE_PATH")),
-    _action_response_path(std::getenv("ORACLE_RESPONSE_PIPE_PATH")),
-    _feasibility_request_path(std::getenv("FEASIBILITY_REQUEST_PIPE_PATH")),
-    _feasibility_response_path(std::getenv("FEASIBILITY_RESPONSE_PIPE_PATH")),
-    _feasibility_sample_request_path(std::getenv("FEASIBILITY_SAMPLE_REQUEST_PIPE_PATH")),
-    _feasibility_sample_response_path(std::getenv("FEASIBILITY_SAMPLE_RESPONSE_PIPE_PATH")),
-    _pushability_request_path(std::getenv("PUSHABILITY_REQUEST_PIPE_PATH")),
-    _pushability_response_path(std::getenv("PUSHABILITY_RESPONSE_PIPE_PATH")),
-    _pushability_projection_request_path(std::getenv("PUSHABILITY_PROJECTION_REQUEST_PIPE_PATH")),
-    _pushability_projection_response_path(std::getenv("PUSHABILITY_PROJECTION_RESPONSE_PIPE_PATH"))
+mps::planner::pushing::oracle::LearnedPipeOracle::LearnedPipeOracle(const std::vector<ObjectData>& object_data)
+    : _action_request_path(std::getenv("ORACLE_REQUEST_PIPE_PATH"))
+    , _action_response_path(std::getenv("ORACLE_RESPONSE_PIPE_PATH"))
+    , _feasibility_request_path(std::getenv("FEASIBILITY_REQUEST_PIPE_PATH"))
+    , _feasibility_response_path(std::getenv("FEASIBILITY_RESPONSE_PIPE_PATH"))
+    , _feasibility_sample_request_path(std::getenv("FEASIBILITY_SAMPLE_REQUEST_PIPE_PATH"))
+    , _feasibility_sample_response_path(std::getenv("FEASIBILITY_SAMPLE_RESPONSE_PIPE_PATH"))
+    , _pushability_request_path(std::getenv("PUSHABILITY_REQUEST_PIPE_PATH"))
+    , _pushability_response_path(std::getenv("PUSHABILITY_RESPONSE_PIPE_PATH"))
+    , _pushability_projection_request_path(std::getenv("PUSHABILITY_PROJECTION_REQUEST_PIPE_PATH"))
+    , _pushability_projection_response_path(std::getenv("PUSHABILITY_PROJECTION_RESPONSE_PIPE_PATH"))
 {
     static const std::string log_prefix("[mps::planner::pushing::oracle::LearnedPipeOracle::LearnedPipeOracle]");
     GOOGLE_PROTOBUF_VERIFY_VERSION;
-    if (_feasibility_request_path == nullptr ||
-        _feasibility_response_path == nullptr ||
-        _action_request_path == nullptr ||
-        _action_response_path == nullptr ||
-        _feasibility_sample_request_path == nullptr ||
-        _feasibility_sample_response_path == nullptr ||
-        _pushability_projection_request_path == nullptr ||
-        _pushability_projection_response_path == nullptr ||
-        _pushability_request_path == nullptr ||
-        _pushability_response_path == nullptr
-        )
-    {
-        mps_logging::logDebug("ERROR: Environment variables for oracle pipes not set", log_prefix);
+    if (_feasibility_request_path == nullptr || _feasibility_response_path == nullptr || _action_request_path == nullptr || _action_response_path == nullptr || _feasibility_sample_request_path == nullptr || _feasibility_sample_response_path == nullptr || _pushability_projection_request_path == nullptr || _pushability_projection_response_path == nullptr || _pushability_request_path == nullptr || _pushability_response_path == nullptr) {
+        mps_logging::logErr("ERROR: Environment variables for oracle pipes not set", log_prefix);
         raise(SIGABRT);
     }
     _object_data = object_data;
 }
 
-mps::planner::pushing::oracle::LearnedPipeOracle::~LearnedPipeOracle() {
+mps::planner::pushing::oracle::LearnedPipeOracle::~LearnedPipeOracle()
+{
     /* No members allocated within the class at the moment */
 }
 
-
-float mps::planner::pushing::oracle::LearnedPipeOracle::predictPushability(const Eigen::VectorXf &current_obj_state,
-                         const Eigen::VectorXf &next_obj_state,
-                         const unsigned int& obj_id) {
+float mps::planner::pushing::oracle::LearnedPipeOracle::predictPushability(const Eigen::VectorXf& current_obj_state,
+    const Eigen::VectorXf& next_obj_state,
+    const unsigned int& obj_id)
+{
     /* Create buffer */
     auto request = oracle_communication::PushabilityRequest();
 
@@ -98,10 +88,11 @@ float mps::planner::pushing::oracle::LearnedPipeOracle::predictPushability(const
 }
 
 void mps::planner::pushing::oracle::LearnedPipeOracle::projectToPushability(const Eigen::VectorXf& current_obj_state,
-                          const Eigen::VectorXf& next_obj_state,
-                          const float& num_std,
-                          const unsigned int& obj_id,
-                          Eigen::VectorXf& output) {
+    const Eigen::VectorXf& next_obj_state,
+    const float& num_std,
+    const unsigned int& obj_id,
+    Eigen::VectorXf& output)
+{
     /* Create buffer */
     auto request = oracle_communication::PushabilityRequest();
 
@@ -149,10 +140,11 @@ void mps::planner::pushing::oracle::LearnedPipeOracle::projectToPushability(cons
     return;
 }
 
-float mps::planner::pushing::oracle::LearnedPipeOracle::predictFeasibility(const Eigen::VectorXf &current_robot_state,
-                         const Eigen::VectorXf &current_obj_state,
-                         const Eigen::VectorXf &next_obj_state,
-                         const unsigned int& obj_id) {
+float mps::planner::pushing::oracle::LearnedPipeOracle::predictFeasibility(const Eigen::VectorXf& current_robot_state,
+    const Eigen::VectorXf& current_obj_state,
+    const Eigen::VectorXf& next_obj_state,
+    const unsigned int& obj_id)
+{
     /* Create buffer */
     auto request = oracle_communication::FeasibilityRequest();
 
@@ -197,10 +189,11 @@ float mps::planner::pushing::oracle::LearnedPipeOracle::predictFeasibility(const
     return 1.0 / response.mahalanobis();
 }
 
-void mps::planner::pushing::oracle::LearnedPipeOracle::sampleFeasibleState(const Eigen::VectorXf &current_obj_state,
-                         const Eigen::VectorXf &next_obj_state,
-                         const unsigned int& obj_id,
-                         Eigen::VectorXf &new_robot_state) {
+void mps::planner::pushing::oracle::LearnedPipeOracle::sampleFeasibleState(const Eigen::VectorXf& current_obj_state,
+    const Eigen::VectorXf& next_obj_state,
+    const unsigned int& obj_id,
+    Eigen::VectorXf& new_robot_state)
+{
     /* Create buffer */
     auto request = oracle_communication::FeasibilityRequest();
 
@@ -250,11 +243,12 @@ void mps::planner::pushing::oracle::LearnedPipeOracle::sampleFeasibleState(const
     return;
 }
 
-void mps::planner::pushing::oracle::LearnedPipeOracle::predictAction(const Eigen::VectorXf &current_robot_state,
-                   const Eigen::VectorXf &current_obj_state,
-                   const Eigen::VectorXf &next_obj_state,
-                   const unsigned int& obj_id,
-                   Eigen::VectorXf &control) {
+void mps::planner::pushing::oracle::LearnedPipeOracle::predictAction(const Eigen::VectorXf& current_robot_state,
+    const Eigen::VectorXf& current_obj_state,
+    const Eigen::VectorXf& next_obj_state,
+    const unsigned int& obj_id,
+    Eigen::VectorXf& control)
+{
     /* Create buffer */
     auto request = oracle_communication::ActionRequest();
 
@@ -306,7 +300,8 @@ void mps::planner::pushing::oracle::LearnedPipeOracle::predictAction(const Eigen
     return;
 }
 
-float mps::planner::pushing::oracle::LearnedPipeOracle::getMaximalPushingDistance() const {
+float mps::planner::pushing::oracle::LearnedPipeOracle::getMaximalPushingDistance() const
+{
     // TODO
     return 0.1f;
 }
