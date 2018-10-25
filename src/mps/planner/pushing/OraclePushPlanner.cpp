@@ -2,20 +2,20 @@
 // Created by joshua on 8/21/17.
 //
 
-#include <ompl/base/samplers/UniformValidStateSampler.h>
-#include <mps/planner/pushing/OraclePushPlanner.h>
-#include <mps/planner/pushing/Costs.h>
-#include <mps/planner/util/Serialize.h>
-#include <mps/planner/ompl/state/goal/ObjectsRelocationGoal.h>
-#include <mps/planner/pushing/oracle/OracleControlSampler.h>
+#include <chrono>
 #include <mps/planner/ompl/control/NaiveControlSampler.h>
-#include <mps/planner/util/Logging.h>
-#include <mps/planner/util/Playback.h>
+#include <mps/planner/ompl/state/goal/ObjectsRelocationGoal.h>
+#include <mps/planner/pushing/Costs.h>
+#include <mps/planner/pushing/OraclePushPlanner.h>
 #include <mps/planner/pushing/oracle/HumanOracle.h>
 #include <mps/planner/pushing/oracle/LearnedOracle.h>
+#include <mps/planner/pushing/oracle/OracleControlSampler.h>
 #include <mps/planner/pushing/oracle/RampComputer.h>
+#include <mps/planner/util/Logging.h>
+#include <mps/planner/util/Playback.h>
+#include <mps/planner/util/Serialize.h>
+#include <ompl/base/samplers/UniformValidStateSampler.h>
 #include <thread>
-#include <chrono>
 
 using namespace mps::planner::pushing;
 namespace mps_state = mps::planner::ompl::state;
@@ -23,26 +23,28 @@ namespace mps_control = mps::planner::ompl::control;
 namespace mps_essentials = mps::planner::ompl::planning::essentials;
 namespace mps_logging = mps::planner::util::logging;
 
-PlanningProblem::PlanningProblem() :
-        control_limits(Eigen::VectorXf(), Eigen::VectorXf(), Eigen::Array2f())
+PlanningProblem::PlanningProblem()
+    : control_limits(Eigen::VectorXf(), Eigen::VectorXf(), Eigen::Array2f())
 {
 }
 
 PlanningProblem::PlanningProblem(const PlanningProblem& other) = default;
 
 PlanningProblem::PlanningProblem(sim_env::WorldPtr world, sim_env::RobotPtr robot,
-                                 sim_env::RobotVelocityControllerPtr controller,
-                                 const ompl::state::goal::RelocationGoalSpecification& goal) :
-            PlanningProblem(world, robot, controller, std::vector<ompl::state::goal::RelocationGoalSpecification>(1, goal))
+    sim_env::RobotVelocityControllerPtr controller,
+    const ompl::state::goal::RelocationGoalSpecification& goal)
+    : PlanningProblem(world, robot, controller, std::vector<ompl::state::goal::RelocationGoalSpecification>(1, goal))
 {
 }
 
 PlanningProblem::PlanningProblem(sim_env::WorldPtr world, sim_env::RobotPtr robot,
-                                 sim_env::RobotVelocityControllerPtr controller,
-                                 const std::vector<ompl::state::goal::RelocationGoalSpecification>& goals) :
-        world(world), robot(robot), robot_controller(controller),
-        control_limits(Eigen::VectorXf(robot->getNumActiveDOFs()), Eigen::VectorXf(robot->getNumActiveDOFs()), Eigen::Array2f()),
-        relocation_goals(goals)
+    sim_env::RobotVelocityControllerPtr controller,
+    const std::vector<ompl::state::goal::RelocationGoalSpecification>& goals)
+    : world(world)
+    , robot(robot)
+    , robot_controller(controller)
+    , control_limits(Eigen::VectorXf(robot->getNumActiveDOFs()), Eigen::VectorXf(robot->getNumActiveDOFs()), Eigen::Array2f())
+    , relocation_goals(goals)
 {
     assert(relocation_goals.size() > 0);
     planning_time_out = 60.0f;
@@ -84,28 +86,33 @@ PlanningProblem::PlanningProblem(sim_env::WorldPtr world, sim_env::RobotPtr robo
     num_control_samples = 10;
     shortcut_type = ShortcutType::LocalShortcut;
     max_shortcut_time = 5.0f;
-    stopping_condition = [](){return false;};
+    stopping_condition = []() { return false; };
     collision_policy.setStaticCollisions(true);
     collision_policy.setStaticCollisions(robot->getName(), false);
 }
 
-PlanningSolution::PlanningSolution() : path(nullptr), solved(false) {
-
+PlanningSolution::PlanningSolution()
+    : path(nullptr)
+    , solved(false)
+{
 }
 
-OraclePushPlanner::OraclePushPlanner() {
+OraclePushPlanner::OraclePushPlanner()
+{
     _is_initialized = false;
 }
 
 OraclePushPlanner::~OraclePushPlanner() = default;
 
-bool OraclePushPlanner::setup(PlanningProblem& problem) {
+bool OraclePushPlanner::setup(PlanningProblem& problem)
+{
     // TODO this is ugly to have. In principle, I think this slice visualizer should maybe not be there or
     // TODO have it's copies of everything
     if (_rrt_debug_drawer) {
         // clearing the slice drawer here, allows it to delete slices before we reset the state space these slices belong to
         auto slice_drawer = _rrt_debug_drawer->getSliceDrawer();
-        if (slice_drawer) slice_drawer->clear();
+        if (slice_drawer)
+            slice_drawer->clear();
     }
     static const std::string log_prefix("[mps::planner::pushing::OraclePushPlanner::setup]");
     // first delete any previous instances
@@ -117,35 +124,31 @@ bool OraclePushPlanner::setup(PlanningProblem& problem) {
     _planning_problem = problem;
     // now create new instances
     _state_space = std::make_shared<mps_state::SimEnvWorldStateSpace>(_planning_problem.world,
-                                                                      _planning_problem.workspace_bounds,
-                                                                      _planning_problem.b_semi_dynamic,
-                                                                      _planning_problem.weight_map);
-    _control_space =
-            std::make_shared<mps_control::RampVelocityControlSpace>(_state_space,
-                                                                    problem.control_limits,
-                                                                    problem.control_subspaces);
-    _space_information =
-            std::make_shared<::ompl::control::SpaceInformation>(_state_space, _control_space);
+        _planning_problem.workspace_bounds,
+        _planning_problem.b_semi_dynamic,
+        _planning_problem.weight_map);
+    _control_space = std::make_shared<mps_control::RampVelocityControlSpace>(_state_space,
+        problem.control_limits,
+        problem.control_subspaces);
+    _space_information = std::make_shared<::ompl::control::SpaceInformation>(_state_space, _control_space);
     _space_information->setPropagationStepSize(1.0); // NOT USED
     _space_information->setMinMaxControlDuration(1, 1); // NOT USED
-    _validity_checker =
-            std::make_shared<mps::planner::ompl::state::SimEnvValidityChecker>(_space_information,
-                                                                               _planning_problem.world);
+    _validity_checker = std::make_shared<mps::planner::ompl::state::SimEnvValidityChecker>(_space_information,
+        _planning_problem.world);
     _validity_checker->collision_policy = _planning_problem.collision_policy;
     _space_information->setStateValidityChecker(_validity_checker);
-    _state_propagator =
-            std::make_shared<mps::planner::ompl::control::SimEnvStatePropagator>(_space_information,
-                                                                                 _planning_problem.world,
-                                                                                 _planning_problem.robot_controller,
-                                                                                 _planning_problem.b_semi_dynamic,
-                                                                                 _planning_problem.t_max);
+    _state_propagator = std::make_shared<mps::planner::ompl::control::SimEnvStatePropagator>(_space_information,
+        _planning_problem.world,
+        _planning_problem.robot_controller,
+        _planning_problem.b_semi_dynamic,
+        _planning_problem.t_max);
     prepareDistanceWeights();
     _space_information->setStatePropagator(_state_propagator);
     _space_information->setup();
     createAlgorithm(); // sets _algorithm and _shortcutter
     _data_generator = std::make_shared<oracle::DataGenerator>(_space_information, _state_propagator,
-                                                              _planning_problem.world, _planning_problem.robot->getName(),
-                                                              _planning_problem.relocation_goals.at(0).object_name);
+        _planning_problem.world, _planning_problem.robot->getName(),
+        _planning_problem.relocation_goals.at(0).object_name);
     // TODO this is only for debug
     if (_planning_problem.debug) {
         std::vector<unsigned int> target_object_ids;
@@ -154,39 +157,43 @@ bool OraclePushPlanner::setup(PlanningProblem& problem) {
         }
         if (!_rrt_debug_drawer) {
             _rrt_debug_drawer = std::make_shared<algorithm::DebugDrawer>(_planning_problem.world->getViewer(),
-                                                                     _state_space->getObjectIndex(_planning_problem.robot->getName()),
-                                                                     target_object_ids);
+                _state_space->getObjectIndex(_planning_problem.robot->getName()),
+                target_object_ids);
         } else {
             _rrt_debug_drawer->setRobotId(_state_space->getObjectIndex(_planning_problem.robot->getName()));
             _rrt_debug_drawer->setTargetIds(target_object_ids);
         }
         _algorithm->setDebugDrawer(_rrt_debug_drawer);
-        if (_shortcutter) _shortcutter->setDebugDrawer(_rrt_debug_drawer);
+        if (_shortcutter)
+            _shortcutter->setDebugDrawer(_rrt_debug_drawer);
     }
     // TODO we probably don't need to reconstruct everything all the time
     _is_initialized = true;
     return _is_initialized;
 }
 
-bool OraclePushPlanner::solve(PlanningSolution& solution) {
-    if (!_is_initialized) throw std::logic_error("[OraclePushPlanner::solve] Planner not initialized. Can not plan.");
+bool OraclePushPlanner::solve(PlanningSolution& solution)
+{
+    if (!_is_initialized)
+        throw std::logic_error("[OraclePushPlanner::solve] Planner not initialized. Can not plan.");
     if (_rrt_debug_drawer) {
         // TODO this is ugly to do like this
         auto slice_drawer = _rrt_debug_drawer->getSliceDrawer();
-        if (slice_drawer) slice_drawer->setStateSpace(_state_space);
+        if (slice_drawer)
+            slice_drawer->setStateSpace(_state_space);
     }
     // start state
     auto* start_state = _state_space->allocState();
     _state_space->extractState(_planning_problem.world,
-                               dynamic_cast<ompl::state::SimEnvWorldStateSpace::StateType *>(start_state));
+        dynamic_cast<ompl::state::SimEnvWorldStateSpace::StateType*>(start_state));
     // goal
     _goal_region = std::make_shared<ompl::state::goal::ObjectsRelocationGoal>(_space_information,
-                                                                              _planning_problem.relocation_goals);
+        _planning_problem.relocation_goals);
     // planning query
     algorithm::RearrangementRRT::PlanningQuery pq(_goal_region,
-                                                  start_state,
-                                                  _planning_problem.planning_time_out,
-                                                  _planning_problem.robot->getName());
+        start_state,
+        _planning_problem.planning_time_out,
+        _planning_problem.robot->getName());
     pq.stopping_condition = _planning_problem.stopping_condition;
     pq.weights = _distance_weights;
     pq.action_randomness = _planning_problem.action_noise;
@@ -210,9 +217,7 @@ bool OraclePushPlanner::solve(PlanningSolution& solution) {
         }
     }
     // optionally shortcut query, TODO: shortcutting will likely fail if solution is not reproducible
-    if (_planning_problem.shortcut_type != PlanningProblem::ShortcutType::NoShortcut &&
-        solution.solved)
-    {
+    if (_planning_problem.shortcut_type != PlanningProblem::ShortcutType::NoShortcut && solution.solved) {
         auto cost_fn = std::make_shared<costs::ActionDurationCost>();
         algorithm::Shortcutter::ShortcutQuery sq(_goal_region, cost_fn, _planning_problem.robot->getName());
         sq.stopping_condition = _planning_problem.stopping_condition;
@@ -229,22 +234,24 @@ bool OraclePushPlanner::solve(PlanningSolution& solution) {
 }
 
 void OraclePushPlanner::playback(const PlanningSolution& solution,
-                                 const std::function<bool()>& interrupt_callback,
-                                 bool force_synch) {
+    const std::function<bool()>& interrupt_callback,
+    bool force_synch)
+{
     if (solution.solved) {
         clearVisualizations();
         mps::planner::util::playback::playPath(_planning_problem.world,
-                                               _planning_problem.robot_controller,
-                                               _state_space,
-                                               solution.path,
-                                               interrupt_callback,
-                                               force_synch);
+            _planning_problem.robot_controller,
+            _state_space,
+            solution.path,
+            interrupt_callback,
+            force_synch);
     }
 }
 
-bool OraclePushPlanner::saveSolution(const PlanningSolution& solution, const std::string& filename) 
+bool OraclePushPlanner::saveSolution(const PlanningSolution& solution, const std::string& filename)
 {
-    if (!_is_initialized) throw std::logic_error("[OraclePushPlanner::saveSolution] Planner not initialized. Can not save solution.");
+    if (!_is_initialized)
+        throw std::logic_error("[OraclePushPlanner::saveSolution] Planner not initialized. Can not save solution.");
     static const std::string log_prefix("[OraclePushPlanner::saveSolution]");
     std::setlocale(LC_NUMERIC, "en_US.UTF-8");
     // first open the file
@@ -260,30 +267,33 @@ bool OraclePushPlanner::saveSolution(const PlanningSolution& solution, const std
     file_stream << _state_space->hasVelocities() << ",";
     for (unsigned int i = 0; i < _state_space->getNumObjects(); ++i) {
         file_stream << _state_space->getSubspace(i)->getDimension();
-        if (i < _state_space->getNumObjects() - 1) file_stream << ",";
+        if (i < _state_space->getNumObjects() - 1)
+            file_stream << ",";
     }
     // second line contains action space information
-    file_stream << "\n" << _control_space->getNumParameters() << "\n";
+    file_stream << "\n"
+                << _control_space->getNumParameters() << "\n";
     // third line contains stats
     solution.stats.printCVS(file_stream);
     // run over path and store it
     file_stream << solution.path->getNumMotions() << "\n";
     for (unsigned int wp = 0; wp < solution.path->getNumMotions(); ++wp) {
-       auto motion = solution.path->getConstMotion(wp);
-       auto state = dynamic_cast<const mps_state::SimEnvWorldState*>(motion->getConstState());
-       state->serializeInNumbers(file_stream);
-       file_stream << "\n";
-       auto control = dynamic_cast<const mps::planner::util::serialize::RealValueSerializable*>(motion->getConstControl());
-       control->serializeInNumbers(file_stream);
-       file_stream << "\n";
+        auto motion = solution.path->getConstMotion(wp);
+        auto state = dynamic_cast<const mps_state::SimEnvWorldState*>(motion->getConstState());
+        state->serializeInNumbers(file_stream);
+        file_stream << "\n";
+        auto control = dynamic_cast<const mps::planner::util::serialize::RealValueSerializable*>(motion->getConstControl());
+        control->serializeInNumbers(file_stream);
+        file_stream << "\n";
     }
     file_stream.close();
     return true;
 }
 
-bool OraclePushPlanner::loadSolution(PlanningSolution& solution, const std::string& filename) 
+bool OraclePushPlanner::loadSolution(PlanningSolution& solution, const std::string& filename)
 {
-    if (!_is_initialized) throw std::logic_error("[OraclePushPlanner::loadSolution] Planner not initialized. Can not load solution.");
+    if (!_is_initialized)
+        throw std::logic_error("[OraclePushPlanner::loadSolution] Planner not initialized. Can not load solution.");
     static const std::string log_prefix("[OraclePushPlanner::loadSolution]");
     std::setlocale(LC_NUMERIC, "en_US.UTF-8");
 
@@ -308,8 +318,7 @@ bool OraclePushPlanner::loadSolution(PlanningSolution& solution, const std::stri
     }
     // read in whether it has velocities or not
     bool has_velocities = std::stoul(comma_seperated_values[1]);
-    if ((has_velocities && !_state_space->hasVelocities()) ||
-        (!has_velocities && _state_space->hasVelocities())) {
+    if ((has_velocities && !_state_space->hasVelocities()) || (!has_velocities && _state_space->hasVelocities())) {
         mps_logging::logErr("Could not load solution. Semi-dynamic flag is incompatible.", log_prefix);
         return false;
     }
@@ -322,7 +331,7 @@ bool OraclePushPlanner::loadSolution(PlanningSolution& solution, const std::stri
         unsigned int dof = std::stoul(comma_seperated_values[i + 2]);
         if (dof != _state_space->getSubspace(i)->getDimension()) {
             mps_logging::logErr(boost::format("Could not load solution. Dimension for object %i is incompatible.") % i,
-                                log_prefix);
+                log_prefix);
             return false;
         }
     }
@@ -366,22 +375,27 @@ bool OraclePushPlanner::loadSolution(PlanningSolution& solution, const std::stri
     return true;
 }
 
-void OraclePushPlanner::setSliceDrawer(algorithm::SliceDrawerInterfacePtr slice_drawer) {
-    if (_rrt_debug_drawer) _rrt_debug_drawer->setSliceDrawer(slice_drawer);
+void OraclePushPlanner::setSliceDrawer(algorithm::SliceDrawerInterfacePtr slice_drawer)
+{
+    if (_rrt_debug_drawer)
+        _rrt_debug_drawer->setSliceDrawer(slice_drawer);
 }
 
-void OraclePushPlanner::renderSDF(float resolution) {
+void OraclePushPlanner::renderSDF(float resolution)
+{
     if (_eb_computer) {
         _eb_debug_drawer = _eb_computer->getDebugDrawer();
         _eb_computer->renderSDF(resolution);
     }
 }
 
-void OraclePushPlanner::clearVisualizations() {
+void OraclePushPlanner::clearVisualizations()
+{
     if (_rrt_debug_drawer) {
         _rrt_debug_drawer->clear();
         auto slice_drawer = _rrt_debug_drawer->getSliceDrawer();
-        if (slice_drawer) slice_drawer->clear();
+        if (slice_drawer)
+            slice_drawer->clear();
     }
     if (_eb_debug_drawer) {
         _eb_debug_drawer->clear();
@@ -389,22 +403,25 @@ void OraclePushPlanner::clearVisualizations() {
 }
 
 void OraclePushPlanner::generateData(const std::string& file_name,
-                                     unsigned int num_samples,
-                                     const std::string& annotation,
-                                     bool deterministic) {
+    unsigned int num_samples,
+    const std::string& annotation,
+    bool deterministic)
+{
     _data_generator->generateData(file_name, num_samples, annotation, deterministic);
 }
 
 void OraclePushPlanner::evaluateOracle(mps::planner::ompl::state::goal::RelocationGoalSpecification goal,
-                                       const std::string& file_name,
-                                       unsigned int num_samples,
-                                       const std::string& annotation) {
+    const std::string& file_name,
+    unsigned int num_samples,
+    const std::string& annotation)
+{
     auto oracle_rrt = std::dynamic_pointer_cast<algorithm::OracleRearrangementRRT>(_algorithm);
     auto oracle_sampler = oracle_rrt->getOracleSampler();
     _data_generator->evaluateOracle(goal, oracle_sampler, _state_space, file_name, num_samples, annotation);
 }
 
-void OraclePushPlanner::dummyTest() {
+void OraclePushPlanner::dummyTest()
+{
     // TODO can put manual tests here
     ::ompl::base::StateSamplerPtr state_sampler = _space_information->allocStateSampler();
     ::ompl::control::ControlSamplerPtr control_sampler = _space_information->allocControlSampler();
@@ -413,39 +430,39 @@ void OraclePushPlanner::dummyTest() {
     ::ompl::base::State* new_state = _space_information->allocState();
     ::ompl::control::Control* control = _space_information->allocControl();
     // CODE FOR TESTING NAIVE CONTROL SAMPLING
-//    _distance_measure->setAll(false);
-//    _distance_measure->setActive("robot", true);
-//    state_sampler->sampleUniform(state);
-//    state_sampler->sampleUniform(new_state);
-//    auto* world_state = state->as<mps_state::SimEnvWorldState>();
-//    auto* new_world_state = new_state->as<mps_state::SimEnvWorldState>();
-//    util::logging::logDebug("Start state", "[mps::planner::pushing::OraclePushPlanner::dummyTest]");
-//    _state_space->setToState(_planning_problem.world, world_state);
-//    std::chrono::milliseconds sleeping_duration(1000);
-//    std::this_thread::sleep_for(sleeping_duration);
-//    util::logging::logDebug("Target state", "[mps::planner::pushing::OraclePushPlanner::dummyTest]");
-//    _state_space->setToState(_planning_problem.world, new_world_state);
-//    std::this_thread::sleep_for(sleeping_duration);
-//    directed_control_sampler->sampleTo(control, state, new_state);
-//    _state_propagator->propagate(state, control, new_state);
-//    util::logging::logDebug("Resulting state of chosen action", "[mps::planner::pushing::OraclePushPlanner::dummyTest]");
-//    _state_space->setToState(_planning_problem.world, new_world_state);
-//    std::this_thread::sleep_for(sleeping_duration);
+    //    _distance_measure->setAll(false);
+    //    _distance_measure->setActive("robot", true);
+    //    state_sampler->sampleUniform(state);
+    //    state_sampler->sampleUniform(new_state);
+    //    auto* world_state = state->as<mps_state::SimEnvWorldState>();
+    //    auto* new_world_state = new_state->as<mps_state::SimEnvWorldState>();
+    //    util::logging::logDebug("Start state", "[mps::planner::pushing::OraclePushPlanner::dummyTest]");
+    //    _state_space->setToState(_planning_problem.world, world_state);
+    //    std::chrono::milliseconds sleeping_duration(1000);
+    //    std::this_thread::sleep_for(sleeping_duration);
+    //    util::logging::logDebug("Target state", "[mps::planner::pushing::OraclePushPlanner::dummyTest]");
+    //    _state_space->setToState(_planning_problem.world, new_world_state);
+    //    std::this_thread::sleep_for(sleeping_duration);
+    //    directed_control_sampler->sampleTo(control, state, new_state);
+    //    _state_propagator->propagate(state, control, new_state);
+    //    util::logging::logDebug("Resulting state of chosen action", "[mps::planner::pushing::OraclePushPlanner::dummyTest]");
+    //    _state_space->setToState(_planning_problem.world, new_world_state);
+    //    std::this_thread::sleep_for(sleeping_duration);
 
     // CODE FOR TESTING GOAL SAMPLING
-//    ompl::state::goal::ObjectRelocationGoal or_goal(_space_information,
-//                                                    _planning_problem.target_object->getName(),
-//                                                    _planning_problem.goal_position,
-//                                                    Eigen::Quaternionf(),
-//                                                    _planning_problem.goal_region_radius,
-//                                                    0.0f);
-//    for (unsigned int i = 0; i < 10; ++i) {
-//        or_goal.sampleGoal(state);
-//        auto* world_state = state->as<mps_state::SimEnvWorldState>();
-//        _state_space->setToState(_planning_problem.world, world_state);
-//        std::chrono::milliseconds sleeping_duration(500);
-//        std::this_thread::sleep_for(sleeping_duration);
-//    }
+    //    ompl::state::goal::ObjectRelocationGoal or_goal(_space_information,
+    //                                                    _planning_problem.target_object->getName(),
+    //                                                    _planning_problem.goal_position,
+    //                                                    Eigen::Quaternionf(),
+    //                                                    _planning_problem.goal_region_radius,
+    //                                                    0.0f);
+    //    for (unsigned int i = 0; i < 10; ++i) {
+    //        or_goal.sampleGoal(state);
+    //        auto* world_state = state->as<mps_state::SimEnvWorldState>();
+    //        _state_space->setToState(_planning_problem.world, world_state);
+    //        std::chrono::milliseconds sleeping_duration(500);
+    //        std::this_thread::sleep_for(sleeping_duration);
+    //    }
     // CODE FOR GENERATING DUMMY DATA
     mps::planner::util::serialize::OracleDataDumper data_dumper;
     data_dumper.setFile("/home/joshua/test/oracle_training_data.cvs");
@@ -466,10 +483,13 @@ void OraclePushPlanner::dummyTest() {
     _space_information->freeControl(control);
 }
 
-bool OraclePushPlanner::verifySolution(PlanningSolution& solution) {
+bool OraclePushPlanner::verifySolution(PlanningSolution& solution)
+{
     // first make sure we actually have a path
-    if (!solution.path) return false;
-    if (solution.path->getNumMotions() <= 2) return false;
+    if (!solution.path)
+        return false;
+    if (solution.path->getNumMotions() <= 2)
+        return false;
     // now we verify that it is actually valid and leading to a goal
     bool extension_success = true;
     auto my_motion = std::make_shared<mps_essentials::Motion>(_space_information);
@@ -479,8 +499,8 @@ bool OraclePushPlanner::verifySolution(PlanningSolution& solution) {
         auto current_motion = solution.path->getMotion(m);
         _control_space->copyControl(my_motion->getControl(), current_motion->getConstControl());
         extension_success = _state_propagator->propagate(my_motion->getState(),
-                                                         my_motion->getControl(),
-                                                         my_motion->getState());
+            my_motion->getControl(),
+            my_motion->getState());
         if (not extension_success) {
             return false;
         }
@@ -502,7 +522,7 @@ mps::planner::ompl::planning::essentials::PathPtr OraclePushPlanner::testOracle(
     auto oracle_rrt = std::dynamic_pointer_cast<algorithm::OracleRearrangementRRT>(_algorithm);
     if (!oracle_rrt) {
         logger->logErr("Could not test oracle. The selected algorithm is not of type OracleRearrangementRRT.",
-                       log_prefix);
+            log_prefix);
         return nullptr;
     }
     int target_id = _state_space->getObjectIndex(goal.object_name);
@@ -517,7 +537,7 @@ mps::planner::ompl::planning::essentials::PathPtr OraclePushPlanner::testOracle(
     auto* target_state = dynamic_cast<mps::planner::ompl::state::SimEnvWorldState*>(_state_space->allocState());
     auto start_motion = std::make_shared<ompl::planning::essentials::Motion>(_space_information);
     _state_space->extractState(_planning_problem.world,
-                               dynamic_cast<mps::planner::ompl::state::SimEnvWorldState*>(start_motion->getState()));
+        dynamic_cast<mps::planner::ompl::state::SimEnvWorldState*>(start_motion->getState()));
     _state_space->copyState(target_state, start_motion->getState());
     auto* object_state = target_state->getObjectState(target_id);
     Eigen::VectorXf target_config(3);
@@ -528,9 +548,9 @@ mps::planner::ompl::planning::essentials::PathPtr OraclePushPlanner::testOracle(
     if (target_id == robot_id) {
         success = oracle_sampler->steerRobot(oracle_controls, start_motion->getState(), target_state);
     } else {
-        // check whether we want to move to a pushing state or 
+        // check whether we want to move to a pushing state or
         if (approach) {
-            auto pushing_state =  dynamic_cast<mps::planner::ompl::state::SimEnvWorldState*>(_state_space->allocState());
+            auto pushing_state = dynamic_cast<mps::planner::ompl::state::SimEnvWorldState*>(_state_space->allocState());
             _state_space->copyState(pushing_state, start_motion->getState());
             oracle_sampler->sampleFeasibleState(pushing_state, target_state, target_id);
             success = oracle_sampler->steerRobot(oracle_controls, start_motion->getState(), pushing_state);
@@ -558,7 +578,28 @@ mps::planner::ompl::planning::essentials::PathPtr OraclePushPlanner::testOracle(
     return path;
 }
 
-void OraclePushPlanner::prepareDistanceWeights() {
+mps::planner::ompl::state::SimEnvWorldStateSpacePtr OraclePushPlanner::getStateSpace()
+{
+    return _state_space;
+}
+
+mps::planner::ompl::control::RampVelocityControlSpacePtr OraclePushPlanner::getControlSpace()
+{
+    return _control_space;
+}
+
+mps::planner::ompl::state::SimEnvValidityCheckerPtr OraclePushPlanner::getValidityChecker()
+{
+    return _validity_checker;
+}
+
+mps::planner::ompl::control::SimEnvStatePropagatorPtr OraclePushPlanner::getStatePropagator()
+{
+    return _state_propagator;
+}
+
+void OraclePushPlanner::prepareDistanceWeights()
+{
     _distance_weights.resize(_state_space->getNumObjects());
     for (unsigned int i = 0; i < _distance_weights.size(); ++i) {
         std::string name = _state_space->getObjectName(i);
@@ -571,15 +612,16 @@ void OraclePushPlanner::prepareDistanceWeights() {
     }
 }
 
-void OraclePushPlanner::createAlgorithm() {
+void OraclePushPlanner::createAlgorithm()
+{
     static const std::string log_prefix("[mps::planner::pushing::OraclePushPlanner::createAlgorithm]");
-    if (_planning_problem.algorithm_type == PlanningProblem::AlgorithmType::Naive)
-    {
+    if (_planning_problem.algorithm_type == PlanningProblem::AlgorithmType::Naive) {
         _algorithm = std::make_shared<algorithm::NaiveRearrangementRRT>(_space_information);
         util::logging::logDebug("Using naive algorithm, i.e. no oracle at all", log_prefix);
         if (_planning_problem.shortcut_type != PlanningProblem::ShortcutType::NoShortcut) {
             util::logging::logWarn("Selected naive planner in combination with shortcutting."
-                                    "Shortcutting not supported in this setting", log_prefix);
+                                   "Shortcutting not supported in this setting",
+                log_prefix);
         }
     } else {
         // all other algorithms need an oracle
@@ -588,28 +630,25 @@ void OraclePushPlanner::createAlgorithm() {
         oracle::PushingOraclePtr pushing_oracle;
         oracle::RobotOraclePtr robot_oracle;
         switch (_planning_problem.local_planner_type) {
-            case PlanningProblem::LocalPlanner::Line:
-            {
-                auto ramp_computer =
-                    std::make_shared<oracle::RampComputer>(robot_configuration_space, _control_space);
-                robot_oracle = ramp_computer;
-                break;
+        case PlanningProblem::LocalPlanner::Line: {
+            auto ramp_computer = std::make_shared<oracle::RampComputer>(robot_configuration_space, _control_space);
+            robot_oracle = ramp_computer;
+            break;
+        }
+        case PlanningProblem::LocalPlanner::PotentialField: {
+            if (!_eb_computer) {
+                _eb_computer = std::make_shared<oracle::ElasticBandRampComputer>();
             }
-            case PlanningProblem::LocalPlanner::PotentialField:
-            {
-                if (!_eb_computer) {
-                    _eb_computer = std::make_shared<oracle::ElasticBandRampComputer>();
-                }
-                _eb_computer->init(_planning_problem.world,
-                                   _planning_problem.robot,
-                                   _state_space,
-                                   _control_space,
-                                   _planning_problem.workspace_bounds,
-                                   _planning_problem.sdf_resolution,
-                                   _planning_problem.sdf_error_threshold);
-                robot_oracle = _eb_computer;
-                break;
-            }
+            _eb_computer->init(_planning_problem.world,
+                _planning_problem.robot,
+                _state_space,
+                _control_space,
+                _planning_problem.workspace_bounds,
+                _planning_problem.sdf_resolution,
+                _planning_problem.sdf_error_threshold);
+            robot_oracle = _eb_computer;
+            break;
+        }
         }
         // create object data
         std::vector<mps::planner::pushing::oracle::PushingOracle::ObjectData> object_data;
@@ -625,61 +664,54 @@ void OraclePushPlanner::createAlgorithm() {
             object_data.push_back(data);
         }
         switch (_planning_problem.oracle_type) {
-            case PlanningProblem::OracleType::Human:
-            {
-                pushing_oracle = std::make_shared<oracle::HumanOracle>(robot_oracle, object_data);
-                util::logging::logInfo("Using human made oracle!", log_prefix);
-                break;
-            }
-            case PlanningProblem::OracleType::Learned:
-            {
-                pushing_oracle = std::make_shared<oracle::LearnedPipeOracle>(object_data);
-                util::logging::logInfo("Using learned oracle!", log_prefix);
-                break;
-            }
+        case PlanningProblem::OracleType::Human: {
+            pushing_oracle = std::make_shared<oracle::HumanOracle>(robot_oracle, object_data);
+            util::logging::logInfo("Using human made oracle!", log_prefix);
+            break;
+        }
+        case PlanningProblem::OracleType::Learned: {
+            pushing_oracle = std::make_shared<oracle::LearnedPipeOracle>(object_data);
+            util::logging::logInfo("Using learned oracle!", log_prefix);
+            break;
+        }
         }
         switch (_planning_problem.algorithm_type) {
-            case PlanningProblem::AlgorithmType::OracleRRT:
-            {
-                _algorithm = std::make_shared<algorithm::OracleRearrangementRRT>(_space_information,
-                                                                           pushing_oracle,
-                                                                           robot_oracle,
-                                                                           _planning_problem.robot->getName());
-                util::logging::logInfo("Using OracleRRT", log_prefix);
-                break;
-            }
-            case PlanningProblem::AlgorithmType ::SliceOracleRRT:
-            {
-                _algorithm = std::make_shared<algorithm::SliceBasedOracleRRT>(_space_information,
-                                                                        pushing_oracle,
-                                                                        robot_oracle,
-                                                                        _planning_problem.robot->getName());
-                util::logging::logInfo("Using SliceOracleRRT", log_prefix);
-                break;
-            }
-            case PlanningProblem::AlgorithmType::HybridActionRRT:
-            {
-                _algorithm = std::make_shared<algorithm::HybridActionRRT>(_space_information,
-                                                                    pushing_oracle,
-                                                                    robot_oracle, _planning_problem.robot->getName());
-                util::logging::logInfo("Using HybridActionRRT", log_prefix);
-                break;
-            }
-            case PlanningProblem::AlgorithmType::GNATSamplingSliceOracleRRT:
-            {
-                // TODO this is future work
-                throw std::logic_error("Sorry, disabled GNATSamplingSliceBasedOracleRRT. This is future work!");
-                // algo = std::make_shared<algorithm::GNATSamplingSliceBasedOracleRRT>(_space_information,
-                //                                                                 pushing_oracle,
-                //                                                                 robot_oracle,
-                //                                                                 _planning_problem.robot->getName());
-                break;
-            }
-            default:
-            {
-                util::logging::logErr("Invalid algorithm configuration encountered.", log_prefix);
-                throw std::runtime_error("Invalid algorithm configuration encountered");
-            }
+        case PlanningProblem::AlgorithmType::OracleRRT: {
+            _algorithm = std::make_shared<algorithm::OracleRearrangementRRT>(_space_information,
+                pushing_oracle,
+                robot_oracle,
+                _planning_problem.robot->getName());
+            util::logging::logInfo("Using OracleRRT", log_prefix);
+            break;
+        }
+        case PlanningProblem::AlgorithmType ::SliceOracleRRT: {
+            _algorithm = std::make_shared<algorithm::SliceBasedOracleRRT>(_space_information,
+                pushing_oracle,
+                robot_oracle,
+                _planning_problem.robot->getName());
+            util::logging::logInfo("Using SliceOracleRRT", log_prefix);
+            break;
+        }
+        case PlanningProblem::AlgorithmType::HybridActionRRT: {
+            _algorithm = std::make_shared<algorithm::HybridActionRRT>(_space_information,
+                pushing_oracle,
+                robot_oracle, _planning_problem.robot->getName());
+            util::logging::logInfo("Using HybridActionRRT", log_prefix);
+            break;
+        }
+        case PlanningProblem::AlgorithmType::GNATSamplingSliceOracleRRT: {
+            // TODO this is future work
+            throw std::logic_error("Sorry, disabled GNATSamplingSliceBasedOracleRRT. This is future work!");
+            // algo = std::make_shared<algorithm::GNATSamplingSliceBasedOracleRRT>(_space_information,
+            //                                                                 pushing_oracle,
+            //                                                                 robot_oracle,
+            //                                                                 _planning_problem.robot->getName());
+            break;
+        }
+        default: {
+            util::logging::logErr("Invalid algorithm configuration encountered.", log_prefix);
+            throw std::runtime_error("Invalid algorithm configuration encountered");
+        }
         }
         if (_planning_problem.shortcut_type != PlanningProblem::ShortcutType::NoShortcut) {
             createShortcutAlgorithm(pushing_oracle, robot_oracle);
@@ -688,46 +720,40 @@ void OraclePushPlanner::createAlgorithm() {
 }
 
 void OraclePushPlanner::createShortcutAlgorithm(oracle::PushingOraclePtr pushing_oracle,
-                                                oracle::RobotOraclePtr robot_oracle)
+    oracle::RobotOraclePtr robot_oracle)
 {
     std::string log_prefix("[OraclePushPlanner::createShortcutAlgorithm]");
-    switch(_planning_problem.shortcut_type) {
-        case PlanningProblem::ShortcutType::NaiveShortcut:
-        {
-            util::logging::logInfo("Setting up naive shortcutter", log_prefix);
-            _shortcutter = std::make_shared<algorithm::NaiveShortcutter>(_space_information, robot_oracle);
-            break;
-        }
-        case PlanningProblem::ShortcutType::LocalShortcut:
-        {
-            util::logging::logInfo("Setting up local shortcutter", log_prefix);
-            _shortcutter = std::make_shared<algorithm::LocalShortcutter>(_space_information, robot_oracle, 
-                                                                         _planning_problem.robot->getName());
-            break;
-        }
-        case PlanningProblem::ShortcutType::LocalOracleShortcut:
-        {
-            util::logging::logInfo("Setting up local oracle shortcutter", log_prefix);
-            _shortcutter = std::make_shared<algorithm::LocalOracleShortcutter>(_space_information, robot_oracle, pushing_oracle,
-                                                                               _planning_problem.robot->getName());
-            break;
-        }
-        case PlanningProblem::ShortcutType::OracleShortcut:
-        {
-            util::logging::logInfo("Setting up oracle shortcutter", log_prefix);
-            _shortcutter = std::make_shared<algorithm::OracleShortcutter>(_space_information, robot_oracle, pushing_oracle,
-                                                                          _planning_problem.robot->getName());
-            break;
-        }
-        case PlanningProblem::ShortcutType::NoShortcut:
-        {
-            util::logging::logInfo("No shortcutting selected.", log_prefix);
-            break;
-        }
-        default:
-        {
-            util::logging::logErr("Invalid shortcut configuration encountered.", log_prefix);
-            throw std::runtime_error("Invalid shortcut configuration encountered");
-        }
+    switch (_planning_problem.shortcut_type) {
+    case PlanningProblem::ShortcutType::NaiveShortcut: {
+        util::logging::logInfo("Setting up naive shortcutter", log_prefix);
+        _shortcutter = std::make_shared<algorithm::NaiveShortcutter>(_space_information, robot_oracle);
+        break;
+    }
+    case PlanningProblem::ShortcutType::LocalShortcut: {
+        util::logging::logInfo("Setting up local shortcutter", log_prefix);
+        _shortcutter = std::make_shared<algorithm::LocalShortcutter>(_space_information, robot_oracle,
+            _planning_problem.robot->getName());
+        break;
+    }
+    case PlanningProblem::ShortcutType::LocalOracleShortcut: {
+        util::logging::logInfo("Setting up local oracle shortcutter", log_prefix);
+        _shortcutter = std::make_shared<algorithm::LocalOracleShortcutter>(_space_information, robot_oracle, pushing_oracle,
+            _planning_problem.robot->getName());
+        break;
+    }
+    case PlanningProblem::ShortcutType::OracleShortcut: {
+        util::logging::logInfo("Setting up oracle shortcutter", log_prefix);
+        _shortcutter = std::make_shared<algorithm::OracleShortcutter>(_space_information, robot_oracle, pushing_oracle,
+            _planning_problem.robot->getName());
+        break;
+    }
+    case PlanningProblem::ShortcutType::NoShortcut: {
+        util::logging::logInfo("No shortcutting selected.", log_prefix);
+        break;
+    }
+    default: {
+        util::logging::logErr("Invalid shortcut configuration encountered.", log_prefix);
+        throw std::runtime_error("Invalid shortcut configuration encountered");
+    }
     }
 }
