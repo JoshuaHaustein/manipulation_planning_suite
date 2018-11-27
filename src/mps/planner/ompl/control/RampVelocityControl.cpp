@@ -10,8 +10,9 @@ namespace omc = ::ompl::control;
 //////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////// RampVelocityControl ///////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////////////
-RampVelocityControl::RampVelocityControl(RampVelocityControlSpaceConstPtr control_space):
-        _control_space(control_space) {
+RampVelocityControl::RampVelocityControl(RampVelocityControlSpaceConstPtr control_space)
+    : _control_space(control_space)
+{
     _rest_time = 0.0f;
     _plateau_duration = 0.0f;
     _acceleration_duration = 0.0f;
@@ -19,16 +20,19 @@ RampVelocityControl::RampVelocityControl(RampVelocityControlSpaceConstPtr contro
     assert(_num_dofs > 0);
 }
 
-RampVelocityControl::~RampVelocityControl() {
+RampVelocityControl::~RampVelocityControl()
+{
 }
 
-void RampVelocityControl::setMaxVelocities(const Eigen::VectorXf &max_velocities, float duration) {
+void RampVelocityControl::setMaxVelocities(const Eigen::VectorXf& max_velocities, float duration)
+{
     _max_velocities = max_velocities;
     _plateau_duration = duration;
     computeRamp();
 }
 
-void RampVelocityControl::setParameters(const Eigen::VectorXf& parameters) {
+void RampVelocityControl::setParameters(const Eigen::VectorXf& parameters)
+{
     assert(parameters.size() == _num_dofs + 1);
     Eigen::VectorXf velocities(_num_dofs - 1);
     for (size_t i = 0; i < velocities.size(); ++i) {
@@ -39,13 +43,15 @@ void RampVelocityControl::setParameters(const Eigen::VectorXf& parameters) {
     setRestTime(parameters[parameters.size() - 1]);
 }
 
-Eigen::VectorXf RampVelocityControl::getParameters() const {
+Eigen::VectorXf RampVelocityControl::getParameters() const
+{
     Eigen::VectorXf params;
     getParameters(params);
     return params;
 }
 
-void RampVelocityControl::getParameters(Eigen::VectorXf& params) const {
+void RampVelocityControl::getParameters(Eigen::VectorXf& params) const
+{
     params.resize(getNumParameters());
     for (size_t i = 0; i < _max_velocities.size(); ++i) {
         params[i] = _max_velocities[i];
@@ -54,25 +60,43 @@ void RampVelocityControl::getParameters(Eigen::VectorXf& params) const {
     params[params.size() - 1] = _rest_time;
 }
 
-unsigned int RampVelocityControl::getNumParameters() const {
-    return  _num_dofs + 1; // velocity_dofs + duration + waiting time
+unsigned int RampVelocityControl::getNumParameters() const
+{
+    return _num_dofs + 1; // velocity_dofs + duration + waiting time
 }
 
-Eigen::VectorXf RampVelocityControl::getMaxVelocities() const {
+void RampVelocityControl::setFromLocalTwist(const Eigen::Vector3f& robot_pose, const Eigen::Vector4f& ltwist)
+{
+    assert(_num_dofs == 4); // this only works for SE(2) robots
+    float heading = robot_pose[2] + ltwist[2];
+    Eigen::VectorXf params(5);
+    params[0] = ltwist[0] * std::cos(heading);
+    params[1] = ltwist[0] * std::sin(heading);
+    params[2] = ltwist[1];
+    params[3] = ltwist[3];
+    params[4] = 0.0;
+    setParameters(params);
+}
+
+Eigen::VectorXf RampVelocityControl::getMaxVelocities() const
+{
     return _max_velocities;
 }
 
-void RampVelocityControl::getMaxVelocities(Eigen::VectorXf& vel) const {
+void RampVelocityControl::getMaxVelocities(Eigen::VectorXf& vel) const
+{
     vel = _max_velocities;
 }
 
-Eigen::VectorXf RampVelocityControl::getVelocity(float dt) const {
+Eigen::VectorXf RampVelocityControl::getVelocity(float dt) const
+{
     Eigen::VectorXf vel;
     getVelocity(dt, vel);
     return vel;
 }
 
-void RampVelocityControl::getVelocity(float dt, Eigen::VectorXf& vel) const {
+void RampVelocityControl::getVelocity(float dt, Eigen::VectorXf& vel) const
+{
     if (dt < _acceleration_duration) { // acceleration phase
         vel = dt * _accelerations;
     } else if (dt < _acceleration_duration + _plateau_duration) { // plateau phase
@@ -85,27 +109,33 @@ void RampVelocityControl::getVelocity(float dt, Eigen::VectorXf& vel) const {
     }
 }
 
-float RampVelocityControl::getMaxDuration() const {
+float RampVelocityControl::getMaxDuration() const
+{
     return 2.0f * _acceleration_duration + _plateau_duration + _rest_time;
 }
 
-float RampVelocityControl::getAccelerationTime() const {
+float RampVelocityControl::getAccelerationTime() const
+{
     return _acceleration_duration;
 }
 
-float RampVelocityControl::getRestTime() const {
+float RampVelocityControl::getRestTime() const
+{
     return _rest_time;
 }
 
-void RampVelocityControl::addRestTime(float dt) {
+void RampVelocityControl::addRestTime(float dt)
+{
     _rest_time += dt;
 }
 
-void RampVelocityControl::setRestTime(float t) {
+void RampVelocityControl::setRestTime(float t)
+{
     _rest_time = t;
 }
 
-void RampVelocityControl::computeRamp() {
+void RampVelocityControl::computeRamp()
+{
     // first retrieve the acceleration limits
     RampVelocityControlSpaceConstPtr control_space = _control_space.lock();
     if (!control_space) {
@@ -127,153 +157,178 @@ void RampVelocityControl::computeRamp() {
     _acceleration_duration = max_accel_time;
 }
 
-
 //////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////// RampVelocityControlSpace //////////////////////////////
 //////////////////////////////////////////////////////////////////////////////////////
 
-RampVelocityControlSpace::ControlSubspace::ControlSubspace(const Eigen::VectorXi &sub_indices,
-                                                           const Eigen::Array2f &sub_norm_limits) :
-    indices(sub_indices),
-    norm_limits(sub_norm_limits)
+RampVelocityControlSpace::ControlSubspace::ControlSubspace(const Eigen::VectorXi& sub_indices,
+    const Eigen::Array2f& sub_norm_limits)
+    : indices(sub_indices)
+    , norm_limits(sub_norm_limits)
 {
 }
 
-RampVelocityControlSpace::ControlLimits::ControlLimits(const Eigen::VectorXf &velocity_limits,
-                                                       const Eigen::VectorXf &acceleration_limits,
-                                                       const Eigen::Array2f &duration_limits) :
-        velocity_limits(velocity_limits),
-        acceleration_limits(acceleration_limits),
-        duration_limits(duration_limits)
+RampVelocityControlSpace::ControlLimits::ControlLimits(const Eigen::VectorXf& velocity_limits,
+    const Eigen::VectorXf& acceleration_limits,
+    const Eigen::Array2f& duration_limits)
+    : velocity_limits(velocity_limits)
+    , acceleration_limits(acceleration_limits)
+    , duration_limits(duration_limits)
 {
 }
 
-RampVelocityControlSpace::RampVelocityControlSpace(const ::ompl::base::StateSpacePtr &stateSpace,
-                                                   const Eigen::VectorXf &velocity_limits,
-                                                   const Eigen::VectorXf &acceleration_limits,
-                                                   const Eigen::Array2f &duration_limits,
-                                                   const std::vector<ControlSubspace>& sub_spaces) :
-        omc::ControlSpace(stateSpace), _acceleration_limits(acceleration_limits),
-        _velocity_limits(velocity_limits), _duration_limits(duration_limits), _sub_spaces(sub_spaces) {
+RampVelocityControlSpace::ControlLimits::ControlLimits() = default;
+
+RampVelocityControlSpace::RampVelocityControlSpace(const ::ompl::base::StateSpacePtr& stateSpace,
+    const Eigen::VectorXf& velocity_limits,
+    const Eigen::VectorXf& acceleration_limits,
+    const Eigen::Array2f& duration_limits,
+    const std::vector<ControlSubspace>& sub_spaces)
+    : omc::ControlSpace(stateSpace)
+    , _acceleration_limits(acceleration_limits)
+    , _velocity_limits(velocity_limits)
+    , _duration_limits(duration_limits)
+    , _sub_spaces(sub_spaces)
+{
 }
 
-RampVelocityControlSpace::RampVelocityControlSpace(const ::ompl::base::StateSpacePtr &stateSpace,
-                                                   const ControlLimits& limits,
-                                                   const std::vector<ControlSubspace>& sub_spaces) :
-        RampVelocityControlSpace(stateSpace, limits.velocity_limits,
-                                 limits.acceleration_limits, limits.duration_limits, sub_spaces)
+RampVelocityControlSpace::RampVelocityControlSpace(const ::ompl::base::StateSpacePtr& stateSpace,
+    const ControlLimits& limits,
+    const std::vector<ControlSubspace>& sub_spaces)
+    : RampVelocityControlSpace(stateSpace, limits.velocity_limits,
+          limits.acceleration_limits, limits.duration_limits, sub_spaces)
 {
 }
 
 RampVelocityControlSpace::~RampVelocityControlSpace() = default;
 
-unsigned int RampVelocityControlSpace::getDimension() const {
+unsigned int RampVelocityControlSpace::getDimension() const
+{
     // 1 dimension per dof velocity + duration of plateau (resting time is not part of the dimension)
-    return (unsigned int) (_velocity_limits.rows() + 1);
+    return (unsigned int)(_velocity_limits.rows() + 1);
 }
 
-omc::Control* RampVelocityControlSpace::allocControl() const {
+omc::Control* RampVelocityControlSpace::allocControl() const
+{
     return new RampVelocityControl(shared_from_this());
 }
 
-void RampVelocityControlSpace::freeControl(omc::Control* control) const {
+void RampVelocityControlSpace::freeControl(omc::Control* control) const
+{
     RampVelocityControl* ramp_control = castControl(control);
     delete ramp_control;
 }
 
 void RampVelocityControlSpace::copyControl(omc::Control* control,
-                         const omc::Control* source) const {
+    const omc::Control* source) const
+{
     RampVelocityControl* ramp_control = castControl(control);
     const RampVelocityControl* source_control = castControl(source);
     ramp_control->setParameters(source_control->getParameters());
 }
 
 bool RampVelocityControlSpace::equalControls(const omc::Control* control_1,
-                           const omc::Control* control_2) const {
+    const omc::Control* control_2) const
+{
     const RampVelocityControl* ramp_control_1 = castControl(control_1);
     const RampVelocityControl* ramp_control_2 = castControl(control_2);
     return (ramp_control_1->getParameters() - ramp_control_2->getParameters()).isZero();
 }
 
-void RampVelocityControlSpace::nullControl(omc::Control* control) const {
+void RampVelocityControlSpace::nullControl(omc::Control* control) const
+{
     RampVelocityControl* ramp_control = castControl(control);
     Eigen::VectorXf vel(_velocity_limits.rows());
     vel.setZero();
     ramp_control->setMaxVelocities(vel, 0.0f);
 }
 
-double* RampVelocityControlSpace::getValueAddressAtIndex(omc::Control* control, unsigned int index) const {
+double* RampVelocityControlSpace::getValueAddressAtIndex(omc::Control* control, unsigned int index) const
+{
     throw std::logic_error("[mps::planner::ompl::control::getValueAddressAtIndex] Not supported.");
 }
 
-::ompl::control::ControlSamplerPtr RampVelocityControlSpace::allocDefaultControlSampler() const {
+::ompl::control::ControlSamplerPtr RampVelocityControlSpace::allocDefaultControlSampler() const
+{
     return std::make_shared<RampVelocityControlSampler>(shared_from_this());
 }
 
-void RampVelocityControlSpace::printControl(const omc::Control *control, std::ostream &out) const {
+void RampVelocityControlSpace::printControl(const omc::Control* control, std::ostream& out) const
+{
     const RampVelocityControl* ramp_control = castControl(control);
     out << "RampVelocityControl: " << ramp_control->getParameters();
 }
 
-void RampVelocityControlSpace::printSettings(std::ostream &out) const {
+void RampVelocityControlSpace::printSettings(std::ostream& out) const
+{
     out << "printSettings is not supported.";
 }
 
-void RampVelocityControlSpace::setup() {
+void RampVelocityControlSpace::setup()
+{
     omc::ControlSpace::setup();
 }
 
 // TODO this function is probably doing the same as getSerializationLength() is intended for
-unsigned int RampVelocityControlSpace::getNumParameters() const {
+unsigned int RampVelocityControlSpace::getNumParameters() const
+{
     return getDimension() + 1; // includes resting time
-} 
+}
 
-unsigned int RampVelocityControlSpace::getSerializationLength() const {
+unsigned int RampVelocityControlSpace::getSerializationLength() const
+{
     throw std::logic_error("[mps::planner::ompl::RampVelocityControlSapce::getSerializeationLength]"
-                                   " Not implemented");
+                           " Not implemented");
 }
 
-void RampVelocityControlSpace::serialize(void* serialization, const omc::Control* ctrl) const {
+void RampVelocityControlSpace::serialize(void* serialization, const omc::Control* ctrl) const
+{
     throw std::logic_error("[mps::planner::ompl::RampVelocityControlSpace::serialize]"
-                                   " Not implemented");
+                           " Not implemented");
 }
 
-void RampVelocityControlSpace::deserialize(omc::Control* ctrl, const void* serialization) const {
+void RampVelocityControlSpace::deserialize(omc::Control* ctrl, const void* serialization) const
+{
     throw std::logic_error("[mps::planner::ompl::RampVelocityControlSpace::deserialize]"
-                                   " Not implemented");
+                           " Not implemented");
 }
 
-bool RampVelocityControlSpace::isCompound() const {
+bool RampVelocityControlSpace::isCompound() const
+{
     return false;
 }
 
-
-void RampVelocityControlSpace::getAccelerationLimits(Eigen::VectorXf& limits) const {
+void RampVelocityControlSpace::getAccelerationLimits(Eigen::VectorXf& limits) const
+{
     limits = _acceleration_limits;
 }
 
-void RampVelocityControlSpace::getVelocityLimits(Eigen::VectorXf& limits) const {
+void RampVelocityControlSpace::getVelocityLimits(Eigen::VectorXf& limits) const
+{
     limits = _velocity_limits;
 }
 
-void RampVelocityControlSpace::getDurationLimits(Eigen::Array2f& limits) const {
+void RampVelocityControlSpace::getDurationLimits(Eigen::Array2f& limits) const
+{
     limits = _duration_limits;
 }
 
-const RampVelocityControl* RampVelocityControlSpace::castControl(const omc::Control *control) const {
+const RampVelocityControl* RampVelocityControlSpace::castControl(const omc::Control* control) const
+{
     const RampVelocityControl* ramp_control = dynamic_cast<const RampVelocityControl*>(control);
     if (!ramp_control) {
         throw std::logic_error("[mps::planner::ompl::control::RampVelocityControlSpace] Could not cast control."
-                                       "Control type is not RampVelocityControl");
+                               "Control type is not RampVelocityControl");
     }
     return ramp_control;
 }
 
-RampVelocityControl* RampVelocityControlSpace::castControl(omc::Control *control) const {
+RampVelocityControl* RampVelocityControlSpace::castControl(omc::Control* control) const
+{
     RampVelocityControl* ramp_control = dynamic_cast<RampVelocityControl*>(control);
     if (!ramp_control) {
         throw std::logic_error("[mps::planner::ompl::control::RampVelocityControlSpace] Could not cast control."
-                                       "Control type is not RampVelocityControl");
+                               "Control type is not RampVelocityControl");
     }
     return ramp_control;
 }
@@ -283,21 +338,24 @@ const std::vector<RampVelocityControlSpace::ControlSubspace>& RampVelocityContro
     return _sub_spaces;
 }
 
-RampVelocityControlSampler::RampVelocityControlSampler(RampVelocityControlSpaceConstPtr control_space) :
-        ControlSampler(control_space.get()), _control_space(control_space)
+RampVelocityControlSampler::RampVelocityControlSampler(RampVelocityControlSpaceConstPtr control_space)
+    : ControlSampler(control_space.get())
+    , _control_space(control_space)
 {
     _values_buffer = new double[control_space->getDimension()];
 }
 
-RampVelocityControlSampler::~RampVelocityControlSampler() {
+RampVelocityControlSampler::~RampVelocityControlSampler()
+{
     delete[] _values_buffer;
 }
 
-void RampVelocityControlSampler::sample(omc::Control *control) {
+void RampVelocityControlSampler::sample(omc::Control* control)
+{
     RampVelocityControlSpaceConstPtr control_space = _control_space.lock();
     if (!control_space) {
         throw std::logic_error("[mps::planner::ompl::control::RampVelocityControlSampler::sample]"
-                                       "Invalid pointer. Could not access control space.");
+                               "Invalid pointer. Could not access control space.");
     }
     auto rng = mps::planner::util::random::getDefaultRandomGenerator();
     RampVelocityControl* ramp_control = control_space->castControl(control);

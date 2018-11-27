@@ -47,6 +47,19 @@ void ElasticBandRampComputer::steer(const Eigen::VectorXf &current_robot_state,
     _ramp_computer->steer(current_robot_state, desired_robot_state, control_params);
 }
 
+void ElasticBandRampComputer::steer(const ompl::state::SimEnvObjectState* current_robot_state,
+                                    const ompl::state::SimEnvObjectState* desired_robot_state,
+                                    std::vector<::ompl::control::Control*> &controls) const
+{
+    static const std::string log_prefix("[mps::planner::pushing::oracle::ElasticBandRampComputer::steer]");
+    if (!_world) {
+        throw std::logic_error(log_prefix + " steer(..) called before this instance was intialized.");
+    }
+    // If we do not know the world state, we can not use the sdf,
+    // so just call the normal ramp computer
+    _ramp_computer->steer(current_robot_state, desired_robot_state, controls);
+}
+
 void mps::planner::pushing::oracle::ElasticBandRampComputer::steer(
                                     const ompl::state::SimEnvObjectState* current_robot_state,
                                     const ompl::state::SimEnvObjectState* desired_robot_state,

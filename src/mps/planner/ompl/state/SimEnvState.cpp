@@ -1441,19 +1441,42 @@ SimEnvValidityChecker::~SimEnvValidityChecker()
 bool SimEnvValidityChecker::isValid(const ::ompl::base::State* state) const
 {
     auto* world_state = state->as<SimEnvWorldState>();
-    // first check whether the provided state is within bounds
-    bool bounds_valid = _world_space->satisfiesBounds(state);
+    // first check bounds
+    bool bounds_valid = _world_space->satisfiesBounds(_world_state);
     if (!bounds_valid) {
         mps_logging::logDebug("State bounds violated. Rejecting state.",
             "[mps::planner::ompl::state::SimEnvValidityChecker::isValid]");
         return false;
     }
-    // next check, whether the state is valid in terms of collisions
-    std::lock_guard<std::recursive_mutex> world_lock(_world->getMutex());
+    // now check rest
     // save the state the world is in
     _world->saveState();
     // now set it to represent the given SimEnvWorldState
     _world_space->setToState(_world, world_state);
+    // check whether this state is valid in terms of collisions
+    bool valid = isWorldStateValid(false);
+    // restore whatever state the world was in before
+    _world->restoreState();
+    if (valid) {
+        mps_logging::logDebug("The state " + world_state->toString() + " is valid.", "[SimEnvValidityChecker::isValid]");
+    }
+    return valid;
+}
+
+bool SimEnvValidityChecker::isWorldStateValid(bool check_bounds) const
+{
+    std::lock_guard<std::recursive_mutex> world_lock(_world->getMutex());
+    if (check_bounds) {
+        _world_space->extractState(_world, _world_state);
+        // TODO do we need to check physical feasibility here, too?
+        // first check whether the current state is within bounds
+        bool bounds_valid = _world_space->satisfiesBounds(_world_state);
+        if (!bounds_valid) {
+            mps_logging::logDebug("State bounds violated. Rejecting state.",
+                "[mps::planner::ompl::state::SimEnvValidityChecker::isValidIntermediate]");
+            return false;
+        }
+    }
     // first check whether this state is physically feasible
     if (not _world->isPhysicallyFeasible()) {
         mps_logging::logDebug("Rejecting state because it is physically infeasible.",
@@ -1475,9 +1498,6 @@ bool SimEnvValidityChecker::isValid(const ::ompl::base::State* state) const
             }
         }
     }
-    // finally restore whatever state the world was in before
-    _world->restoreState();
-    mps_logging::logDebug("The state " + world_state->toString() + " is valid.", "[SimEnvValidityChecker::isValid]");
     return true;
 }
 

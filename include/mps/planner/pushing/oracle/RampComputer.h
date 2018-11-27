@@ -27,6 +27,9 @@ namespace mps {
                                    std::vector<Eigen::VectorXf> &control_params) const override;
                         void steer(const ompl::state::SimEnvObjectState* current_robot_state,
                                    const ompl::state::SimEnvObjectState* desired_robot_state,
+                                   std::vector<::ompl::control::Control*>& controls) const override;
+                        void steer(const ompl::state::SimEnvObjectState* current_robot_state,
+                                   const ompl::state::SimEnvObjectState* desired_robot_state,
                                    const ompl::state::SimEnvWorldState* current_world_state,
                                    std::vector<Eigen::VectorXf>& control_params) const override;
 

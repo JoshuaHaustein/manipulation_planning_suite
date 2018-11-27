@@ -89,6 +89,8 @@ set(PLANNER_H
         include/mps/planner/pushing/oracle/RampComputer.h
         include/mps/planner/pushing/oracle/DataGenerator.h
         include/mps/planner/pushing/algorithm/RRT.h
+        include/mps/planner/sorting/PushSortingPlanner.h
+        include/mps/planner/sorting/algorithm/MCTS.h
         include/mps/planner/util/Logging.h
         include/mps/planner/util/Playback.h
         include/mps/planner/util/Serialize.h
@@ -96,6 +98,7 @@ set(PLANNER_H
         include/mps/planner/util/Time.h
         include/mps/planner/util/Math.h
         include/mps/planner/util/yaml/OracleParsing.h
+        include/mps/planner/util/yaml/SortingParsing.h
         include/mps/sdf/SDF.h
         include/mps/sdf/FMM.h
         )
@@ -118,6 +121,7 @@ set(PLANNER_SRC
         src/mps/planner/util/Playback.cpp
         src/mps/planner/util/Math.cpp
         src/mps/planner/util/yaml/OracleParsing.cpp
+        src/mps/planner/util/yaml/SortingParsing.cpp
         src/mps/planner/pushing/OraclePushPlanner.cpp
         src/mps/planner/pushing/Costs.cpp
         src/mps/planner/pushing/oracle/OracleControlSampler.cpp
@@ -128,6 +132,8 @@ set(PLANNER_SRC
         src/mps/planner/pushing/oracle/RampComputer.cpp
         src/mps/planner/pushing/oracle/DataGenerator.cpp
         src/mps/planner/pushing/algorithm/RRT.cpp
+        src/mps/planner/sorting/PushSortingPlanner.cpp
+        src/mps/planner/sorting/algorithm/MCTS.cpp
         src/mps/sdf/SDF.cpp
 )
 
