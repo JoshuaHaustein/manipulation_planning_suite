@@ -68,12 +68,12 @@ unsigned int RampVelocityControl::getNumParameters() const
 void RampVelocityControl::setFromLocalTwist(const Eigen::Vector3f& robot_pose, const Eigen::Vector4f& ltwist)
 {
     assert(_num_dofs == 4); // this only works for SE(2) robots
-    float heading = robot_pose[2] + ltwist[2];
+    float heading = robot_pose[2] + ltwist[3];
     Eigen::VectorXf params(5);
     params[0] = ltwist[0] * std::cos(heading);
     params[1] = ltwist[0] * std::sin(heading);
     params[2] = ltwist[1];
-    params[3] = ltwist[3];
+    params[3] = ltwist[2];
     params[4] = 0.0;
     setParameters(params);
 }

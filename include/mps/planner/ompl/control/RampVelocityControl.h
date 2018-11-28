@@ -54,11 +54,11 @@ namespace planner {
 
                 /**
                      * Initialize from a local twist (for holonomic SE(2) robots). 
-                     * A local twist is a tuple (v, w, theta, t), where
+                     * A local twist is a tuple (v, w, t, theta), where
                      *  v in (0, v_max) is the translational velocity
                      *  w in (-w_max, w_max) the angular velocity
-                     *  theta in [0, 2pi) the direction of the translational velocity relative to the robot
                      *  t in [0, t_max] the duration of the plateau
+                     *  theta in [0, 2pi) the direction of the translational velocity relative to the robot
                      * @param robot_pose - starting pose of the robot
                      * @param ltwist - the local twist
                      * TODO this is specific to SE(2) robots
