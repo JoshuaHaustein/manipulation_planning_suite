@@ -1442,7 +1442,7 @@ bool SimEnvValidityChecker::isValid(const ::ompl::base::State* state) const
 {
     auto* world_state = state->as<SimEnvWorldState>();
     // first check bounds
-    bool bounds_valid = _world_space->satisfiesBounds(_world_state);
+    bool bounds_valid = _world_space->satisfiesBounds(world_state);
     if (!bounds_valid) {
         mps_logging::logDebug("State bounds violated. Rejecting state.",
             "[mps::planner::ompl::state::SimEnvValidityChecker::isValid]");
