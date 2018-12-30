@@ -78,9 +78,17 @@ void ObjectsRelocationGoal::sampleGoal(::ompl::base::State *state) const {
         _state_sampler->sampleUniform(state);
         // now sample a pose of the target object around the target position
         // TODO this is hardcoded for sampling in a plane, either change documentation or make this more general
+        #ifdef OMPL_NEW_VERSION
+        std::vector<double> values(2);
+        #else
         double values[2];
+        #endif
         for (const auto& goal_specification : _goal_specifications) {
+            #ifdef OMPL_NEW_VERSION
+            _rng->uniformInBall(goal_specification.position_tolerance, values);
+            #else
             _rng->uniformInBall(goal_specification.position_tolerance, 2, values);
+            #endif
             Eigen::Vector3f position(goal_specification.goal_position);
             position[0] += values[0];
             position[1] += values[1];
