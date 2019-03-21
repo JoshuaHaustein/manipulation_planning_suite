@@ -183,34 +183,43 @@ bool OraclePushPlanner::solve(PlanningSolution& solution)
             slice_drawer->setStateSpace(_state_space);
     }
     // start state
-    auto* start_state = _state_space->allocState();
-    _state_space->extractState(_planning_problem.world,
-        dynamic_cast<ompl::state::SimEnvWorldStateSpace::StateType*>(start_state));
+    auto* start_state = dynamic_cast<ompl::state::SimEnvWorldState*>(_state_space->allocState());
+    _state_space->extractState(_planning_problem.world, start_state);
     // goal
     _goal_region = std::make_shared<ompl::state::goal::ObjectsRelocationGoal>(_space_information,
         _planning_problem.relocation_goals);
     // planning query
-    algorithm::RearrangementRRT::PlanningQuery pq(_goal_region,
-        start_state,
-        _planning_problem.planning_time_out,
-        _planning_problem.robot->getName());
-    pq.stopping_condition = _planning_problem.stopping_condition;
-    pq.weights = _distance_weights;
-    pq.action_randomness = _planning_problem.action_noise;
-    pq.feasible_state_noise = _planning_problem.state_noise;
-    pq.goal_bias = _planning_problem.goal_bias;
-    pq.num_control_samples = _planning_problem.num_control_samples;
-    pq.goal_bias = _planning_problem.goal_bias;
-    pq.robot_bias = _planning_problem.robot_bias;
-    pq.target_bias = _planning_problem.target_bias;
-    pq.do_slice_ball_projection = _planning_problem.do_slice_ball_projection;
-    pq.min_state_distance = _planning_problem.min_state_distance;
-    solution.path = std::make_shared<mps::planner::ompl::planning::essentials::Path>(_space_information);
+    auto pq = _algorithm->createPlanningQuery(_goal_region, start_state,
+        _planning_problem.robot->getName(),
+        _planning_problem.planning_time_out);
+    pq->stopping_condition = _planning_problem.stopping_condition;
+    pq->weights = _distance_weights;
+    // TODO this is dependend on the locale!
+    if (pq->parameters->hasParam("action_randomness")) {
+        pq->parameters->setParam("action_randomness", std::to_string(_planning_problem.action_noise));
+    }
+    if (pq->parameters->hasParam("state_noise")) {
+        pq->parameters->setParam("state_noise", std::to_string(_planning_problem.state_noise));
+    }
+    if (pq->parameters->hasParam("goal_bias")) {
+        pq->parameters->setParam("goal_bias", std::to_string(_planning_problem.goal_bias));
+    }
+    if (pq->parameters->hasParam("target_bias")) {
+        pq->parameters->setParam("target_bias", std::to_string(_planning_problem.target_bias));
+    }
+    if (pq->parameters->hasParam("robot_bias")) {
+        pq->parameters->setParam("robot_bias", std::to_string(_planning_problem.robot_bias));
+    }
+    if (pq->parameters->hasParam("num_control_samples")) {
+        pq->parameters->setParam("num_control_samples", std::to_string(_planning_problem.num_control_samples));
+    }
+    solution.path = nullptr;
     // before planning. let's save the state of the world
     auto world_state = _planning_problem.world->getWorldState();
     // PLAAAAAAANNN
-    solution.solved = _algorithm->plan(pq, solution.path, solution.stats);
+    solution.solved = _algorithm->plan(pq, solution.stats);
     if (solution.solved) {
+        solution.path = pq->path;
         solution.stats.reproducible = verifySolution(solution);
         if (!solution.stats.reproducible) {
             mps_logging::logWarn("Planner produced a non-reproducible solution", "[OraclePushPlanner::solve");
