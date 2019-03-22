@@ -2,11 +2,16 @@
 // Created by joshua on 8/21/17.
 //
 
+// stl
 #include <chrono>
+#include <thread>
+// mps
 #include <mps/planner/ompl/control/NaiveControlSampler.h>
 #include <mps/planner/ompl/state/goal/ObjectsRelocationGoal.h>
 #include <mps/planner/pushing/Costs.h>
 #include <mps/planner/pushing/OraclePushPlanner.h>
+#include <mps/planner/pushing/algorithm/MultiExtendRRT.h>
+#include <mps/planner/pushing/algorithm/SingleExtendRRT.h>
 #include <mps/planner/pushing/oracle/HumanOracle.h>
 #include <mps/planner/pushing/oracle/LearnedOracle.h>
 #include <mps/planner/pushing/oracle/OracleControlSampler.h>
@@ -14,8 +19,8 @@
 #include <mps/planner/util/Logging.h>
 #include <mps/planner/util/Playback.h>
 #include <mps/planner/util/Serialize.h>
+// ompl
 #include <ompl/base/samplers/UniformValidStateSampler.h>
-#include <thread>
 
 using namespace mps::planner::pushing;
 namespace mps_state = mps::planner::ompl::state;
@@ -708,13 +713,11 @@ void OraclePushPlanner::createAlgorithm()
             util::logging::logInfo("Using HybridActionRRT", log_prefix);
             break;
         }
-        case PlanningProblem::AlgorithmType::GNATSamplingSliceOracleRRT: {
-            // TODO this is future work
-            throw std::logic_error("Sorry, disabled GNATSamplingSliceBasedOracleRRT. This is future work!");
-            // algo = std::make_shared<algorithm::GNATSamplingSliceBasedOracleRRT>(_space_information,
-            //                                                                 pushing_oracle,
-            //                                                                 robot_oracle,
-            //                                                                 _planning_problem.robot->getName());
+        case PlanningProblem::AlgorithmType::MultiExtendRRT: {
+            _algorithm = std::make_shared<algorithm::MultiExtendRRT>(_space_information,
+                pushing_oracle,
+                robot_oracle,
+                _planning_problem.robot->getName());
             break;
         }
         default: {

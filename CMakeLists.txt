@@ -88,8 +88,10 @@ set(PLANNER_H
         include/mps/planner/pushing/oracle/ElasticBandRampComputer.h
         include/mps/planner/pushing/oracle/RampComputer.h
         include/mps/planner/pushing/oracle/DataGenerator.h
-        include/mps/planner/pushing/algorithm/RRT.h
-        include/mps/planner/pushing/algorithm/Interfaces.h
+        include/mps/planner/pushing/algorithm/SingleExtendRRT.h
+        include/mps/planner/pushing/algorithm/MultiExtendRRT.h
+        include/mps/planner/pushing/algorithm/RearrangementPlanner.h
+        include/mps/planner/pushing/algorithm/Shortcut.h
         include/mps/planner/sorting/PushSortingPlanner.h
         include/mps/planner/sorting/algorithm/MCTS.h
         include/mps/planner/util/Logging.h
@@ -132,8 +134,10 @@ set(PLANNER_SRC
         src/mps/planner/pushing/oracle/ElasticBandRampComputer.cpp
         src/mps/planner/pushing/oracle/RampComputer.cpp
         src/mps/planner/pushing/oracle/DataGenerator.cpp
-        src/mps/planner/pushing/algorithm/RRT.cpp
-        src/mps/planner/pushing/algorithm/Interfaces.cpp
+        src/mps/planner/pushing/algorithm/SingleExtendRRT.cpp
+        src/mps/planner/pushing/algorithm/RearrangementPlanner.cpp
+        src/mps/planner/pushing/algorithm/Shortcut.cpp
+        src/mps/planner/pushing/algorithm/MultiExtendRRT.cpp
         src/mps/planner/sorting/PushSortingPlanner.cpp
         src/mps/planner/sorting/algorithm/MCTS.cpp
         src/mps/sdf/SDF.cpp

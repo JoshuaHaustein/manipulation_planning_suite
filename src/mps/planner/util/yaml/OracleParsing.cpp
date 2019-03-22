@@ -4,61 +4,64 @@
 
 #include <mps/planner/util/yaml/OracleParsing.h>
 
-std::string mps::planner::util::yaml::oracleTypeToString(mps::planner::pushing::PlanningProblem::OracleType oracle_type) {
-    switch(oracle_type) {
-        case mps::planner::pushing::PlanningProblem::OracleType::Human:
-            return "Human";
-        case mps::planner::pushing::PlanningProblem::OracleType::Learned:
-            return "Learned";
+std::string mps::planner::util::yaml::oracleTypeToString(mps::planner::pushing::PlanningProblem::OracleType oracle_type)
+{
+    switch (oracle_type) {
+    case mps::planner::pushing::PlanningProblem::OracleType::Human:
+        return "Human";
+    case mps::planner::pushing::PlanningProblem::OracleType::Learned:
+        return "Learned";
     }
     return "UNDEFINED";
 }
 
-std::string mps::planner::util::yaml::localPlannerTypeToString(mps::planner::pushing::PlanningProblem::LocalPlanner planner_type) {
-    switch(planner_type) {
-        case mps::planner::pushing::PlanningProblem::LocalPlanner::Line:
-            return "Line";
-        case mps::planner::pushing::PlanningProblem::LocalPlanner::PotentialField:
-            return "PotentialField";
+std::string mps::planner::util::yaml::localPlannerTypeToString(mps::planner::pushing::PlanningProblem::LocalPlanner planner_type)
+{
+    switch (planner_type) {
+    case mps::planner::pushing::PlanningProblem::LocalPlanner::Line:
+        return "Line";
+    case mps::planner::pushing::PlanningProblem::LocalPlanner::PotentialField:
+        return "PotentialField";
     }
     return "UNDEFINED";
 }
 
-std::string mps::planner::util::yaml::algorithmTypeToString(mps::planner::pushing::PlanningProblem::AlgorithmType algo_type) {
-    switch(algo_type) {
-        case mps::planner::pushing::PlanningProblem::AlgorithmType::Naive:
-            return "Naive";
-        case mps::planner::pushing::PlanningProblem::AlgorithmType::OracleRRT:
-            return "OracleRRT";
-        case mps::planner::pushing::PlanningProblem::AlgorithmType::SliceOracleRRT:
-            return "SliceOracleRRT";
-        case mps::planner::pushing::PlanningProblem::AlgorithmType::HybridActionRRT:
-            return "HybridActionRRT";
-        case mps::planner::pushing::PlanningProblem::AlgorithmType::GNATSamplingSliceOracleRRT:
-            return "GNATSamplingSliceOracleRRT";
-        case mps::planner::pushing::PlanningProblem::AlgorithmType::SemanticGNATSamplingSliceOracleRRT:
-            return "SemanticGNATSamplingSliceOracleRRT";
+std::string mps::planner::util::yaml::algorithmTypeToString(mps::planner::pushing::PlanningProblem::AlgorithmType algo_type)
+{
+    switch (algo_type) {
+    case mps::planner::pushing::PlanningProblem::AlgorithmType::Naive:
+        return "Naive";
+    case mps::planner::pushing::PlanningProblem::AlgorithmType::OracleRRT:
+        return "OracleRRT";
+    case mps::planner::pushing::PlanningProblem::AlgorithmType::SliceOracleRRT:
+        return "SliceOracleRRT";
+    case mps::planner::pushing::PlanningProblem::AlgorithmType::HybridActionRRT:
+        return "HybridActionRRT";
+    case mps::planner::pushing::PlanningProblem::AlgorithmType::MultiExtendRRT:
+        return "MultiExtendRRT";
     }
     return "UNDEFINED";
 }
 
-std::string mps::planner::util::yaml::shortcutTypeToString(mps::planner::pushing::PlanningProblem::ShortcutType shortcut_type) {
-    switch(shortcut_type) {
-        case mps::planner::pushing::PlanningProblem::ShortcutType::NoShortcut:
-            return "NoShortcut";
-        case mps::planner::pushing::PlanningProblem::ShortcutType::NaiveShortcut:
-            return "NaiveShortcut";
-        case mps::planner::pushing::PlanningProblem::ShortcutType::OracleShortcut:
-            return "OracleShortcut";
-        case mps::planner::pushing::PlanningProblem::ShortcutType::LocalShortcut:
-            return "LocalShortcut";
-        case mps::planner::pushing::PlanningProblem::ShortcutType::LocalOracleShortcut:
-            return "LocalOracleShortcut";
+std::string mps::planner::util::yaml::shortcutTypeToString(mps::planner::pushing::PlanningProblem::ShortcutType shortcut_type)
+{
+    switch (shortcut_type) {
+    case mps::planner::pushing::PlanningProblem::ShortcutType::NoShortcut:
+        return "NoShortcut";
+    case mps::planner::pushing::PlanningProblem::ShortcutType::NaiveShortcut:
+        return "NaiveShortcut";
+    case mps::planner::pushing::PlanningProblem::ShortcutType::OracleShortcut:
+        return "OracleShortcut";
+    case mps::planner::pushing::PlanningProblem::ShortcutType::LocalShortcut:
+        return "LocalShortcut";
+    case mps::planner::pushing::PlanningProblem::ShortcutType::LocalOracleShortcut:
+        return "LocalOracleShortcut";
     }
     return "UNDEFINED";
 }
 
-mps::planner::pushing::PlanningProblem::OracleType mps::planner::util::yaml::stringToOracleType(const std::string& str) {
+mps::planner::pushing::PlanningProblem::OracleType mps::planner::util::yaml::stringToOracleType(const std::string& str)
+{
     if (str.compare("Human") == 0) {
         return mps::planner::pushing::PlanningProblem::OracleType::Human;
     } else if (str.compare("Learned") == 0) {
@@ -68,7 +71,8 @@ mps::planner::pushing::PlanningProblem::OracleType mps::planner::util::yaml::str
     }
 }
 
-mps::planner::pushing::PlanningProblem::AlgorithmType mps::planner::util::yaml::stringToAlgorithmType(const std::string& str) {
+mps::planner::pushing::PlanningProblem::AlgorithmType mps::planner::util::yaml::stringToAlgorithmType(const std::string& str)
+{
     if (str.compare("Naive") == 0) {
         return mps::planner::pushing::PlanningProblem::AlgorithmType::Naive;
     } else if (str.compare("OracleRRT") == 0) {
@@ -77,16 +81,15 @@ mps::planner::pushing::PlanningProblem::AlgorithmType mps::planner::util::yaml::
         return mps::planner::pushing::PlanningProblem::AlgorithmType::SliceOracleRRT;
     } else if (str.compare("HybridActionRRT") == 0) {
         return mps::planner::pushing::PlanningProblem::AlgorithmType::HybridActionRRT;
-    } else if (str.compare("GNATSamplingSliceOracleRRT") == 0) {
-        return  mps::planner::pushing::PlanningProblem::AlgorithmType::GNATSamplingSliceOracleRRT;
-    } else if (str.compare("SemanticGNATSamplingSliceOracleRRT") == 0) {
-        return  mps::planner::pushing::PlanningProblem::AlgorithmType::SemanticGNATSamplingSliceOracleRRT;
+    } else if (str.compare("MultiExtendRRT") == 0) {
+        return mps::planner::pushing::PlanningProblem::AlgorithmType::MultiExtendRRT;
     } else {
         throw std::runtime_error("Unknown algorithm type encountered: " + str);
     }
 }
 
-mps::planner::pushing::PlanningProblem::LocalPlanner mps::planner::util::yaml::stringToLocalPlannerType(const std::string& str) {
+mps::planner::pushing::PlanningProblem::LocalPlanner mps::planner::util::yaml::stringToLocalPlannerType(const std::string& str)
+{
     if (str.compare("Line") == 0) {
         return mps::planner::pushing::PlanningProblem::LocalPlanner::Line;
     } else if (str.compare("PotentialField") == 0) {
@@ -96,7 +99,8 @@ mps::planner::pushing::PlanningProblem::LocalPlanner mps::planner::util::yaml::s
     }
 }
 
-mps::planner::pushing::PlanningProblem::ShortcutType mps::planner::util::yaml::stringToShortcutType(const std::string& str) {
+mps::planner::pushing::PlanningProblem::ShortcutType mps::planner::util::yaml::stringToShortcutType(const std::string& str)
+{
     if (str.compare("NoShortcut") == 0) {
         return mps::planner::pushing::PlanningProblem::ShortcutType::NoShortcut;
     } else if (str.compare("NaiveShortcut") == 0) {
@@ -112,8 +116,9 @@ mps::planner::pushing::PlanningProblem::ShortcutType mps::planner::util::yaml::s
     }
 }
 
-void mps::planner::util::yaml::configurePlanningProblem(mps::planner::pushing::PlanningProblem &problem,
-                                                        const OraclePlanningProblemDesc &problem_desc) {
+void mps::planner::util::yaml::configurePlanningProblem(mps::planner::pushing::PlanningProblem& problem,
+    const OraclePlanningProblemDesc& problem_desc)
+{
     // load control limits
     problem.control_limits.velocity_limits = problem_desc.control_limits.velocity_limits;
     problem.control_limits.duration_limits = problem_desc.control_limits.duration_limits;

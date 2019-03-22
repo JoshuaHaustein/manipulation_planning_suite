@@ -5,17 +5,21 @@
 #ifndef MANIPULATION_PLANNING_SUITE_ORACLEPUSHINGPLANNER_H
 #define MANIPULATION_PLANNING_SUITE_ORACLEPUSHINGPLANNER_H
 
+// stl
 #include <map>
+// mps
 #include <mps/planner/ompl/control/Interfaces.h>
 #include <mps/planner/ompl/control/RampVelocityControl.h>
 #include <mps/planner/ompl/control/SimEnvStatePropagator.h>
 #include <mps/planner/ompl/state/SimEnvState.h>
 #include <mps/planner/ompl/state/SimEnvWorldStateDistanceMeasure.h>
 #include <mps/planner/ompl/state/goal/ObjectsRelocationGoal.h>
-#include <mps/planner/pushing/algorithm/RRT.h>
+#include <mps/planner/pushing/algorithm/RearrangementPlanner.h>
+#include <mps/planner/pushing/algorithm/Shortcut.h>
 #include <mps/planner/pushing/oracle/DataGenerator.h>
 #include <mps/planner/pushing/oracle/ElasticBandRampComputer.h>
 #include <mps/planner/pushing/oracle/Oracle.h>
+// sim_env
 #include <sim_env/SimEnv.h>
 
 namespace mps {
@@ -40,9 +44,8 @@ namespace planner {
                 Naive = 0,
                 OracleRRT = 1,
                 SliceOracleRRT = 2,
-                GNATSamplingSliceOracleRRT = 3,
-                SemanticGNATSamplingSliceOracleRRT = 4,
-                HybridActionRRT = 5
+                MultiExtendRRT = 3,
+                HybridActionRRT = 4
             };
 
             enum ShortcutType {
@@ -92,7 +95,7 @@ namespace planner {
             bool debug;
             float sdf_resolution;
             float sdf_error_threshold;
-            // TODO more parameters, like distance weights, goal region
+            // TODO move parameters into a map?
 
             /**
                  *  Constructor of a planning problem.
@@ -210,7 +213,7 @@ namespace planner {
             mps::planner::ompl::state::SimEnvValidityCheckerPtr _validity_checker;
             mps::planner::ompl::control::SimEnvStatePropagatorPtr _state_propagator;
             PlanningProblem _planning_problem;
-            mps::planner::pushing::algorithm::RearrangementRRTPtr _algorithm;
+            mps::planner::pushing::algorithm::RearrangementPlannerPtr _algorithm;
             mps::planner::pushing::algorithm::ShortcutterPtr _shortcutter;
             mps::planner::pushing::oracle::ElasticBandRampComputerPtr _eb_computer;
             mps::planner::pushing::algorithm::DebugDrawerPtr _rrt_debug_drawer;

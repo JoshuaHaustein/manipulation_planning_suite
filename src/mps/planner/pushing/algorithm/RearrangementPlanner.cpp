@@ -1,4 +1,4 @@
-#include <mps/planner/pushing/algorithm/Interfaces.h>
+#include <mps/planner/pushing/algorithm/RearrangementPlanner.h>
 #include <ompl/datastructures/NearestNeighborsGNAT.h>
 
 namespace logging = mps::planner::util::logging;
@@ -44,6 +44,39 @@ std::string RearrangementPlanner::PlanningQuery::toString() const
     ss << "\n";
     parameters->print(ss);
     return ss.str();
+}
+
+/**********************************************************************************************
+ ************************************  PlanningBlackboard  ************************************
+ **********************************************************************************************/
+RearrangementPlanner::PlanningBlackboard::PlanningBlackboard(PlanningQueryPtr pq)
+    : pq(pq)
+    , robot_id(0)
+{
+}
+
+/**********************************************************************************************
+ ************************************  RearrangementPlanner  **********************************
+ **********************************************************************************************/
+RearrangementPlanner::~RearrangementPlanner() = default;
+
+RearrangementPlanner::PlanningQueryPtr RearrangementPlanner::createPlanningQuery(
+    mps_state::goal::ObjectsRelocationGoalPtr goal_region,
+    mps_state::SimEnvWorldState* start_state,
+    const std::string& robot_name, float timeout)
+{
+    return std::shared_ptr<RearrangementPlanner::PlanningQuery>(new RearrangementPlanner::PlanningQuery(goal_region, start_state, robot_name, timeout));
+}
+
+bool RearrangementPlanner::plan(PlanningQueryPtr pq)
+{
+    PlanningStatistics stats;
+    return plan(pq, stats);
+}
+
+void RearrangementPlanner::setDebugDrawer(DebugDrawerPtr debug_drawer)
+{
+    _debug_drawer = debug_drawer;
 }
 /**********************************************************************************************
  ************************************  RobotStateDistanceFn  **********************************
@@ -120,16 +153,6 @@ void Slice::reset(ompl::planning::essentials::MotionPtr repr)
     this->repr = repr;
     slice_samples_nn->add(repr);
     slice_samples_list.push_back(repr);
-}
-
-RearrangementPlanner::~RearrangementPlanner() = default;
-
-RearrangementPlanner::PlanningQueryPtr RearrangementPlanner::createPlanningQuery(
-    mps_state::goal::ObjectsRelocationGoalPtr goal_region,
-    mps_state::SimEnvWorldState* start_state,
-    const std::string& robot_name, float timeout)
-{
-    return std::shared_ptr<RearrangementPlanner::PlanningQuery>(new RearrangementPlanner::PlanningQuery(goal_region, start_state, robot_name, timeout));
 }
 
 /**************************************************************************************************/

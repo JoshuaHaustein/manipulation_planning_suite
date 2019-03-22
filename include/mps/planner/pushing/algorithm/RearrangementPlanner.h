@@ -155,7 +155,7 @@ namespace planner {
                  * it will be stored in pq.path.
                  * @params pq - planning query
                  */
-                virtual bool plan(PlanningQueryPtr pq) = 0;
+                bool plan(PlanningQueryPtr pq);
                 /**
                  * Plan a rearrangement solution for the given planning query. If a solution is found,
                  * it will be stored in pq.path.
@@ -170,7 +170,22 @@ namespace planner {
                  */
                 virtual PlanningQueryPtr createPlanningQuery(mps::planner::ompl::state::goal::ObjectsRelocationGoalPtr goal_region,
                     mps::planner::ompl::state::SimEnvWorldState* start_state, const std::string& robot_name, float timeout = 60.0);
+
+                void setDebugDrawer(DebugDrawerPtr debug_drawer);
+
+            protected:
+                struct PlanningBlackboard {
+                    PlanningQueryPtr pq;
+                    PlanningStatistics stats;
+                    unsigned int robot_id;
+                    explicit PlanningBlackboard(PlanningQueryPtr pq);
+                };
+                DebugDrawerPtr _debug_drawer;
             };
+            typedef std::shared_ptr<RearrangementPlanner> RearrangementPlannerPtr;
+            typedef std::shared_ptr<const RearrangementPlanner> RearrangementPlannerConstPtr;
+            typedef std::weak_ptr<RearrangementPlanner> RearrangementPlannerWeakPtr;
+            typedef std::weak_ptr<const RearrangementPlanner> RearrangementPlannerConstWeakPtr;
 
             /***
              *  A slice of the joint configuration space of robot and objects.
