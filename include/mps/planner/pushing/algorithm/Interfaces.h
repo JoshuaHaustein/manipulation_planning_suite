@@ -9,8 +9,11 @@
 // stl includes
 #include <iomanip>
 #include <memory>
+#include <stack>
 #include <string>
 #include <vector>
+// sim_env includes
+#include <sim_env/SimEnv.h>
 // mps includes
 #include <mps/planner/ompl/planning/Essentials.h>
 #include <mps/planner/ompl/state/SimEnvState.h>
@@ -21,14 +24,9 @@
 
 namespace mps {
 namespace planner {
-    // forward declarations
-    namespace ompl {
-        namespace control {
-            class SimEnvWorldState;
-        }
-    }
     namespace pushing {
         namespace algorithm {
+            // Forward declarations
             class DebugDrawer;
             typedef std::shared_ptr<DebugDrawer> DebugDrawerPtr;
             typedef std::weak_ptr<DebugDrawer> DebugDrawerWeakPtr;
@@ -203,6 +201,7 @@ namespace planner {
                 explicit RobotStateDistanceFn(ompl::state::SimEnvWorldStateSpacePtr state_space,
                     const std::vector<float>& weights = std::vector<float>());
             };
+            typedef std::shared_ptr<RobotStateDistanceFn> RobotStateDistanceFnPtr;
 
             // A distance function defined on motions between sim env states
             // that only takes the distance of movable objects into account
@@ -212,6 +211,99 @@ namespace planner {
                 double distance(const SliceConstPtr& slice_a, const SliceConstPtr& slice_b) const;
                 explicit ObjectArrangementDistanceFn(ompl::state::SimEnvWorldStateSpacePtr state_space,
                     const std::vector<float>& weights = std::vector<float>());
+            };
+            typedef std::shared_ptr<ObjectArrangementDistanceFn> ObjectArrangementDistanceFnPtr;
+
+            /***
+             *  MotionCache maintains a list of motions to save reallocation.
+             * The MotionType must have a constructor of the form MotionType(::ompl::control::SpaceInformationPtr).
+             */
+            template <typename MotionType = mps::planner::ompl::planning::essentials::Motion>
+            class MotionCache {
+            public:
+                MotionCache(::ompl::control::SpaceInformationPtr si)
+                    : _si(si)
+                {
+                }
+                ~MotionCache() = default;
+
+                std::shared_ptr<MotionType> getNewMotion()
+                {
+                    if (not _motions_cache.empty()) {
+                        auto ptr = _motions_cache.top();
+                        _motions_cache.pop();
+                        return ptr;
+                    }
+                    return std::make_shared<MotionType>(_si);
+                }
+
+                void cacheMotion(std::shared_ptr<MotionType> ptr)
+                {
+                    _motions_cache.push(ptr);
+                }
+
+                void cacheMotions(std::vector<std::shared_ptr<MotionType>>& motions)
+                {
+                    for (auto& motion : motions) {
+                        _motions_cache.push(motion);
+                    }
+                    motions.clear();
+                }
+
+            private:
+                std::stack<std::shared_ptr<MotionType>> _motions_cache;
+                ::ompl::control::SpaceInformationPtr _si;
+            };
+
+            class SliceCache {
+            public:
+                SliceCache(RobotStateDistanceFnPtr dist_fn);
+                ~SliceCache();
+                SlicePtr getNewSlice(ompl::planning::essentials::MotionPtr motion);
+                void cacheSlice(SlicePtr slice);
+
+            private:
+                std::stack<SlicePtr> _slices_cache;
+                RobotStateDistanceFnPtr _dist_fn;
+            };
+
+            class DebugDrawer : public std::enable_shared_from_this<DebugDrawer> {
+            public:
+                DebugDrawer(sim_env::WorldViewerPtr world, unsigned int robot_id, const std::vector<unsigned int>& target_indices);
+                DebugDrawer(sim_env::WorldViewerPtr world, SliceDrawerInterfacePtr slice_drawer, unsigned int robot_id, const std::vector<unsigned int>& target_indices);
+                ~DebugDrawer();
+                void setSliceDrawer(SliceDrawerInterfacePtr slice_drawer);
+                void setRobotId(unsigned int robot_id);
+                void setTargetIds(const std::vector<unsigned int>& target_ids);
+                void addNewMotion(mps::planner::ompl::planning::essentials::MotionPtr motion);
+                void clear(bool clear_slice_drawer = true);
+                void drawStateTransition(const ompl::state::SimEnvObjectState* parent_state,
+                    const ompl::state::SimEnvObjectState* new_state,
+                    const Eigen::Vector4f& color);
+                void showState(const ompl::state::SimEnvWorldState* state, const ompl::state::SimEnvWorldStateSpaceConstPtr state_space);
+                void addNewSlice(mps::planner::pushing::algorithm::SliceConstPtr slice);
+                SliceDrawerInterfacePtr getSliceDrawer();
+
+            private:
+                sim_env::WorldViewerPtr _world_viewer;
+                SliceDrawerInterfacePtr _slice_drawer;
+                std::vector<sim_env::WorldViewer::Handle> _handles;
+                unsigned int _robot_id;
+                std::vector<unsigned int> _target_ids;
+            };
+
+            class SliceDrawerInterface {
+            public:
+                virtual ~SliceDrawerInterface() = 0;
+                // TODO functions needed to draw a slice
+                virtual void clear() = 0;
+                virtual void addSlice(mps::planner::pushing::algorithm::SliceConstPtr slice) = 0;
+                void setDebugDrawer(mps::planner::pushing::algorithm::DebugDrawerPtr debug_drawer);
+                void setStateSpace(mps::planner::ompl::state::SimEnvWorldStateSpacePtr state_space);
+
+            protected:
+                mps::planner::ompl::state::SimEnvWorldStateSpacePtr _state_space;
+                mps::planner::pushing::algorithm::DebugDrawerWeakPtr _debug_drawer;
             };
         }
     }

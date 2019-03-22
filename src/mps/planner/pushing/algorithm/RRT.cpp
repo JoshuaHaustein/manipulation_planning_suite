@@ -34,6 +34,7 @@ RearrangementRRT::PlanningBlackboard::PlanningBlackboard(PlanningQueryPtr pq)
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 RearrangementRRT::RearrangementRRT(::ompl::control::SpaceInformationPtr si)
     : _si(si)
+    , _motion_cache(si)
     , _log_prefix("[mps::planner::pushing::algorithm::RearrangementRRT::")
 {
     _state_space = std::dynamic_pointer_cast<mps_state::SimEnvWorldStateSpace>(_si->getStateSpace());
@@ -83,8 +84,8 @@ bool RearrangementRRT::plan(PlanningQueryPtr pq, PlanningStatistics& stats)
     setup(pq, blackboard);
     logging::logDebug("Starting to plan", log_prefix);
 
-    MotionPtr current_motion = getNewMotion();
-    MotionPtr sample_motion = getNewMotion();
+    MotionPtr current_motion = _motion_cache.getNewMotion();
+    MotionPtr sample_motion = _motion_cache.getNewMotion();
     MotionPtr final_motion = nullptr;
     // set the state to be the start state
     _si->copyState(current_motion->getState(), pq->start_state);
@@ -270,21 +271,6 @@ void RearrangementRRT::printState(const std::string& msg, ::ompl::base::State* s
 #endif
 }
 
-MotionPtr RearrangementRRT::getNewMotion()
-{
-    if (not _motions_cache.empty()) {
-        MotionPtr ptr = _motions_cache.top();
-        _motions_cache.pop();
-        return ptr;
-    }
-    return std::make_shared<Motion>(_si);
-}
-
-void RearrangementRRT::cacheMotion(MotionPtr ptr)
-{
-    _motions_cache.push(ptr);
-}
-
 double RearrangementRRT::treeDistanceFunction(const MotionPtr& a, const MotionPtr& b) const
 {
     auto* state_a = a->getState();
@@ -362,7 +348,7 @@ bool NaiveRearrangementRRT::extend(mps::planner::ompl::planning::essentials::Mot
     PlanningBlackboard& pb)
 {
     static const std::string log_prefix("[mps::planner::pushing::algorithm::NaiveRearrangementRRT::extend]");
-    MotionPtr new_motion = getNewMotion();
+    MotionPtr new_motion = _motion_cache.getNewMotion();
     _si->copyState(new_motion->getState(), dest);
     // sampleTo(c, is, ns) - samples a control c that moves is towards ns.
     // ns is overwritten to be the actual outcome (i.e. ns = f(is, c))
@@ -383,7 +369,7 @@ bool NaiveRearrangementRRT::extend(mps::planner::ompl::planning::essentials::Mot
         last_motion = new_motion;
     } else {
         logging::logDebug("Could not find a valid control", log_prefix);
-        cacheMotion(new_motion);
+        _motion_cache.cacheMotion(new_motion);
     }
     pb.stats.num_state_propagations += _control_sampler.getK();
     return reached_a_goal;
@@ -510,7 +496,7 @@ void HybridActionRRT::sampleActionSequence(std::vector<::ompl::control::Control 
             _oracle_sampler->steerRobot(controls, start->getConstState(), dest);
         } else { // transfer primitive
             logging::logDebug("Sampling transfer action", log_prefix);
-            auto new_motion = getNewMotion();
+            auto new_motion = _motion_cache.getNewMotion();
             _state_space->copyState(new_motion->getState(), start->getState());
             // first sample robot state
             _oracle_sampler->sampleFeasibleState(new_motion->getState(), dest, obj_id);
@@ -523,7 +509,7 @@ void HybridActionRRT::sampleActionSequence(std::vector<::ompl::control::Control 
             // forward propagating would make the primitive slower to compute, but a bit more capable
             // for now we beam it only, i.e. we assume the world state didn't change by the previous movement
             _oracle_sampler->steerPush(controls, new_motion->getState(), dest, obj_id);
-            cacheMotion(new_motion);
+            _motion_cache.cacheMotion(new_motion);
         }
     }
 }
@@ -541,7 +527,7 @@ void HybridActionRRT::forwardPropagateActionSequence(const std::vector<::ompl::c
     printState(log_prefix + " Starting forward propagation from state ", start->getState());
 #endif
     for (auto const* control : controls) {
-        MotionPtr new_motion = getNewMotion();
+        MotionPtr new_motion = _motion_cache.getNewMotion();
         _si->copyControl(new_motion->getControl(), control);
         extension_success = _state_propagator->propagate(prev_motion->getState(),
             new_motion->getControl(),
@@ -552,7 +538,7 @@ void HybridActionRRT::forwardPropagateActionSequence(const std::vector<::ompl::c
         pb.stats.num_state_propagations++;
         if (not extension_success) { // this action primitive ends here
             logging::logDebug("An action sequence failed, aborting forward propagation", log_prefix);
-            cacheMotion(new_motion);
+            _motion_cache.cacheMotion(new_motion);
             break;
         }
 #ifdef DEBUG_PRINTOUTS
@@ -567,7 +553,7 @@ void HybridActionRRT::forwardPropagateActionSequence(const std::vector<::ompl::c
 void HybridActionRRT::freeMotionList(std::vector<MotionPtr>& motions)
 {
     for (auto& motion : motions) {
-        cacheMotion(motion);
+        _motion_cache.cacheMotion(motion);
     }
     motions.clear();
 }
@@ -643,7 +629,7 @@ void OracleRearrangementRRT::selectTreeNode(const ompl::planning::essentials::Mo
     // TODO semantically this is part of extend and not selectTreeNode. The reason it is here is in SliceBasedOracleRRT
     if (active_obj_id != pb.robot_id) {
         // sample a feasible robot state for the desired push
-        auto tmp_motion = getNewMotion();
+        auto tmp_motion = _motion_cache.getNewMotion();
         // tmp_motion = slice_representative
         _state_space->copyState(tmp_motion->getState(), selected_node->getState());
         // tmp_motion's robot state gets updated with feasible robot state
@@ -656,7 +642,7 @@ void OracleRearrangementRRT::selectTreeNode(const ompl::planning::essentials::Mo
 #ifdef DEBUG_PRINTOUTS
         printState(log_prefix + " Sampled feasible state ", sample_motion->getState());
 #endif
-        cacheMotion(tmp_motion);
+        _motion_cache.cacheMotion(tmp_motion);
     }
 }
 
@@ -707,7 +693,7 @@ void OracleRearrangementRRT::extendStep(const std::vector<const ::ompl::control:
     extension_success = false;
     auto prev_motion = start_motion;
     for (auto const* control : controls) {
-        MotionPtr new_motion = getNewMotion();
+        MotionPtr new_motion = _motion_cache.getNewMotion();
         _si->copyControl(new_motion->getControl(), control);
         extension_success = _state_propagator->propagate(prev_motion->getState(),
             new_motion->getControl(),
@@ -715,7 +701,7 @@ void OracleRearrangementRRT::extendStep(const std::vector<const ::ompl::control:
         pb.stats.num_state_propagations++;
         if (not extension_success) { // we failed, no tree extension
             logging::logDebug("A control provided by the oracle failed. ", log_prefix);
-            cacheMotion(new_motion);
+            _motion_cache.cacheMotion(new_motion);
             return;
         }
 #ifdef DEBUG_PRINTOUTS
@@ -749,10 +735,11 @@ SliceBasedOracleRRT::SliceBasedOracleRRT(::ompl::control::SpaceInformationPtr si
     mps::planner::pushing::oracle::RobotOraclePtr robot_oracle,
     const std::string& robot_name)
     : OracleRearrangementRRT(si, pushing_oracle, robot_oracle, robot_name)
-    , _robot_state_dist_fn(_state_space)
-    , _slice_distance_fn(_state_space)
+    , _robot_state_dist_fn(std::make_shared<RobotStateDistanceFn>(_state_space))
+    , _slice_distance_fn(std::make_shared<ObjectArrangementDistanceFn>(_state_space))
     , _pushing_oracle(pushing_oracle)
     , _min_slice_distance(0.0)
+    , _slice_cache(_robot_state_dist_fn)
 {
     _slices_nn = std::make_shared<::ompl::NearestNeighborsGNAT<SlicePtr>>();
     _slices_nn->setDistanceFunction(std::bind(&ObjectArrangementDistanceFn::distance,
@@ -768,10 +755,10 @@ void SliceBasedOracleRRT::setup(PlanningQueryPtr pq, PlanningBlackboard& pb)
     RearrangementRRT::setup(pq, pb);
     _robot_state_space = std::dynamic_pointer_cast<mps_state::SimEnvObjectStateSpace>(_state_space->getSubspace(pb.robot_id));
     _robot_state_sampler = _robot_state_space->allocStateSampler();
-    _slice_distance_fn.distance_measure.setWeights(pq->weights);
-    _slice_distance_fn.setRobotId(pb.robot_id);
-    _robot_state_dist_fn.distance_measure.setWeights(pq->weights);
-    _robot_state_dist_fn.setRobotId(pb.robot_id);
+    _slice_distance_fn->distance_measure.setWeights(pq->weights);
+    _slice_distance_fn->setRobotId(pb.robot_id);
+    _robot_state_dist_fn->distance_measure.setWeights(pq->weights);
+    _robot_state_dist_fn->setRobotId(pb.robot_id);
     _slices_nn->clear();
     _slices_list.clear();
     _pushing_oracle->timer = timer_ptr;
@@ -806,7 +793,7 @@ void SliceBasedOracleRRT::selectTreeNode(const ompl::planning::essentials::Motio
         printState("Slice selected for extension: ", selected_slice->repr->getState());
 #endif
         // sample a feasible robot state for the desired push
-        auto tmp_motion = getNewMotion();
+        auto tmp_motion = _motion_cache.getNewMotion();
         // tmp_motion = slice_representative
         _state_space->copyState(tmp_motion->getState(), selected_slice->repr->getState());
 #ifdef DEBUG_PRINTOUTS
@@ -820,7 +807,7 @@ void SliceBasedOracleRRT::selectTreeNode(const ompl::planning::essentials::Motio
 #endif
         // save that robot state in sample
         _state_space->copySubState(sample->getState(), tmp_motion->getState(), pb.robot_id);
-        cacheMotion(tmp_motion);
+        _motion_cache.cacheMotion(tmp_motion);
         // sample the node that is closest to a feasible state in this slice
         selected_node = selected_slice->slice_samples_nn->nearest(sample);
     }
@@ -832,7 +819,7 @@ void SliceBasedOracleRRT::addToTree(MotionPtr new_motion, MotionPtr parent, Plan
     SlicePtr closest_slice = getSlice(new_motion, pb);
     float slice_distance = distanceToSlice(new_motion, closest_slice);
     if (slice_distance > _min_slice_distance) { // we discovered a new slice!
-        auto new_slice = getNewSlice(new_motion);
+        auto new_slice = _slice_cache.getNewSlice(new_motion);
         _slices_nn->add(new_slice);
         _slices_list.push_back(new_slice);
         if (_debug_drawer) {
@@ -848,10 +835,10 @@ SlicePtr SliceBasedOracleRRT::getSlice(MotionPtr motion, PlanningBlackboard& pb)
     if (_slices_nn->size() == 0) {
         return nullptr;
     }
-    auto query_slice = getNewSlice(motion);
+    auto query_slice = _slice_cache.getNewSlice(motion);
     auto nearest = _slices_nn->nearest(query_slice);
     ++pb.stats.num_nearest_neighbor_queries;
-    cacheSlice(query_slice);
+    _slice_cache.cacheSlice(query_slice);
     return nearest;
 }
 
@@ -860,27 +847,10 @@ float SliceBasedOracleRRT::distanceToSlice(ompl::planning::essentials::MotionPtr
     if (!slice) {
         return std::numeric_limits<float>::max();
     }
-    auto query_slice = getNewSlice(motion);
-    float distance = (float)_slice_distance_fn.distance(query_slice, slice);
-    cacheSlice(query_slice);
+    auto query_slice = _slice_cache.getNewSlice(motion);
+    float distance = (float)_slice_distance_fn->distance(query_slice, slice);
+    _slice_cache.cacheSlice(query_slice);
     return distance;
-}
-
-SlicePtr SliceBasedOracleRRT::getNewSlice(ompl::planning::essentials::MotionPtr motion) const
-{
-    if (_slices_cache.empty()) {
-        return std::make_shared<Slice>(motion, std::bind(&RobotStateDistanceFn::distance, std::ref(_robot_state_dist_fn), std::placeholders::_1, std::placeholders::_2));
-    }
-    auto return_value = _slices_cache.top();
-    _slices_cache.pop();
-    return_value->reset(motion);
-    return return_value;
-}
-
-void SliceBasedOracleRRT::cacheSlice(SlicePtr slice) const
-{
-    slice->clear();
-    _slices_cache.push(slice);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -888,6 +858,7 @@ void SliceBasedOracleRRT::cacheSlice(SlicePtr slice) const
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 Shortcutter::Shortcutter(::ompl::control::SpaceInformationPtr si)
     : _si(si)
+    , _motion_cache(si)
 {
     _state_propagator = std::dynamic_pointer_cast<mps_control::SimEnvStatePropagator>(si->getStatePropagator());
 }
@@ -897,29 +868,6 @@ Shortcutter::~Shortcutter() = default;
 void Shortcutter::setDebugDrawer(mps::planner::pushing::algorithm::DebugDrawerPtr debug_drawer)
 {
     _debug_drawer = debug_drawer;
-}
-
-MotionPtr Shortcutter::getNewMotion()
-{
-    if (not _motions_cache.empty()) {
-        MotionPtr ptr = _motions_cache.top();
-        _motions_cache.pop();
-        return ptr;
-    }
-    return std::make_shared<Motion>(_si);
-}
-
-void Shortcutter::cacheMotion(MotionPtr ptr)
-{
-    _motions_cache.push(ptr);
-}
-
-void Shortcutter::cacheMotions(std::vector<MotionPtr>& motions)
-{
-    for (auto& motion : motions) {
-        _motions_cache.push(motion);
-    }
-    motions.clear();
 }
 
 PathPtr Shortcutter::getNewPath()
@@ -936,7 +884,7 @@ void Shortcutter::cachePath(PathPtr ptr, int clear_id)
 {
     if (clear_id >= 0) {
         for (unsigned int id = clear_id; id < ptr->getNumMotions(); ++id) {
-            cacheMotion(ptr->getMotion(id));
+            _motion_cache.cacheMotion(ptr->getMotion(id));
         }
     }
     ptr->clear(); // make sure our path doesn't keep references to any motions
@@ -977,7 +925,7 @@ std::pair<bool, bool> Shortcutter::forwardPropagatePath(mps::planner::ompl::plan
     std::vector<MotionPtr> motions;
     // first copy controls
     for (auto control : controls) {
-        auto new_motion = getNewMotion();
+        auto new_motion = _motion_cache.getNewMotion();
         _si->copyControl(new_motion->getControl(), control);
         motions.push_back(new_motion);
     }
@@ -996,7 +944,7 @@ std::pair<bool, bool> Shortcutter::forwardPropagatePath(mps::planner::ompl::plan
     auto prev_motion = path->last();
     // as long as we have propagation success and there are actions in the old path left
     while (extension_success && current_idx < old_path->getNumMotions()) {
-        auto new_motion = getNewMotion();
+        auto new_motion = _motion_cache.getNewMotion();
         // copy next action from old path
         _si->copyControl(new_motion->getControl(), old_path->getMotion(current_idx)->getControl());
         // propagate from prev_motion
@@ -1012,7 +960,7 @@ std::pair<bool, bool> Shortcutter::forwardPropagatePath(mps::planner::ompl::plan
             if (goal_satisfied)
                 return std::make_pair(true, true); // if yes we are done
         } else { // gonna abort
-            cacheMotion(new_motion);
+            _motion_cache.cacheMotion(new_motion);
         }
     }
     return std::make_pair(extension_success, goal_satisfied);
@@ -1111,7 +1059,7 @@ void NaiveShortcutter::shortcut(mps::planner::ompl::planning::essentials::PathPt
                 break;
             } else {
                 cachePath(new_path);
-                cacheMotions(new_motions);
+                _motion_cache.cacheMotions(new_motions);
             }
             ++pair_iter;
         }
@@ -1145,7 +1093,7 @@ void NaiveShortcutter::computeRobotActions(std::vector<mps::planner::ompl::plann
     std::vector<Eigen::VectorXf> control_params;
     _robot_oracle->steer(current_robot_state, target_robot_state, sim_env_start_state, control_params);
     for (auto& control_param : control_params) {
-        auto new_motion = getNewMotion();
+        auto new_motion = _motion_cache.getNewMotion();
         auto control = dynamic_cast<mps_control::RealValueParameterizedControl*>(new_motion->getControl());
         control->setParameters(control_param);
         motions.push_back(new_motion);
@@ -1252,7 +1200,7 @@ void LocalShortcutter::shortcut(mps::planner::ompl::planning::essentials::PathPt
                 // start_id = (unsigned int) std::max(0, (int)start_id + 1 - (int)stride);
                 ++start_id;
             } else {
-                cacheMotions(new_motions);
+                _motion_cache.cacheMotions(new_motions);
                 ++start_id;
             }
         }
@@ -1297,7 +1245,7 @@ void LocalShortcutter::computeRobotActions(std::vector<mps::planner::ompl::plann
     std::vector<Eigen::VectorXf> control_params;
     _robot_oracle->steer(current_robot_state, target_robot_state, sim_env_start_state, control_params);
     for (auto& control_param : control_params) {
-        auto new_motion = getNewMotion();
+        auto new_motion = _motion_cache.getNewMotion();
         auto control = dynamic_cast<mps_control::RealValueParameterizedControl*>(new_motion->getControl());
         control->setParameters(control_param);
         motions.push_back(new_motion);
@@ -1356,14 +1304,14 @@ std::pair<bool, bool> LocalOracleShortcutter::computeShortcut(
     unsigned int object_id = selectObject(start->getState(), end_state);
     if (object_id != _robot_id) { // we plan to push object object_id
         // first sample a feasible state
-        auto feasible_state_mtn = getNewMotion();
+        auto feasible_state_mtn = _motion_cache.getNewMotion();
         _si->copyState(feasible_state_mtn->getState(), start->getState());
         _oracle_sampler->sampleFeasibleState(feasible_state_mtn->getState(),
             end_state,
             object_id);
         // steer robot to feasible state
         _oracle_sampler->steerRobot(controls, start->getState(), feasible_state_mtn->getState());
-        cacheMotion(feasible_state_mtn);
+        _motion_cache.cacheMotion(feasible_state_mtn);
         if (controls.empty()) {
             logging::logErr("OracleControlSampler provided no controls at all", log_prefix);
             return std::make_pair(false, false);
@@ -1583,14 +1531,14 @@ bool OracleShortcutter::computeShortcut(mps::planner::ompl::planning::essentials
     bool goal_reached = false;
     if (object_id != robot_id) { // we plan to push object object_id
         // first sample a feasible state
-        auto feasible_state_mtn = getNewMotion();
+        auto feasible_state_mtn = _motion_cache.getNewMotion();
         _si->copyState(feasible_state_mtn->getState(), start->getState());
         _oracle_sampler->sampleFeasibleState(feasible_state_mtn->getState(),
             destination->getState(),
             object_id);
         // steer robot to feasible state
         _oracle_sampler->steerRobot(controls, start->getState(), feasible_state_mtn->getState());
-        cacheMotion(feasible_state_mtn);
+        _motion_cache.cacheMotion(feasible_state_mtn);
         if (controls.empty()) {
             logging::logErr("OracleControlSampler provided no controls at all", log_prefix);
             return false;
@@ -1658,14 +1606,14 @@ bool OracleShortcutter::extendPath(PathPtr path,
     bool extension_success = false;
     auto prev_motion = path->last();
     for (auto const* control : controls) {
-        MotionPtr new_motion = getNewMotion();
+        MotionPtr new_motion = _motion_cache.getNewMotion();
         _si->copyControl(new_motion->getControl(), control);
         extension_success = _state_propagator->propagate(prev_motion->getState(),
             new_motion->getControl(),
             new_motion->getState());
         if (not extension_success) { // we failed, no shortcut
             logging::logDebug("Exending path failed", log_prefix);
-            cacheMotion(new_motion);
+            _motion_cache.cacheMotion(new_motion);
             return false;
         }
         // extension is successful, add this to the new path
@@ -1685,130 +1633,4 @@ bool OracleShortcutter::extendPath(PathPtr path,
         prev_motion = new_motion;
     }
     return extension_success;
-}
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-//////////////////////////////////////// DebugDrawer ///////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////////////////////////
-DebugDrawer::DebugDrawer(sim_env::WorldViewerPtr world_viewer,
-    unsigned int robot_id,
-    const std::vector<unsigned int>& target_ids)
-    : DebugDrawer(world_viewer, nullptr, robot_id, target_ids)
-{
-}
-
-DebugDrawer::DebugDrawer(sim_env::WorldViewerPtr world_viewer,
-    SliceDrawerInterfacePtr slice_drawer,
-    unsigned int robot_id,
-    const std::vector<unsigned int>& target_ids)
-{
-    _world_viewer = world_viewer;
-    _slice_drawer = slice_drawer;
-    if (_slice_drawer) {
-        _slice_drawer->setDebugDrawer(shared_from_this());
-    }
-    _robot_id = robot_id;
-    _target_ids = target_ids;
-}
-
-DebugDrawer::~DebugDrawer()
-{
-    clear();
-}
-
-void DebugDrawer::addNewMotion(MotionPtr motion)
-{
-    if (!motion->getParent())
-        return;
-    auto* parent_state = dynamic_cast<ompl::state::SimEnvWorldState*>(motion->getParent()->getState());
-    auto* new_state = dynamic_cast<ompl::state::SimEnvWorldState*>(motion->getState());
-    auto* parent_object_state = parent_state->getObjectState(_robot_id);
-    auto* new_object_state = new_state->getObjectState(_robot_id);
-    drawStateTransition(parent_object_state, new_object_state, Eigen::Vector4f(0.4, 0, 0.9, 1));
-    parent_object_state = parent_state->getObjectState(_target_ids.at(0)); // TODO also print other objects
-    new_object_state = new_state->getObjectState(_target_ids.at(0)); // TODO also draw other target objects
-    drawStateTransition(parent_object_state, new_object_state, Eigen::Vector4f(0, 0.7, 0, 1));
-    for (unsigned int i = 0; i < new_state->getNumObjects(); ++i) {
-        if ((i != _target_ids.at(0)) and (i != _robot_id)) { // TODO also other target objects
-            parent_object_state = parent_state->getObjectState(i);
-            new_object_state = new_state->getObjectState(i);
-            drawStateTransition(parent_object_state, new_object_state, Eigen::Vector4f(0.9, 0.9, 0.9, 0.4));
-        }
-    }
-}
-
-void DebugDrawer::clear(bool clear_slice_drawer)
-{
-    for (auto& handle : _handles) {
-        _world_viewer->removeDrawing(handle);
-    }
-    _handles.clear();
-    if (_slice_drawer and clear_slice_drawer) {
-        _slice_drawer->clear();
-    }
-}
-
-void DebugDrawer::drawStateTransition(const ompl::state::SimEnvObjectState* parent_state,
-    const ompl::state::SimEnvObjectState* new_state,
-    const Eigen::Vector4f& color)
-{
-    // TODO this is overfit to box2d push planning
-    Eigen::VectorXf config = parent_state->getConfiguration();
-    Eigen::Vector3f pos_parent(config[0], config[1], 0.0f);
-    //    Eigen::Vector3f extent(0.1, 0.1, 0.0);
-    config = new_state->getConfiguration();
-    Eigen::Vector3f pos_child(config[0], config[1], 0.0f);
-    //    _handles.push_back(_world_viewer->drawBox(pos_parent, extent, true));
-    _handles.push_back(_world_viewer->drawLine(pos_parent, pos_child, color, 0.01f));
-    //    _handles.push_back(_world_viewer->drawBox(pos_child, extent, true));
-}
-
-void DebugDrawer::showState(const ompl::state::SimEnvWorldState* state,
-    const ompl::state::SimEnvWorldStateSpaceConstPtr state_space)
-{
-    auto world = _world_viewer->getWorld();
-    state_space->setToState(world, state);
-}
-
-void DebugDrawer::addNewSlice(mps::planner::pushing::algorithm::SliceConstPtr slice)
-{
-    if (!_slice_drawer) {
-        return;
-    }
-    _slice_drawer->addSlice(slice);
-}
-
-void DebugDrawer::setSliceDrawer(SliceDrawerInterfacePtr slice_drawer)
-{
-    _slice_drawer = slice_drawer;
-    if (_slice_drawer) {
-        _slice_drawer->setDebugDrawer(shared_from_this());
-    }
-}
-
-void DebugDrawer::setRobotId(unsigned int robot_id)
-{
-    _robot_id = robot_id;
-}
-
-void DebugDrawer::setTargetIds(const std::vector<unsigned int>& target_ids)
-{
-    _target_ids = target_ids;
-}
-
-SliceDrawerInterfacePtr DebugDrawer::getSliceDrawer()
-{
-    return _slice_drawer;
-}
-
-SliceDrawerInterface::~SliceDrawerInterface() = default;
-
-void SliceDrawerInterface::setDebugDrawer(mps::planner::pushing::algorithm::DebugDrawerPtr debug_drawer)
-{
-    _debug_drawer = debug_drawer;
-}
-
-void SliceDrawerInterface::setStateSpace(mps::planner::ompl::state::SimEnvWorldStateSpacePtr state_space)
-{
-    _state_space = state_space;
 }

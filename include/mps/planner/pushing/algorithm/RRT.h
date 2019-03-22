@@ -42,21 +42,6 @@ namespace planner {
                  * implementations.
                  */
             class RearrangementRRT : public RearrangementPlanner {
-                // public:
-                // struct PlanningQuery {
-                //     ompl::state::goal::ObjectsRelocationGoalPtr goal_region; // goal region
-                //     ::ompl::base::State* start_state; // start state of the problem (SimEnvWorldStateSpace)
-                //     std::string robot_name;
-                //     std::vector<float> weights; // optional weights for the distance function
-                //     std::function<bool()> stopping_condition; // optionally a customized stopping condition
-                //     PlanningQuery(ompl::state::goal::ObjectsRelocationGoalPtr goal_region,
-                //         ::ompl::base::State* start_state,
-                //         float time_out,
-                //         const std::string& robot_name);
-                //     PlanningQuery(const PlanningQuery& other);
-                //     std::string toString() const;
-                // };
-
             protected:
                 struct PlanningBlackboard {
                     PlanningQueryPtr pq;
@@ -128,8 +113,6 @@ namespace planner {
                     PlanningBlackboard& pb);
                 unsigned int sampleActiveObject(const PlanningBlackboard& pb) const;
                 void printState(const std::string& msg, ::ompl::base::State* state) const;
-                mps::planner::ompl::planning::essentials::MotionPtr getNewMotion();
-                void cacheMotion(mps::planner::ompl::planning::essentials::MotionPtr ptr);
 
                 ::ompl::control::SpaceInformationPtr _si;
                 ::ompl::base::ValidStateSamplerPtr _state_sampler;
@@ -137,6 +120,7 @@ namespace planner {
                 mps::planner::ompl::state::SimEnvWorldStateDistanceMeasurePtr _distance_measure;
                 ::ompl::RNGPtr _rng;
                 DebugDrawerPtr _debug_drawer;
+                mutable MotionCache<> _motion_cache;
                 // Parameters
                 float _goal_bias; // fraction of times the planner should attempt to connect to a goal configuration
                 float _target_bias; // fraction of times the planner should focus at least on moving the target objects
@@ -147,7 +131,6 @@ namespace planner {
 
                 std::string _log_prefix;
                 std::shared_ptr<::ompl::NearestNeighbors<mps::planner::ompl::planning::essentials::MotionPtr>> _tree;
-                std::stack<mps::planner::ompl::planning::essentials::MotionPtr> _motions_cache;
             };
 
             typedef std::shared_ptr<RearrangementRRT> RearrangementRRTPtr;
@@ -290,21 +273,17 @@ namespace planner {
                 // member functions
                 SlicePtr getSlice(ompl::planning::essentials::MotionPtr motion, PlanningBlackboard& pb) const;
                 float distanceToSlice(ompl::planning::essentials::MotionPtr motion, SlicePtr slice) const;
-                SlicePtr getNewSlice(ompl::planning::essentials::MotionPtr motion) const;
-                void cacheSlice(SlicePtr slice) const;
                 // member variables
                 std::vector<SlicePtr> _slices_list;
                 std::shared_ptr<::ompl::NearestNeighbors<SlicePtr>> _slices_nn;
                 ::ompl::base::StateSamplerPtr _robot_state_sampler;
                 ::ompl::base::StateSpacePtr _robot_state_space;
-                RobotStateDistanceFn _robot_state_dist_fn;
-                ObjectArrangementDistanceFn _slice_distance_fn;
+                const RobotStateDistanceFnPtr _robot_state_dist_fn;
+                const ObjectArrangementDistanceFnPtr _slice_distance_fn;
                 mps::planner::pushing::oracle::PushingOraclePtr _pushing_oracle;
                 float _min_slice_distance;
                 float feasible_state_noise; // probability (in [0,1]) to sample a feasible state uniformly rather than from the oracle
-
-            private:
-                mutable std::stack<SlicePtr> _slices_cache;
+                mutable SliceCache _slice_cache; // Needs to be defined after _robot_state_dist_fn
             };
 
             //////////////////////////////////////////////////////////////////////////////////////
@@ -355,10 +334,8 @@ namespace planner {
                 ::ompl::control::SpaceInformationPtr _si;
                 mps::planner::ompl::control::SimEnvStatePropagatorPtr _state_propagator;
                 mps::planner::util::time::Timer _timer;
+                MotionCache<> _motion_cache;
                 // Methods
-                mps::planner::ompl::planning::essentials::MotionPtr getNewMotion();
-                void cacheMotion(mps::planner::ompl::planning::essentials::MotionPtr ptr);
-                void cacheMotions(std::vector<mps::planner::ompl::planning::essentials::MotionPtr>& motions);
                 mps::planner::ompl::planning::essentials::PathPtr getNewPath();
                 // caches the given path, if clear_id >= 0, the motions with id >= clear_id are also cached
                 void cachePath(mps::planner::ompl::planning::essentials::PathPtr ptr, int clear_id = -1);
@@ -403,7 +380,6 @@ namespace planner {
                 mps::planner::pushing::algorithm::DebugDrawerPtr _debug_drawer;
 
             private:
-                std::stack<mps::planner::ompl::planning::essentials::MotionPtr> _motions_cache;
                 std::stack<mps::planner::ompl::planning::essentials::PathPtr> _path_cache;
             };
             typedef std::shared_ptr<Shortcutter> ShortcutterPtr;
@@ -539,46 +515,6 @@ namespace planner {
             typedef std::shared_ptr<const OracleShortcutter> OracleShortcutterConstPtr;
             typedef std::weak_ptr<OracleShortcutter> OracleShortcutterWeakPtr;
             typedef std::weak_ptr<const OracleShortcutter> OracleShortcutterWeakConstPtr;
-
-            class DebugDrawer : public std::enable_shared_from_this<DebugDrawer> {
-                // TODO this class may be overfit to a 2d planning case.
-            public:
-                DebugDrawer(sim_env::WorldViewerPtr world, unsigned int robot_id, const std::vector<unsigned int>& target_indices);
-                DebugDrawer(sim_env::WorldViewerPtr world, SliceDrawerInterfacePtr slice_drawer, unsigned int robot_id, const std::vector<unsigned int>& target_indices);
-                ~DebugDrawer();
-                void setSliceDrawer(SliceDrawerInterfacePtr slice_drawer);
-                void setRobotId(unsigned int robot_id);
-                void setTargetIds(const std::vector<unsigned int>& target_ids);
-                void addNewMotion(mps::planner::ompl::planning::essentials::MotionPtr motion);
-                void clear(bool clear_slice_drawer = true);
-                void drawStateTransition(const ompl::state::SimEnvObjectState* parent_state,
-                    const ompl::state::SimEnvObjectState* new_state,
-                    const Eigen::Vector4f& color);
-                void showState(const ompl::state::SimEnvWorldState* state, const ompl::state::SimEnvWorldStateSpaceConstPtr state_space);
-                void addNewSlice(mps::planner::pushing::algorithm::SliceConstPtr slice);
-                SliceDrawerInterfacePtr getSliceDrawer();
-
-            private:
-                sim_env::WorldViewerPtr _world_viewer;
-                SliceDrawerInterfacePtr _slice_drawer;
-                std::vector<sim_env::WorldViewer::Handle> _handles;
-                unsigned int _robot_id;
-                std::vector<unsigned int> _target_ids;
-            };
-
-            class SliceDrawerInterface {
-            public:
-                virtual ~SliceDrawerInterface() = 0;
-                // TODO functions needed to draw a slice
-                virtual void clear() = 0;
-                virtual void addSlice(mps::planner::pushing::algorithm::SliceConstPtr slice) = 0;
-                void setDebugDrawer(mps::planner::pushing::algorithm::DebugDrawerPtr debug_drawer);
-                void setStateSpace(mps::planner::ompl::state::SimEnvWorldStateSpacePtr state_space);
-
-            protected:
-                mps::planner::ompl::state::SimEnvWorldStateSpacePtr _state_space;
-                mps::planner::pushing::algorithm::DebugDrawerWeakPtr _debug_drawer;
-            };
         }
     }
 }
