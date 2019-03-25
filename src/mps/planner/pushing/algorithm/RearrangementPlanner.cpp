@@ -58,6 +58,16 @@ RearrangementPlanner::PlanningBlackboard::PlanningBlackboard(PlanningQueryPtr pq
 /**********************************************************************************************
  ************************************  RearrangementPlanner  **********************************
  **********************************************************************************************/
+RearrangementPlanner::RearrangementPlanner(::ompl::control::SpaceInformationPtr si)
+    : _si(si)
+{
+    auto state_space = _si->getStateSpace();
+    _state_space = std::dynamic_pointer_cast<mps_state::SimEnvWorldStateSpace>(state_space);
+    if (_state_space == nullptr) {
+        throw std::logic_error("[mps::planner::pushing::algorithm::RearrangementPlanner::setupBlackboard] Invalid state space. State space needs to be SimEnvWorldStateSpace.");
+    }
+}
+
 RearrangementPlanner::~RearrangementPlanner() = default;
 
 RearrangementPlanner::PlanningQueryPtr RearrangementPlanner::createPlanningQuery(
@@ -78,19 +88,31 @@ void RearrangementPlanner::setDebugDrawer(DebugDrawerPtr debug_drawer)
 {
     _debug_drawer = debug_drawer;
 }
+
+void RearrangementPlanner::setupBlackboard(PlanningBlackboard& pb)
+{
+    pb.robot_id = 0;
+    {
+        int tmp_robot_id = _state_space->getObjectIndex(pb.pq->robot_name);
+        if (tmp_robot_id < 0) {
+            throw std::logic_error("[mps::planner::pushing::oracle::RearrangementPlanner::setupBlackboard]"
+                                   "Could not retrieve id for robot "
+                + pb.pq->robot_name);
+        }
+        pb.robot_id = (unsigned int)tmp_robot_id;
+    }
+}
 /**********************************************************************************************
  ************************************  RobotStateDistanceFn  **********************************
  **********************************************************************************************/
-RobotStateDistanceFn::RobotStateDistanceFn(ompl::state::SimEnvWorldStateSpacePtr state_space,
-    const std::vector<float>& weights)
-    : distance_measure(state_space, weights)
+RobotStateDistanceFn::RobotStateDistanceFn(ompl::state::SimEnvWorldStateSpacePtr state_space)
+    : distance_measure(state_space, 0)
 {
 }
 
 void RobotStateDistanceFn::setRobotId(unsigned int id)
 {
-    distance_measure.setAll(false);
-    distance_measure.setActive(id, true);
+    distance_measure.setObjectId(id);
 }
 
 double RobotStateDistanceFn::distance(const ompl::planning::essentials::MotionPtr& motion_a,

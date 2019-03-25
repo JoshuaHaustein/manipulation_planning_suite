@@ -106,9 +106,7 @@ namespace planner {
                 unsigned int sampleActiveObject(const PlanningBlackboard& pb) const;
                 void printState(const std::string& msg, ::ompl::base::State* state) const;
 
-                ::ompl::control::SpaceInformationPtr _si;
                 ::ompl::base::ValidStateSamplerPtr _state_sampler;
-                mps::planner::ompl::state::SimEnvWorldStateSpacePtr _state_space;
                 mps::planner::ompl::state::SimEnvWorldStateDistanceMeasurePtr _distance_measure;
                 ::ompl::RNGPtr _rng;
                 mutable MotionCache<> _motion_cache;
@@ -118,8 +116,6 @@ namespace planner {
                 float _robot_bias; // fraction of times the planner should focus at least on moving the robot
 
             private:
-                void setupBlackboard(PlanningBlackboard& pb);
-
                 std::string _log_prefix;
                 std::shared_ptr<::ompl::NearestNeighbors<mps::planner::ompl::planning::essentials::MotionPtr>> _tree;
             };
@@ -264,7 +260,6 @@ namespace planner {
                 SlicePtr getSlice(ompl::planning::essentials::MotionPtr motion, PlanningBlackboard& pb) const;
                 float distanceToSlice(ompl::planning::essentials::MotionPtr motion, SlicePtr slice) const;
                 // member variables
-                std::vector<SlicePtr> _slices_list;
                 std::shared_ptr<::ompl::NearestNeighbors<SlicePtr>> _slices_nn;
                 ::ompl::base::StateSamplerPtr _robot_state_sampler;
                 ::ompl::base::StateSpacePtr _robot_state_space;

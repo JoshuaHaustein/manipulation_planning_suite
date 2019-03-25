@@ -24,7 +24,7 @@ using namespace mps::planner::ompl::planning::essentials;
 /////////////////////////////////////// SingleExtendRRT /////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 SingleExtendRRT::SingleExtendRRT(::ompl::control::SpaceInformationPtr si)
-    : _si(si)
+    : RearrangementPlanner(si)
     , _motion_cache(si)
     , _log_prefix("[mps::planner::pushing::algorithm::SingleExtendRRT::")
 {
@@ -261,20 +261,6 @@ double SingleExtendRRT::treeDistanceFunction(const MotionPtr& a, const MotionPtr
     auto* state_a = a->getState();
     auto* state_b = b->getState();
     return _state_space->distance(state_a, state_b); // this uses _distance_measure
-}
-
-void SingleExtendRRT::setupBlackboard(PlanningBlackboard& pb)
-{
-    pb.robot_id = 0;
-    {
-        int tmp_robot_id = _state_space->getObjectIndex(pb.pq->robot_name);
-        if (tmp_robot_id < 0) {
-            throw std::logic_error("[mps::planner::pushing::oracle::SingleExtendRRT::setupBlackboard]"
-                                   "Could not retrieve id for robot "
-                + pb.pq->robot_name);
-        }
-        pb.robot_id = (unsigned int)tmp_robot_id;
-    }
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -737,10 +723,8 @@ void SliceBasedOracleRRT::setup(PlanningQueryPtr pq, PlanningBlackboard& pb)
     _robot_state_sampler = _robot_state_space->allocStateSampler();
     _slice_distance_fn->distance_measure.setWeights(pq->weights);
     _slice_distance_fn->setRobotId(pb.robot_id);
-    _robot_state_dist_fn->distance_measure.setWeights(pq->weights);
     _robot_state_dist_fn->setRobotId(pb.robot_id);
     _slices_nn->clear();
-    _slices_list.clear();
     _pushing_oracle->timer = timer_ptr;
     // set min slice distance
     // TODO should update this using state space and distance weights
@@ -801,7 +785,6 @@ void SliceBasedOracleRRT::addToTree(MotionPtr new_motion, MotionPtr parent, Plan
     if (slice_distance > _min_slice_distance) { // we discovered a new slice!
         auto new_slice = _slice_cache.getNewSlice(new_motion);
         _slices_nn->add(new_slice);
-        _slices_list.push_back(new_slice);
         if (_debug_drawer) {
             _debug_drawer->addNewSlice(new_slice);
         }

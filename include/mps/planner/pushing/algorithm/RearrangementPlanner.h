@@ -148,6 +148,7 @@ namespace planner {
                 };
                 typedef std::shared_ptr<PlanningQuery> PlanningQueryPtr;
 
+                RearrangementPlanner(::ompl::control::SpaceInformationPtr si);
                 virtual ~RearrangementPlanner() = 0;
 
                 /**
@@ -180,7 +181,10 @@ namespace planner {
                     unsigned int robot_id;
                     explicit PlanningBlackboard(PlanningQueryPtr pq);
                 };
+                void setupBlackboard(PlanningBlackboard& pb);
                 DebugDrawerPtr _debug_drawer;
+                ::ompl::control::SpaceInformationPtr _si;
+                mps::planner::ompl::state::SimEnvWorldStateSpacePtr _state_space;
             };
             typedef std::shared_ptr<RearrangementPlanner> RearrangementPlannerPtr;
             typedef std::shared_ptr<const RearrangementPlanner> RearrangementPlannerConstPtr;
@@ -209,12 +213,11 @@ namespace planner {
             // A distance function defined on motions between sim env states
             // that only takes the distance of the robot into account
             struct RobotStateDistanceFn {
-                ompl::state::SimEnvWorldStateDistanceMeasure distance_measure;
+                ompl::state::SimEnvWorldStateDistanceProjection distance_measure;
+                void setRobotId(unsigned int id);
                 double distance(const ompl::planning::essentials::MotionPtr& motion_a,
                     const ompl::planning::essentials::MotionPtr& motion_b) const;
-                void setRobotId(unsigned int id);
-                explicit RobotStateDistanceFn(ompl::state::SimEnvWorldStateSpacePtr state_space,
-                    const std::vector<float>& weights = std::vector<float>());
+                RobotStateDistanceFn(ompl::state::SimEnvWorldStateSpacePtr state_space);
             };
             typedef std::shared_ptr<RobotStateDistanceFn> RobotStateDistanceFnPtr;
 
