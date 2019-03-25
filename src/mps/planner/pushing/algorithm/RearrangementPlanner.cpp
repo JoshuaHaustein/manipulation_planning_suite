@@ -60,6 +60,7 @@ RearrangementPlanner::PlanningBlackboard::PlanningBlackboard(PlanningQueryPtr pq
  **********************************************************************************************/
 RearrangementPlanner::RearrangementPlanner(::ompl::control::SpaceInformationPtr si)
     : _si(si)
+    , _timer(std::make_shared<mps::planner::util::time::Timer>())
 {
     auto state_space = _si->getStateSpace();
     _state_space = std::dynamic_pointer_cast<mps_state::SimEnvWorldStateSpace>(state_space);
@@ -102,6 +103,21 @@ void RearrangementPlanner::setupBlackboard(PlanningBlackboard& pb)
         pb.robot_id = (unsigned int)tmp_robot_id;
     }
 }
+
+void RearrangementPlanner::printState(const std::string& msg, ::ompl::base::State* state) const
+{
+    std::stringstream ss;
+    auto* world_state = dynamic_cast<mps_state::SimEnvWorldState*>(state);
+    ss.str("");
+    ss << msg;
+    world_state->print(ss);
+    logging::logDebug(ss.str(), "[mps::planner::pushing::oracle::RearrangementPlanner::printState]");
+#ifdef DEBUG_VISUALIZE
+    if (_debug_drawer)
+        _debug_drawer->showState(world_state, _state_space);
+#endif
+}
+
 /**********************************************************************************************
  ************************************  RobotStateDistanceFn  **********************************
  **********************************************************************************************/

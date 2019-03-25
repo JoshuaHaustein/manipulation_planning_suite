@@ -85,9 +85,9 @@ bool SingleExtendRRT::plan(PlanningQueryPtr pq, PlanningStatistics& stats)
     pq->goal_region->print(ss);
     logging::logDebug("Planning towards goal " + ss.str(), log_prefix);
     logging::logDebug("Entering main loop", log_prefix);
-    timer_ptr->startTimer(pq->time_out);
+    _timer->startTimer(pq->time_out);
     // Do the actual planning
-    while (not timer_ptr->timeOutExceeded() and not pq->stopping_condition() && !solved) {
+    while (not _timer->timeOutExceeded() and not pq->stopping_condition() && !solved) {
         blackboard.stats.num_iterations++;
         // sample a new state
         unsigned int active_obj_id = 0;
@@ -96,7 +96,7 @@ bool SingleExtendRRT::plan(PlanningQueryPtr pq, PlanningStatistics& stats)
         printState("Sampled state is ", sample_motion->getState()); // TODO remove
 #endif
         // Get a tree node to expand
-        selectTreeNode(sample_motion, current_motion, active_obj_id, goal_sampled, blackboard);
+        selectTreeNode(sample_motion, current_motion, active_obj_id, blackboard);
 #ifdef DEBUG_PRINTOUTS
         printState("Selected tree state: ", current_motion->getState()); // TODO remove
 #endif
@@ -108,7 +108,7 @@ bool SingleExtendRRT::plan(PlanningQueryPtr pq, PlanningStatistics& stats)
 #endif
     }
 
-    blackboard.stats.runtime = timer_ptr->stopTimer();
+    blackboard.stats.runtime = _timer->stopTimer();
     blackboard.stats.success = solved;
     ss.str("");
     blackboard.stats.print(ss);
@@ -178,7 +178,6 @@ bool SingleExtendRRT::sample(mps::planner::ompl::planning::essentials::MotionPtr
 void SingleExtendRRT::selectTreeNode(const ompl::planning::essentials::MotionPtr& sample_motion,
     ompl::planning::essentials::MotionPtr& selected_node,
     unsigned int& active_obj_id,
-    bool sample_is_goal,
     PlanningBlackboard& pb)
 {
     static const std::string log_prefix("[mps::planner::pushing::algorithm::SingleExtendRRT::selectTreeNode]");
@@ -240,20 +239,6 @@ unsigned int SingleExtendRRT::sampleActiveObject(const PlanningBlackboard& pb) c
         int value = _rng->uniformInt(0, _state_space->getNumObjects() - 1);
         return static_cast<unsigned int>(value);
     }
-}
-
-void SingleExtendRRT::printState(const std::string& msg, ::ompl::base::State* state) const
-{
-    std::stringstream ss;
-    auto* world_state = dynamic_cast<mps_state::SimEnvWorldState*>(state);
-    ss.str("");
-    ss << msg;
-    world_state->print(ss);
-    logging::logDebug(ss.str(), "[mps::planner::pushing::oracle::SingleExtendRRT::printState]");
-#ifdef DEBUG_VISUALIZE
-    if (_debug_drawer)
-        _debug_drawer->showState(world_state, _state_space);
-#endif
 }
 
 double SingleExtendRRT::treeDistanceFunction(const MotionPtr& a, const MotionPtr& b) const
@@ -584,12 +569,11 @@ void OracleRearrangementRRT::setStateNoise(float sn)
 void OracleRearrangementRRT::selectTreeNode(const ompl::planning::essentials::MotionPtr& sample_motion,
     ompl::planning::essentials::MotionPtr& selected_node,
     unsigned int& active_obj_id,
-    bool sample_is_goal,
     PlanningBlackboard& pb)
 {
     static const std::string log_prefix("[mps::planner::pushing::algorithm::OracleRearrangementRRT::selectTreeNode]");
     // TODO we only overwrite this because we need to sample a feasible state.
-    SingleExtendRRT::selectTreeNode(sample_motion, selected_node, active_obj_id, sample_is_goal, pb);
+    SingleExtendRRT::selectTreeNode(sample_motion, selected_node, active_obj_id, pb);
     // now sample a feasible state for pushing
     // TODO This is a bit of a hack and should probably be done in a cleaner way
     // TODO semantically this is part of extend and not selectTreeNode. The reason it is here is in SliceBasedOracleRRT
@@ -725,7 +709,7 @@ void SliceBasedOracleRRT::setup(PlanningQueryPtr pq, PlanningBlackboard& pb)
     _slice_distance_fn->setRobotId(pb.robot_id);
     _robot_state_dist_fn->setRobotId(pb.robot_id);
     _slices_nn->clear();
-    _pushing_oracle->timer = timer_ptr;
+    _pushing_oracle->timer = _timer; // give pushing oracle access to our timer, so it can add its computation time (in a different process)
     // set min slice distance
     // TODO should update this using state space and distance weights
     _min_slice_distance = (_state_space->getNumObjects() - 1) * 0.001;
@@ -733,8 +717,7 @@ void SliceBasedOracleRRT::setup(PlanningQueryPtr pq, PlanningBlackboard& pb)
 
 void SliceBasedOracleRRT::selectTreeNode(const ompl::planning::essentials::MotionPtr& sample,
     ompl::planning::essentials::MotionPtr& selected_node,
-    unsigned int& active_obj_id, bool sample_is_goal,
-    PlanningBlackboard& pb)
+    unsigned int& active_obj_id, PlanningBlackboard& pb)
 {
     static const std::string log_prefix("[mps::planner::pushing::algorithm::SliceBasedOracleRRT]");
     logging::logDebug("Selecting tree node to extend for given sample", log_prefix);

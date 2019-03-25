@@ -16,7 +16,6 @@
 #include <mps/planner/pushing/algorithm/RearrangementPlanner.h>
 #include <mps/planner/pushing/oracle/OracleControlSampler.h>
 #include <mps/planner/util/Random.h>
-#include <mps/planner/util/Time.h>
 #include <mps/sdf/SDF.h>
 
 namespace mps {
@@ -83,12 +82,9 @@ namespace planner {
                 virtual void selectTreeNode(const ompl::planning::essentials::MotionPtr& sample,
                     ompl::planning::essentials::MotionPtr& selected_node,
                     unsigned int& active_obj_id,
-                    bool sample_is_goal,
                     PlanningBlackboard& pb);
                 virtual double treeDistanceFunction(const mps::planner::ompl::planning::essentials::MotionPtr& a,
                     const mps::planner::ompl::planning::essentials::MotionPtr& b) const;
-
-                std::shared_ptr<mps::planner::util::time::Timer> timer_ptr = std::make_shared<mps::planner::util::time::Timer>();
 
                 // Getters and setters for parameters
                 float getGoalBias() const;
@@ -104,7 +100,6 @@ namespace planner {
                     mps::planner::ompl::planning::essentials::MotionPtr parent,
                     PlanningBlackboard& pb);
                 unsigned int sampleActiveObject(const PlanningBlackboard& pb) const;
-                void printState(const std::string& msg, ::ompl::base::State* state) const;
 
                 ::ompl::base::ValidStateSamplerPtr _state_sampler;
                 mps::planner::ompl::state::SimEnvWorldStateDistanceMeasurePtr _distance_measure;
@@ -205,7 +200,6 @@ namespace planner {
                 void selectTreeNode(const ompl::planning::essentials::MotionPtr& sample,
                     ompl::planning::essentials::MotionPtr& selected_node,
                     unsigned int& active_obj_id,
-                    bool sample_is_goal,
                     PlanningBlackboard& pb) override;
                 bool extend(mps::planner::ompl::planning::essentials::MotionPtr start,
                     ::ompl::base::State* dest,
@@ -249,7 +243,6 @@ namespace planner {
                 void selectTreeNode(const ompl::planning::essentials::MotionPtr& sample,
                     ompl::planning::essentials::MotionPtr& selected_node,
                     unsigned int& active_obj_id,
-                    bool sample_is_goal,
                     PlanningBlackboard& pb) override;
                 void addToTree(mps::planner::ompl::planning::essentials::MotionPtr new_motion,
                     mps::planner::ompl::planning::essentials::MotionPtr parent,

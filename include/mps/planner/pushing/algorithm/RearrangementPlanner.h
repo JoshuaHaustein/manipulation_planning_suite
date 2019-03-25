@@ -21,6 +21,7 @@
 #include <mps/planner/ompl/state/goal/ObjectsRelocationGoal.h>
 #include <mps/planner/util/Logging.h>
 #include <mps/planner/util/Serialize.h>
+#include <mps/planner/util/Time.h>
 
 namespace mps {
 namespace planner {
@@ -182,9 +183,12 @@ namespace planner {
                     explicit PlanningBlackboard(PlanningQueryPtr pq);
                 };
                 void setupBlackboard(PlanningBlackboard& pb);
-                DebugDrawerPtr _debug_drawer;
+                void printState(const std::string& msg, ::ompl::base::State* state) const;
+                // member variables
                 ::ompl::control::SpaceInformationPtr _si;
+                std::shared_ptr<mps::planner::util::time::Timer> _timer;
                 mps::planner::ompl::state::SimEnvWorldStateSpacePtr _state_space;
+                DebugDrawerPtr _debug_drawer;
             };
             typedef std::shared_ptr<RearrangementPlanner> RearrangementPlannerPtr;
             typedef std::shared_ptr<const RearrangementPlanner> RearrangementPlannerConstPtr;
