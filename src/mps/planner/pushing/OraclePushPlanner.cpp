@@ -218,6 +218,7 @@ bool OraclePushPlanner::solve(PlanningSolution& solution)
     if (pq->parameters->hasParam("num_control_samples")) {
         pq->parameters->setParam("num_control_samples", std::to_string(_planning_problem.num_control_samples));
     }
+    // TODO set other parameters (tolerances)
     solution.path = nullptr;
     // before planning. let's save the state of the world
     auto world_state = _planning_problem.world->getWorldState();
@@ -713,8 +714,8 @@ void OraclePushPlanner::createAlgorithm()
             util::logging::logInfo("Using HybridActionRRT", log_prefix);
             break;
         }
-        case PlanningProblem::AlgorithmType::MultiExtendRRT: {
-            _algorithm = std::make_shared<algorithm::MultiExtendRRT>(_space_information,
+        case PlanningProblem::AlgorithmType::GreedyMultiExtendRRT: {
+            _algorithm = std::make_shared<algorithm::GreedyMultiExtendRRT>(_space_information,
                 pushing_oracle,
                 robot_oracle,
                 _planning_problem.robot->getName());

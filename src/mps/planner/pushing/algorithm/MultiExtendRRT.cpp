@@ -6,6 +6,7 @@ namespace ob = ::ompl::base;
 namespace oc = ::ompl::control;
 namespace mps_state = mps::planner::ompl::state;
 namespace mps_control = mps::planner::ompl::control;
+namespace mps_oracle = mps::planner::pushing::oracle;
 using namespace mps::planner::pushing::algorithm;
 using namespace mps::planner::ompl::planning::essentials;
 
@@ -70,61 +71,6 @@ bool PushMotion::isTeleportTransit() const
     return _is_teleport_transit;
 }
 
-/************************************ GreedyMonotoneExtension **************************************/
-GreedyMonotoneExtension::GreedyMonotoneExtension(oracle::PushingOraclePtr pushing_oracle, oracle::RobotOraclePtr robot_oracle)
-{
-    // TODO
-}
-
-GreedyMonotoneExtension::~GreedyMonotoneExtension() = default;
-
-void GreedyMonotoneExtension::setup(unsigned int robot_id, float goal_tolerance, float disturbance_tolerance)
-{
-    // TODO
-}
-
-GreedyMonotoneExtension::ExtensionProgress GreedyMonotoneExtension::extend(SlicePtr start_slice,
-    mps::planner::ompl::state::SimEnvWorldState const* target,
-    std::vector<PushMotionPtr>& path)
-{
-    // TODO
-    return GreedyMonotoneExtension::ExtensionProgress::FAIL;
-}
-
-std::tuple<GreedyMonotoneExtension::ExtensionProgress, PushMotionPtr> GreedyMonotoneExtension::recursiveExtend(
-    unsigned int t, PushMotionPtr x_c, MovableSet& targets,
-    MovableSet& remainers, mps::planner::ompl::state::SimEnvWorldState const* target_slice)
-{
-    // TODO
-    return { GreedyMonotoneExtension::ExtensionProgress::FAIL, nullptr };
-}
-
-std::tuple<GreedyMonotoneExtension::PushResult, PushMotionPtr> GreedyMonotoneExtension::tryPush(
-    unsigned int t, PushMotionConstPtr x_c, MovableSet& movables, MovableSet& blockers,
-    mps::planner::ompl::state::SimEnvWorldState const* target_slice, bool new_push)
-{
-    // TODO
-    return { GreedyMonotoneExtension::PushResult::FAIL, nullptr };
-}
-
-bool GreedyMonotoneExtension::isCloseEnough(PushMotionPtr x_c,
-    mps::planner::ompl::state::SimEnvWorldState const* goal,
-    unsigned int t) const
-{
-    // TODO
-    return false;
-}
-
-bool GreedyMonotoneExtension::madeProgress(PushMotionPtr x_b, PushMotionPtr x_a, mps::planner::ompl::state::SimEnvWorldState const* goal, unsigned int t) const
-{
-    // TODO
-    return false;
-}
-void GreedyMonotoneExtension::getPushBlockers(PushMotionPtr x_b, PushMotionPtr x_a, mps::planner::ompl::state::SimEnvWorldState const* goal)
-{
-    // TODO
-}
-
 /**************************************** MultiExtendRRT *******************************************/
 MultiExtendRRT::MultiExtendRRT(oc::SpaceInformationPtr si, oracle::PushingOraclePtr pushing_oracle,
     oracle::RobotOraclePtr robot_oracle, const std::string& robot_name)
@@ -132,18 +78,22 @@ MultiExtendRRT::MultiExtendRRT(oc::SpaceInformationPtr si, oracle::PushingOracle
     , _robot_state_dist_fn(std::make_shared<RobotStateDistanceFn>(_state_space))
     , _slice_distance_fn(std::make_shared<ObjectArrangementDistanceFn>(_state_space))
     , _pushing_oracle(pushing_oracle)
+    , _oracle_sampler(std::make_shared<mps_oracle::OracleControlSampler>(si, pushing_oracle, robot_oracle, robot_name))
     , _min_slice_distance(0.0)
     , _goal_bias(0.1)
     , _motion_cache(si)
     , _slice_cache(_robot_state_dist_fn)
     , _log_prefix("[mps::planner::pushing::algorithm::MultiExtendRRT::")
 {
+    _rng = mps::planner::util::random::getDefaultRandomGenerator();
+    _state_propagator = std::dynamic_pointer_cast<mps_control::SimEnvStatePropagator>(si->getStatePropagator());
+    assert(_state_propagator);
     _slices_nn = std::make_shared<::ompl::NearestNeighborsGNAT<SlicePtr>>();
     _slices_nn->setDistanceFunction(std::bind(&ObjectArrangementDistanceFn::distance,
         std::ref(_slice_distance_fn),
         std::placeholders::_1,
         std::placeholders::_2));
-    _rng = mps::planner::util::random::getDefaultRandomGenerator();
+    _state_sampler = _si->allocValidStateSampler();
 }
 
 MultiExtendRRT::~MultiExtendRRT() = default;
@@ -179,7 +129,7 @@ bool MultiExtendRRT::plan(PlanningQueryPtr pq, PlanningStatistics& stats)
     while (not _timer->timeOutExceeded() and not pq->stopping_condition() && !solved) {
         blackboard.stats.num_iterations++;
         // sample a new target arrangement
-        bool goal_sampled = sample(sample_motion, blackboard);
+        sample(sample_motion, blackboard);
 #ifdef DEBUG_PRINTOUTS
         printState("Sampled arrangement is ", sample_motion->getState());
 #endif
@@ -189,7 +139,7 @@ bool MultiExtendRRT::plan(PlanningQueryPtr pq, PlanningStatistics& stats)
         printState("Selected tree state: ", current_motion->getState()); // TODO remove
 #endif
         // Extend the tree
-        solved = extend(current_slice, sample_motion->getState(), final_motion, blackboard);
+        solved = extend(current_slice, sample_motion, final_motion, blackboard);
 #ifdef DEBUG_PRINTOUTS
         printState("Tree extended to ", final_motion->getState()); // TODO remove
 #endif
@@ -226,6 +176,11 @@ RearrangementPlanner::PlanningQueryPtr MultiExtendRRT::createPlanningQuery(
     std::function<float()> gb_getter = std::bind(&MultiExtendRRT::getGoalBias, this);
     pq->parameters->declareParam<float>("goal_bias", gb_setter, gb_getter);
     pq->parameters->setParam("goal_bias", "0.2");
+    // declare pushing state epsilon
+    std::function<void(float)> ps_setter = std::bind(&MultiExtendRRT::setPushingStateEps, this, _1);
+    std::function<float()> ps_getter = std::bind(&MultiExtendRRT::getPushingStateEps, this);
+    pq->parameters->declareParam<float>("pushing_state_eps", ps_setter, ps_getter);
+    pq->parameters->setParam("pushing_state_eps", "0.00001");
     return pq;
 }
 
@@ -239,21 +194,28 @@ float MultiExtendRRT::getGoalBias() const
     return _goal_bias;
 }
 
-bool MultiExtendRRT::sample(const PushMotionPtr& sample, PlanningBlackboard& pb)
+void MultiExtendRRT::setPushingStateEps(float eps)
+{
+    _pushing_state_eps = eps;
+}
+
+float MultiExtendRRT::getPushingStateEps() const
+{
+    return _pushing_state_eps;
+}
+
+void MultiExtendRRT::sample(const PushMotionPtr& sample, PlanningBlackboard& pb)
 {
     static const std::string log_prefix("mps::planner::pushing::algorithm::MultiExtendRRT::sample]");
-    bool is_goal = false;
     // sample random state with goal biasing
     if (_rng->uniform01() < _goal_bias && pb.pq->goal_region->canSample()) {
         logging::logDebug("Sampling a goal arrangement", log_prefix);
         pb.pq->goal_region->sampleGoal(sample->getState());
-        is_goal = true;
     } else {
         logging::logDebug("Sampling a random arrangement", log_prefix);
         _state_sampler->sample(sample->getState());
     }
     pb.stats.num_samples++;
-    return is_goal;
 }
 
 void MultiExtendRRT::select(const PushMotionPtr& sample, SlicePtr& selected_slice, PlanningBlackboard& pb) const
@@ -265,13 +227,6 @@ void MultiExtendRRT::select(const PushMotionPtr& sample, SlicePtr& selected_slic
 #ifdef DEBUG_PRINTOUTS
     printState("Rerpresentative of nearest slice is ", selected_slice->repr->getState());
 #endif
-}
-
-bool MultiExtendRRT::extend(const SlicePtr& current_slice, ::ompl::base::State* dest,
-    PushMotionPtr& last_motion, PlanningBlackboard& pb)
-{
-    // TODO use GreedyMonotoneExtension
-    return false;
 }
 
 void MultiExtendRRT::setup(PlanningQueryPtr pq, PlanningBlackboard& blackboard)
@@ -334,3 +289,367 @@ float MultiExtendRRT::distanceToSlice(ompl::planning::essentials::MotionPtr moti
     _slice_cache.cacheSlice(query_slice);
     return distance;
 }
+
+/************************************ GreedyMultiExtendRRT **************************************/
+GreedyMultiExtendRRT::GreedyMultiExtendRRT(::ompl::control::SpaceInformationPtr si,
+    oracle::PushingOraclePtr pushing_oracle,
+    oracle::RobotOraclePtr robot_oracle,
+    const std::string& robot_name)
+    : MultiExtendRRT(si, pushing_oracle, robot_oracle, robot_name)
+    , _log_prefix("[mps::planner::pushing::algorithm::GreedyMultiExtendRRT::")
+{
+    _distances_after.resize(_state_space->getNumObjects());
+    _distances_before.resize(_state_space->getNumObjects());
+    _vector_a.resize(_state_space->getNumObjects());
+}
+
+GreedyMultiExtendRRT::~GreedyMultiExtendRRT() = default;
+
+RearrangementPlanner::PlanningQueryPtr GreedyMultiExtendRRT::createPlanningQuery(mps::planner::ompl::state::goal::ObjectsRelocationGoalPtr goal_region,
+    mps::planner::ompl::state::SimEnvWorldState* start_state, const std::string& robot_name, float timeout)
+{
+    auto pq = MultiExtendRRT::createPlanningQuery(goal_region, start_state, robot_name, timeout);
+    // declare disturbance tolerance
+    using std::placeholders::_1;
+    std::function<void(float)> dt_setter = std::bind(&GreedyMultiExtendRRT::setDisturbanceTolerance, this, _1);
+    std::function<float()> dt_getter = std::bind(&GreedyMultiExtendRRT::getDisturbanceTolerance, this);
+    pq->parameters->declareParam<float>("disturbance_tol", dt_setter, dt_getter);
+    pq->parameters->setParam("disturbance_tol", "0.03");
+    // declare target tolerance
+    std::function<void(float)> tt_setter = std::bind(&GreedyMultiExtendRRT::setTargetTolerance, this, _1);
+    std::function<float()> tt_getter = std::bind(&GreedyMultiExtendRRT::getTargetTolerance, this);
+    pq->parameters->declareParam<float>("target_tol", tt_setter, tt_getter);
+    pq->parameters->setParam("target_tol", "0.02");
+    // declare num pushing trials
+    std::function<void(float)> pt_setter = std::bind(&GreedyMultiExtendRRT::setNumPushingTrials, this, _1);
+    std::function<float()> pt_getter = std::bind(&GreedyMultiExtendRRT::getNumPushingTrials, this);
+    pq->parameters->declareParam<float>("pushing_trials", pt_setter, pt_getter);
+    pq->parameters->setParam("pushing_trials", "10");
+    // // declare position tolerance
+    // std::function<void(float)> pt_setter = std::bind(&GreedyMultiExtendRRT::setPositionTolerance, this, _1);
+    // std::function<float()> pt_getter = std::bind(&GreedyMultiExtendRRT::getPositionTolerance, this);
+    // pq->parameters->declareParam<float>("position_tol", pt_setter, pt_getter);
+    // pq->parameters->setParam("position_tol", "0.02");
+    // // declare orientation tolerance
+    // std::function<void(float)> ot_setter = std::bind(&GreedyMultiExtendRRT::setOrientationTolerance, this, _1);
+    // std::function<float()> ot_getter = std::bind(&GreedyMultiExtendRRT::getOrientationTolerance, this);
+    // pq->parameters->declareParam<float>("orientation_tol", ot_setter, ot_getter);
+    // pq->parameters->setParam("orientation_tol", "0.2");
+    return pq;
+}
+
+bool GreedyMultiExtendRRT::extend(const SlicePtr& current, const PushMotionPtr& target_state,
+    PushMotionPtr& last_motion, PlanningBlackboard& pb)
+{
+    static const std::string log_prefix(_log_prefix + "extend] ");
+    auto target_slice = _slice_cache.getNewSlice(target_state);
+    // create a set of all movable indices
+    MovableSet all_movables;
+    for (unsigned int m = 0; _state_space->getNumObjects(); ++m) {
+        if (m == pb.robot_id)
+            continue;
+        all_movables.insert(m);
+    }
+    PushMotionPtr push_motion = std::dynamic_pointer_cast<PushMotion>(current->repr);
+    StateSlicePair current_state_slice = std::make_pair(push_motion, current);
+    // run over all movables and try recursive extend
+    for (unsigned int t : all_movables) {
+        auto targets = MovableSet(all_movables);
+        auto remainers = MovableSet();
+        targets.erase(t);
+        auto [result, last_motion] = recursiveExtend(t, current_state_slice, targets, remainers, target_slice, pb);
+        if (result == ExtensionProgress::REACHED or result == ExtensionProgress::GOAL_REACHED) {
+            return result == ExtensionProgress::GOAL_REACHED;
+        }
+    }
+    return false;
+}
+
+std::tuple<GreedyMultiExtendRRT::ExtensionProgress, PushMotionPtr> GreedyMultiExtendRRT::recursiveExtend(
+    unsigned int t, const StateSlicePair& start, MovableSet& targets,
+    MovableSet& remainers, SliceConstPtr target_slice, PlanningBlackboard& pb)
+{
+    MovableSet movables;
+    movables.insert(remainers.begin(), remainers.end());
+    movables.insert(targets.begin(), targets.end());
+    GreedyMultiExtendRRT::PushResult push_result = GreedyMultiExtendRRT::PushResult::PROGRESS;
+    bool b_new_push = true;
+    StateSlicePair current = start;
+    while (push_result != GreedyMultiExtendRRT::PushResult::REACHED) {
+        MovableSet blockers;
+        auto [push_result, after_push] = tryPush(t, current, movables, blockers, target_slice, b_new_push, pb);
+        b_new_push = false;
+        switch (push_result) {
+        case GreedyMultiExtendRRT::PushResult::FAIL: {
+            return { GreedyMultiExtendRRT::ExtensionProgress::FAIL, nullptr };
+        }
+        case GreedyMultiExtendRRT::PushResult::MOVABLES_BLOCK_PUSH: {
+            // TODO
+        }
+        case GreedyMultiExtendRRT::PushResult::PROGRESS:
+        case GreedyMultiExtendRRT::PushResult::REACHED: {
+            // TODO save states in tree, check whether it is a goal
+            current = std::make_pair(after_push, getSlice(after_push, pb));
+        }
+        }
+    }
+    // reaching this part means, we succeeded at pushing t to its goal, try pushing the remaining targets
+    for (auto t_prime : targets) {
+        MovableSet sub_targets(targets);
+        sub_targets.erase(t_prime);
+        MovableSet sub_remainers(remainers);
+        auto [sub_result, sub_final_motion] = recursiveExtend(t_prime, current, sub_targets, sub_remainers, target_slice, pb);
+        // TODO deal with GOAL_REACHED
+        if (sub_result == GreedyMultiExtendRRT::ExtensionProgress::REACHED) {
+            remainers = sub_remainers;
+            return { GreedyMultiExtendRRT::ExtensionProgress::REACHED, sub_final_motion };
+        }
+    }
+    return { GreedyMultiExtendRRT::ExtensionProgress::FAIL, nullptr };
+}
+
+std::tuple<GreedyMultiExtendRRT::PushResult, PushMotionPtr> GreedyMultiExtendRRT::tryPush(
+    unsigned int t, const StateSlicePair& current, MovableSet& movables, MovableSet& blockers,
+    SliceConstPtr target_slice, bool new_push, PlanningBlackboard& pb)
+{
+    if (isCloseEnough(current.first, target_slice, t))
+        return { PushResult::REACHED, current.first };
+    blockers.clear();
+    unsigned int min_num_blockers = std::numeric_limits<unsigned int>::max();
+    // allocate motions
+    PushMotionPtr approach_motion = _motion_cache.getNewMotion();
+    PushMotionPtr pushing_motion = _motion_cache.getNewMotion();
+    PushMotionPtr tmp_approach_motion = _motion_cache.getNewMotion();
+    PushMotionPtr tmp_pushing_motion = _motion_cache.getNewMotion();
+    // init approach motion
+    _state_space->copyState(approach_motion->getState(), current.first->getState());
+    pushing_motion->setParent(approach_motion);
+    // init tmp approach motion
+    _state_space->copyState(tmp_approach_motion->getState(), current.first->getState());
+    // try pushing
+    for (unsigned int trial = 0; trial < _num_pushing_trials; ++trial) {
+        if (trial == 0 or new_push) {
+            // sample a pushing state
+            _oracle_sampler->sampleFeasibleState(tmp_approach_motion->getState(), target_slice->repr->getState(), t, _pushing_state_eps);
+            // check if its valid or not
+            if (!_si->isValid(tmp_approach_motion->getState()))
+                continue;
+        }
+        // query the policy
+        _oracle_sampler->queryPolicy(tmp_pushing_motion->getControl(), tmp_approach_motion->getState(), target_slice->repr->getState(), t);
+        // propagate
+        bool extension_success = _state_propagator->propagate(tmp_approach_motion->getState(),
+            tmp_pushing_motion->getControl(),
+            tmp_pushing_motion->getState());
+        pb.stats.num_state_propagations++;
+        if (!extension_success) {
+            continue;
+        }
+        // evaluate the result
+        bool made_progress = madeProgress(tmp_approach_motion, tmp_pushing_motion, target_slice, t);
+        MovableSet tmp_blockers;
+        bool valid_blockers = getPushBlockers(tmp_approach_motion, tmp_pushing_motion, target_slice, movables, tmp_blockers, pb);
+        if (valid_blockers and made_progress) {
+            blockers = tmp_blockers;
+            min_num_blockers = blockers.size();
+            _si->copyState(approach_motion->getState(), tmp_approach_motion->getState());
+            _si->copyState(pushing_motion->getState(), tmp_pushing_motion->getState());
+            _si->copyControl(approach_motion->getControl(), tmp_approach_motion->getControl());
+            _si->copyControl(pushing_motion->getControl(), tmp_pushing_motion->getControl());
+            if (min_num_blockers == 0) // we have clear push
+                break;
+        }
+    }
+    _motion_cache.cacheMotion(tmp_approach_motion);
+    _motion_cache.cacheMotion(tmp_pushing_motion);
+    if (min_num_blockers == std::numeric_limits<unsigned int>::max()) {
+        _motion_cache.cacheMotion(approach_motion);
+        _motion_cache.cacheMotion(pushing_motion);
+        return { GreedyMultiExtendRRT::PushResult::FAIL, nullptr };
+    } else if (min_num_blockers == 0) {
+        // set up approach motion
+        approach_motion->setTargetId(pb.robot_id);
+        approach_motion->setTeleportTransit(true); // TODO use roadmap here?
+        approach_motion->setParent(current.first); // TODO set parent differently?
+        pushing_motion->setTargetId(t);
+        pushing_motion->setParent(approach_motion);
+        if (isCloseEnough(pushing_motion, target_slice, t)) {
+            return { GreedyMultiExtendRRT::PushResult::REACHED, pushing_motion };
+        } else {
+            return { GreedyMultiExtendRRT::PushResult::PROGRESS, pushing_motion };
+        }
+    } else {
+        return { GreedyMultiExtendRRT::PushResult::MOVABLES_BLOCK_PUSH, nullptr };
+    }
+}
+
+// bool OracleRearrangementRRT::extend(mps::planner::ompl::planning::essentials::MotionPtr start,
+//     ::ompl::base::State* dest, unsigned int active_obj_id,
+//     mps::planner::ompl::planning::essentials::MotionPtr& last_motion,
+//     PlanningBlackboard& pb)
+// {
+//     static const std::string log_prefix("[mps::planner::pushing::algorithm::OracleRearrangementRRT::extend]");
+//     logging::logDebug("Attempting to extend search tree", log_prefix);
+//     std::vector<const ::ompl::control::Control*> controls;
+//     bool b_goal = false;
+//     bool extension_success = false;
+//     float random_die = _rng->uniform01();
+//     if (random_die < _action_randomness) {
+//         logging::logDebug("Sampling random action sequence", log_prefix);
+//         // sample random action
+//         _oracle_sampler->randomControl(controls);
+//         extendStep(controls, start, last_motion, pb, extension_success, b_goal);
+//     } else { // these are our primitives
+//         // first only move the robot TODO: This often pushes the object away from us
+//         _oracle_sampler->steerRobot(controls, start->getState(), dest);
+//         if (controls.empty()) {
+//             logging::logErr("OracleControlSampler provided no controls at all", log_prefix);
+//             return false;
+//         }
+//         extendStep(controls, start, last_motion, pb, extension_success, b_goal);
+//         // next, if the active object is not the robot, try a push
+//         if (extension_success and active_obj_id != pb.robot_id and not b_goal) {
+//             logging::logDebug("Steering robot to feasible state successful, attempting push", log_prefix);
+//             controls.clear();
+//             _oracle_sampler->steerPush(controls, last_motion->getState(), dest, active_obj_id);
+//             extendStep(controls, last_motion, last_motion, pb, extension_success, b_goal);
+//         }
+//     }
+//     return b_goal;
+// }
+
+// void OracleRearrangementRRT::extendStep(const std::vector<const ::ompl::control::Control*>& controls,
+//     const mps::planner::ompl::planning::essentials::MotionPtr& start_motion,
+//     mps::planner::ompl::planning::essentials::MotionPtr& result_motion,
+//     PlanningBlackboard& pb,
+//     bool& extension_success,
+//     bool& goal_reached)
+// {
+//     static const std::string log_prefix("[mps::planner::pushing::algorithm::OracleRearrangementRRT::extendStep]");
+//     goal_reached = false;
+//     extension_success = false;
+//     auto prev_motion = start_motion;
+//     for (auto const* control : controls) {
+//         MotionPtr new_motion = _motion_cache.getNewMotion();
+//         _si->copyControl(new_motion->getControl(), control);
+//         extension_success = _state_propagator->propagate(prev_motion->getState(),
+//             new_motion->getControl(),
+//             new_motion->getState());
+//         pb.stats.num_state_propagations++;
+//         if (not extension_success) { // we failed, no tree extension
+//             logging::logDebug("A control provided by the oracle failed. ", log_prefix);
+//             _motion_cache.cacheMotion(new_motion);
+//             return;
+//         }
+// #ifdef DEBUG_PRINTOUTS
+//         printState("Oracle control took us to state ", new_motion->getState());
+// #endif
+//         // we extended the tree a bit, add this new state to the tree
+//         addToTree(new_motion, prev_motion, pb);
+//         result_motion = new_motion;
+//         if (pb.pq->goal_region->isSatisfied(new_motion->getState())) {
+//             // we reached a goal!
+//             goal_reached = true;
+//             return;
+//         }
+//         // otherwise we just continue extending as long as we have controls
+//         prev_motion = new_motion;
+//     }
+// }
+
+bool GreedyMultiExtendRRT::isCloseEnough(const PushMotionPtr& current,
+    SliceConstPtr target_slice, unsigned int t) const
+{
+    auto object_state_space = _state_space->getSubspace(t);
+    auto current_state = dynamic_cast<mps_state::SimEnvWorldState*>(current->getState());
+    auto target_state = dynamic_cast<mps_state::SimEnvWorldState*>(target_slice->repr->getState());
+    return object_state_space->distance(current_state, target_state) < _target_tolerance;
+}
+
+bool GreedyMultiExtendRRT::madeProgress(PushMotionPtr x_b, PushMotionPtr x_a, SliceConstPtr target_slice, unsigned int t) const
+{
+    auto object_state_space = _state_space->getSubspace(t);
+    auto before_state = dynamic_cast<mps_state::SimEnvWorldState*>(x_b->getState());
+    auto after_state = dynamic_cast<mps_state::SimEnvWorldState*>(x_a->getState());
+    auto target_state = dynamic_cast<mps_state::SimEnvWorldState*>(target_slice->repr->getState());
+    float dist_before = object_state_space->distance(before_state->getObjectState(t), target_state->getObjectState(t));
+    float dist_after = object_state_space->distance(after_state->getObjectState(t), target_state->getObjectState(t));
+    return dist_after < dist_before;
+}
+
+bool GreedyMultiExtendRRT::getPushBlockers(const PushMotionConstPtr& x_b, const PushMotionConstPtr& x_a, const SliceConstPtr& target_slice,
+    const MovableSet& movables, MovableSet& blockers, PlanningBlackboard& pb) const
+{
+    bool valid_blockers = true;
+    blockers.clear();
+    computeObjectDistances(x_b, target_slice, _distances_before);
+    computeObjectDistances(x_a, target_slice, _distances_after);
+    _vector_a = _distances_before - _distances_after;
+    for (size_t i = 0; i < _vector_a.size(); ++i) {
+        if (_vector_a[i] > _disturbance_tolerance and i != pb.robot_id) {
+            blockers.insert(i);
+            valid_blockers = valid_blockers & movables.find(i) != movables.end();
+        }
+    }
+    return valid_blockers;
+}
+
+void GreedyMultiExtendRRT::computeObjectDistances(const PushMotionConstPtr& x, const SliceConstPtr& target, Eigen::VectorXf& dist_array) const
+{
+    auto target_state = dynamic_cast<const mps_state::SimEnvWorldState*>(target->repr->getConstState());
+    for (size_t i = 0; i < _state_space->getNumObjects(); ++i) {
+        auto object_state_space = _state_space->getSubspace(i);
+        auto x_state = dynamic_cast<const mps_state::SimEnvWorldState*>(x->getConstState());
+        dist_array[i] = object_state_space->distance(x_state, target_state);
+    }
+}
+
+void GreedyMultiExtendRRT::setDisturbanceTolerance(float tol)
+{
+    _disturbance_tolerance = tol;
+}
+
+float GreedyMultiExtendRRT::getDisturbanceTolerance() const
+{
+    return _disturbance_tolerance;
+}
+
+void GreedyMultiExtendRRT::setTargetTolerance(float tol)
+{
+    _target_tolerance = tol;
+}
+
+float GreedyMultiExtendRRT::getTargetTolerance() const
+{
+    return _target_tolerance;
+}
+
+void GreedyMultiExtendRRT::setNumPushingTrials(unsigned int trials)
+{
+    _num_pushing_trials = trials;
+}
+
+unsigned int GreedyMultiExtendRRT::getNumPushingTrials() const
+{
+    return _num_pushing_trials;
+}
+
+// void GreedyMultiExtendRRT::setPositionTolerance(float tol)
+// {
+//     _position_tolerance = tol;
+// }
+
+// float GreedyMultiExtendRRT::getPositionTolerance() const
+// {
+//     return _position_tolerance;
+// }
+
+// void GreedyMultiExtendRRT::setOrientationTolerance(float tol)
+// {
+//     _orientation_tolerance = tol;
+// }
+
+// float GreedyMultiExtendRRT::getOrientationTolerance() const
+// {
+//     return _orientation_tolerance;
+// }

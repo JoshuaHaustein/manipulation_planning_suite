@@ -37,8 +37,8 @@ std::string mps::planner::util::yaml::algorithmTypeToString(mps::planner::pushin
         return "SliceOracleRRT";
     case mps::planner::pushing::PlanningProblem::AlgorithmType::HybridActionRRT:
         return "HybridActionRRT";
-    case mps::planner::pushing::PlanningProblem::AlgorithmType::MultiExtendRRT:
-        return "MultiExtendRRT";
+    case mps::planner::pushing::PlanningProblem::AlgorithmType::GreedyMultiExtendRRT:
+        return "GreedyMultiExtendRRT";
     }
     return "UNDEFINED";
 }
@@ -81,8 +81,8 @@ mps::planner::pushing::PlanningProblem::AlgorithmType mps::planner::util::yaml::
         return mps::planner::pushing::PlanningProblem::AlgorithmType::SliceOracleRRT;
     } else if (str.compare("HybridActionRRT") == 0) {
         return mps::planner::pushing::PlanningProblem::AlgorithmType::HybridActionRRT;
-    } else if (str.compare("MultiExtendRRT") == 0) {
-        return mps::planner::pushing::PlanningProblem::AlgorithmType::MultiExtendRRT;
+    } else if (str.compare("GreedyMultiExtendRRT") == 0) {
+        return mps::planner::pushing::PlanningProblem::AlgorithmType::GreedyMultiExtendRRT;
     } else {
         throw std::runtime_error("Unknown algorithm type encountered: " + str);
     }

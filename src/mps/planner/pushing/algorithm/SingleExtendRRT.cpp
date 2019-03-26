@@ -91,7 +91,7 @@ bool SingleExtendRRT::plan(PlanningQueryPtr pq, PlanningStatistics& stats)
         blackboard.stats.num_iterations++;
         // sample a new state
         unsigned int active_obj_id = 0;
-        bool goal_sampled = sample(sample_motion, active_obj_id, blackboard);
+        sample(sample_motion, active_obj_id, blackboard);
 #ifdef DEBUG_PRINTOUTS
         printState("Sampled state is ", sample_motion->getState()); // TODO remove
 #endif

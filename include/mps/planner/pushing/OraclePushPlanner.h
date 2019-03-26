@@ -44,7 +44,7 @@ namespace planner {
                 Naive = 0,
                 OracleRRT = 1,
                 SliceOracleRRT = 2,
-                MultiExtendRRT = 3,
+                GreedyMultiExtendRRT = 3,
                 HybridActionRRT = 4
             };
 

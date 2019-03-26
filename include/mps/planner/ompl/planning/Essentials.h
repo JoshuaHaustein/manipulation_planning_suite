@@ -31,7 +31,7 @@ namespace planner {
                     Motion() = delete;
                     Motion(::ompl::control::SpaceInformationPtr si);
                     Motion(const Motion& other);
-                    ~Motion();
+                    virtual ~Motion();
                     Motion& operator=(const Motion& other);
                     ::ompl::base::State* getState();
                     ::ompl::base::State const* getConstState() const;
