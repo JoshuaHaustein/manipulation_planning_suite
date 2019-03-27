@@ -261,12 +261,14 @@ namespace planner {
 
                 void cacheMotion(std::shared_ptr<MotionType> ptr)
                 {
+                    ptr->reset();
                     _motions_cache.push(ptr);
                 }
 
                 void cacheMotions(std::vector<std::shared_ptr<MotionType>>& motions)
                 {
                     for (auto& motion : motions) {
+                        motion->reset();
                         _motions_cache.push(motion);
                     }
                     motions.clear();

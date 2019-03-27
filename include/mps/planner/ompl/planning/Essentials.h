@@ -40,6 +40,8 @@ namespace planner {
                     MotionPtr getParent();
                     MotionConstPtr getConstParent() const;
                     void setParent(MotionPtr parent);
+                    // Reset parent and any other data set after construction
+                    virtual void reset();
 
                 protected:
                     std::weak_ptr<::ompl::control::SpaceInformation> _weak_si;

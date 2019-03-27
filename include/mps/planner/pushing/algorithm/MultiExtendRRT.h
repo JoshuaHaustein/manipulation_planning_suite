@@ -36,6 +36,7 @@ namespace planner {
                 unsigned int getTargetId() const;
                 void setTeleportTransit(bool btransit);
                 bool isTeleportTransit() const;
+                void reset() override;
 
             private:
                 unsigned int _target_id;

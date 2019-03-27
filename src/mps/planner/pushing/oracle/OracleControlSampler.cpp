@@ -212,6 +212,7 @@ bool OracleControlSampler::steerPush(std::vector<::ompl::control::Control const*
 void OracleControlSampler::queryPolicy(::ompl::control::Control* control,
     const ::ompl::base::State* source, const ::ompl::base::State* dest, unsigned int obj_id)
 {
+    static const std::string log_prefix("[mps::planner::pushing::oracle::OracleControlSampler::queryPolicy]");
     const auto* world_source = dynamic_cast<const mps_state::SimEnvWorldState*>(source);
     const auto* world_dest = dynamic_cast<const mps_state::SimEnvWorldState*>(dest);
     const auto* current_robot_state = world_source->getObjectState(_robot_id);
@@ -228,6 +229,7 @@ void OracleControlSampler::queryPolicy(::ompl::control::Control* control,
         obj_id, control_param);
     auto* rv_control = dynamic_cast<mps_control::RealValueParameterizedControl*>(control);
     rv_control->setParameters(control_param);
+    mps_logging::logDebug(boost::format("The oracle suggested to take action %1%") % control_param.transpose(), log_prefix);
 }
 
 // bool OracleControlSampler::steerPushSimple(std::vector<::ompl::control::Control const*>& controls,
