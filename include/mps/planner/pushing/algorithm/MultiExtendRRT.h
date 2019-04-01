@@ -81,7 +81,7 @@ namespace planner {
                 // algorithm stubs for extension function
                 // helpers
                 virtual void setup(PlanningQueryPtr pq, PlanningBlackboard& pb);
-                void addToTree(PushMotionPtr new_motion, PushMotionPtr parent, PlanningBlackboard& pb);
+                SlicePtr addToTree(PushMotionPtr new_motion, PushMotionPtr parent, PlanningBlackboard& pb);
                 SlicePtr getSlice(ompl::planning::essentials::MotionPtr motion, PlanningBlackboard& pb) const;
                 float distanceToSlice(ompl::planning::essentials::MotionPtr motion, SlicePtr slice) const;
                 // member variables

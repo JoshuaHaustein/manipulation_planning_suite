@@ -250,7 +250,6 @@ void MultiExtendRRT::setup(PlanningQueryPtr pq, PlanningBlackboard& blackboard)
     }
     // TODO should update this using state space and distance weights
     _min_slice_distance = (_state_space->getNumObjects() - 1) * 0.001;
-    _slices_nn->clear();
     _slice_distance_fn->distance_measure.setWeights(pq->weights);
     _slice_distance_fn->setRobotId(blackboard.robot_id);
     _robot_state_dist_fn->setRobotId(blackboard.robot_id);
@@ -259,7 +258,7 @@ void MultiExtendRRT::setup(PlanningQueryPtr pq, PlanningBlackboard& blackboard)
     logging::logInfo("MultiExtendRRT setup for the following query:\n " + blackboard.pq->toString(), log_prefix);
 }
 
-void MultiExtendRRT::addToTree(PushMotionPtr new_motion, PushMotionPtr root, PlanningBlackboard& pb)
+SlicePtr MultiExtendRRT::addToTree(PushMotionPtr new_motion, PushMotionPtr root, PlanningBlackboard& pb)
 {
     std::vector<MotionPtr> path;
     MotionPtr motion = new_motion;
@@ -268,12 +267,13 @@ void MultiExtendRRT::addToTree(PushMotionPtr new_motion, PushMotionPtr root, Pla
         motion = motion->getParent();
     }
     path.back()->setParent(root);
+    SlicePtr closest_slice;
     for (auto iter = path.rbegin(); iter != path.rend(); iter++) {
         // _tree->add(new_motion);
         if (_debug_drawer) {
             _debug_drawer->addNewMotion(*iter);
         }
-        SlicePtr closest_slice = getSlice(*iter, pb);
+        closest_slice = getSlice(*iter, pb);
         float slice_distance = distanceToSlice(*iter, closest_slice);
         if (slice_distance > _min_slice_distance) { // we discovered a new slice!
             auto new_slice = _slice_cache.getNewSlice(*iter);
@@ -285,6 +285,7 @@ void MultiExtendRRT::addToTree(PushMotionPtr new_motion, PushMotionPtr root, Pla
             closest_slice->addSample(*iter);
         }
     }
+    return closest_slice;
 }
 
 SlicePtr MultiExtendRRT::getSlice(MotionPtr motion, PlanningBlackboard& pb) const
@@ -403,14 +404,14 @@ std::tuple<GreedyMultiExtendRRT::ExtensionProgress, PushMotionPtr> GreedyMultiEx
     std::tie(push_result, after_push) = tryPush(t, current, movables, blockers, target_slice, true, pb);
     while (push_result == GreedyMultiExtendRRT::PushResult::PROGRESS) {
         // add new state to search tree
-        addToTree(after_push, current.first, pb);
+        auto new_slice = addToTree(after_push, current.first, pb);
         // check whether it is a goal
         if (pb.pq->goal_region->isSatisfied(after_push->getState())) {
             // if yes, abort and return that we reached it
             return { GreedyMultiExtendRRT::ExtensionProgress::GOAL_REACHED, after_push };
         }
         // continue pushing
-        current = std::make_pair(after_push, getSlice(after_push, pb));
+        current = std::make_pair(after_push, new_slice);
         push_path.push_back(current);
         std::tie(push_result, after_push) = tryPush(t, current, movables, blockers, target_slice, false, pb);
     }
@@ -431,7 +432,7 @@ std::tuple<GreedyMultiExtendRRT::ExtensionProgress, PushMotionPtr> GreedyMultiEx
     } else if (push_result == GreedyMultiExtendRRT::PushResult::MOVABLES_BLOCK_PUSH) {
         // movables are blocking the push, try clearing
         // create the set of objects that the subroutine may move if need be
-        MovableSet sub_remainers(movables);
+        MovableSet sub_remainers;
         std::set_difference(movables.cbegin(), movables.cend(), blockers.cbegin(), blockers.cend(),
             std::inserter(sub_remainers, sub_remainers.begin()));
         // try to clear the blockers, attempt this by backtracking starting from the most recent state
@@ -466,13 +467,6 @@ std::tuple<GreedyMultiExtendRRT::ExtensionProgress, PushMotionPtr> GreedyMultiEx
             }
         } // if all attempts to clear the movable block failed, we fail
     }
-    // free motions
-    for (auto pair : push_path) {
-        _motion_cache.cacheMotion(pair.first);
-        _slice_cache.cacheSlice(pair.second);
-    }
-    if (after_push)
-        _motion_cache.cacheMotion(after_push);
     return { GreedyMultiExtendRRT::ExtensionProgress::FAIL, nullptr };
 }
 
@@ -502,6 +496,9 @@ std::tuple<GreedyMultiExtendRRT::PushResult, PushMotionPtr> GreedyMultiExtendRRT
             if (!_si->isValid(tmp_approach_motion->getState()))
                 continue;
         }
+#ifdef DEBUG_PRINTOUTS
+        printState("Pushing from state ", tmp_approach_motion->getState()); // TODO remove
+#endif
         // query the policy
         _oracle_sampler->queryPolicy(tmp_pushing_motion->getControl(), tmp_approach_motion->getState(), target_slice->repr->getState(), t);
         // propagate
@@ -512,6 +509,9 @@ std::tuple<GreedyMultiExtendRRT::PushResult, PushMotionPtr> GreedyMultiExtendRRT
         if (!extension_success) {
             continue;
         }
+#ifdef DEBUG_PRINTOUTS
+        printState("Pushed to ", tmp_pushing_motion->getState()); // TODO remove
+#endif
         // evaluate the result
         bool made_progress = madeProgress(tmp_approach_motion, tmp_pushing_motion, target_slice, t);
         MovableSet tmp_blockers;
