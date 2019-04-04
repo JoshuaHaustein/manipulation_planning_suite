@@ -1492,8 +1492,10 @@ bool SimEnvValidityChecker::isWorldStateValid(bool check_bounds) const
         for (auto& contact : contacts) {
             bool contact_ok = checkContact(contact);
             if (!contact_ok) {
+#ifdef DEBUG_PRINTOUTS
                 mps_logging::logDebug("Rejecting state due to violation of contact constraints.",
                     "[mps::planner::ompl::state::SimEnvValidityChecker::isValid]");
+#endif
                 return false;
             }
         }
@@ -1519,8 +1521,10 @@ bool SimEnvValidityChecker::isValidIntermediate() const
     // first check whether the current state is within bounds
     bool bounds_valid = _world_space->satisfiesBounds(_world_state);
     if (!bounds_valid) {
+#ifdef DEBUG_PRINTOUTS
         mps_logging::logDebug("State bounds violated. Rejecting state.",
             "[mps::planner::ompl::state::SimEnvValidityChecker::isValidIntermediate]");
+#endif
         return false;
     }
     // next check, whether the state is valid in terms of collisions
@@ -1534,8 +1538,10 @@ bool SimEnvValidityChecker::isValidIntermediate() const
         for (const auto& contact : contacts) {
             bool contact_ok = checkContact(contact);
             if (!contact_ok) {
+#ifdef DEBUG_PRINTOUTS
                 mps_logging::logDebug("Rejecting state due to violation of contact constraints.",
                     "[mps::planner::ompl::state::SimEnvValidityChecker::isValidIntermediate]");
+#endif
                 return false;
             }
         }
@@ -1550,8 +1556,10 @@ bool SimEnvValidityChecker::isValidIntermediate(std::vector<sim_env::Contact>& c
     // first check whether the current state is within bounds
     bool bounds_valid = _world_space->satisfiesBounds(_world_state);
     if (!bounds_valid) {
+#ifdef DEBUG_PRINTOUTS
         mps_logging::logDebug("State bounds violated. Rejecting state.",
             "[mps::planner::ompl::state::SimEnvValidityChecker::isValidIntermediate]");
+#endif
         return false;
     }
     for (auto contact : contacts) {

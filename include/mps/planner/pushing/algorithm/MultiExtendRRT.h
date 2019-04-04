@@ -10,6 +10,7 @@
 #include <mps/planner/pushing/algorithm/RearrangementPlanner.h>
 #include <mps/planner/pushing/oracle/OracleControlSampler.h>
 // stl includes
+#include <list>
 #include <set>
 #include <tuple>
 #include <utility>
@@ -71,6 +72,16 @@ namespace planner {
                 void setPushingStateEps(float eps);
                 float getPushingStateEps() const;
 
+                /**
+                 *  Returns whether the given path is a valid solution for the given planning query,
+                 *  assuming the world is initially in state start.
+                 */
+                bool isGoalPath(mps::planner::ompl::planning::essentials::PathConstPtr path,
+                    const mps::planner::ompl::state::SimEnvWorldState* start,
+                    RearrangementPlanner::PlanningQueryPtr pq,
+                    mps::planner::ompl::planning::essentials::PathPtr updated_path)
+                    override;
+
             protected:
                 // high-level algorithm stubs
                 virtual void sample(const PushMotionPtr& sample, PlanningBlackboard& pb);
@@ -102,6 +113,9 @@ namespace planner {
             private:
                 std::string _log_prefix;
             };
+
+            typedef std::shared_ptr<MultiExtendRRT> MultiExtendRRTPtr;
+            typedef std::shared_ptr<const MultiExtendRRT> MultiExtendRRTConstPtr;
 
             /** 
              *  Implementation of MultiExtendRRT that uses a greedy extend function.
@@ -168,6 +182,36 @@ namespace planner {
                 mutable Eigen::VectorXf _vector_a;
                 mutable Eigen::VectorXf _distances_before;
                 mutable Eigen::VectorXf _distances_after;
+            };
+
+            class MERRTExecutionMonitor : public ExecutionMonitor {
+            public:
+                MERRTExecutionMonitor(MultiExtendRRTPtr planner, ExecutionCallback excall);
+                MERRTExecutionMonitor(MultiExtendRRTPtr planner);
+                ~MERRTExecutionMonitor() override;
+                bool execute(RearrangementPlanner::PlanningQueryPtr pq) override;
+
+            protected:
+                struct TransitSegment {
+                    std::vector<PushMotionConstPtr> intended;
+                    std::vector<PushMotionPtr> predicted;
+                };
+
+                struct TransferSegment {
+                    std::vector<PushMotionConstPtr> intended;
+                    std::vector<PushMotionPtr> predicted;
+                };
+
+                void segmentPath(mps::planner::ompl::planning::essentials::PathPtr intended_path,
+                    mps::planner::ompl::planning::essentials::PathPtr predicted_path,
+                    std::list<std::pair<TransitSegment, TransferSegment>>& segments, unsigned int robot_id) const;
+                virtual bool updatePath(mps::planner::ompl::planning::essentials::PathPtr path,
+                    mps::planner::ompl::state::SimEnvWorldState* state, RearrangementPlanner::PlanningQueryPtr pq);
+                virtual bool tryPush(unsigned int t, const mps::planner::ompl::state::SimEnvWorldState* ts,
+                    mps::planner::ompl::state::SimEnvWorldState* cs);
+                ::ompl::control::SpaceInformationPtr _si;
+                mps::planner::ompl::control::SimEnvStatePropagatorPtr _propagator;
+                mps::planner::ompl::state::SimEnvWorldStateSpacePtr _state_space;
             };
         }
     }

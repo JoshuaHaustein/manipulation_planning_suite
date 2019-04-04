@@ -82,6 +82,12 @@ namespace planner {
                          * @param motion - final motion of a path.
                          */
                     void initBacktrackMotion(MotionPtr motion);
+
+                    /**
+                     *  Returns a shallow copy of this path ranging from waypoint s to the end.
+                     */
+                    std::shared_ptr<Path> getSubPath(unsigned int s) const;
+
                     /**
                          * Clear this path.
                          */

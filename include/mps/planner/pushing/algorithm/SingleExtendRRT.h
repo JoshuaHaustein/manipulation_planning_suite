@@ -55,6 +55,12 @@ namespace planner {
                 bool plan(PlanningQueryPtr pq, PlanningStatistics& stats) override;
                 PlanningQueryPtr createPlanningQuery(mps::planner::ompl::state::goal::ObjectsRelocationGoalPtr goal_region,
                     mps::planner::ompl::state::SimEnvWorldState* start_state, const std::string& robot_name, float timeout) override;
+                bool isGoalPath(mps::planner::ompl::planning::essentials::PathConstPtr path,
+                    const mps::planner::ompl::state::SimEnvWorldState* start,
+                    RearrangementPlanner::PlanningQueryPtr pq,
+                    mps::planner::ompl::planning::essentials::PathPtr updated_path)
+                    override;
+
                 /**
                      *
                      * @param start
@@ -102,6 +108,7 @@ namespace planner {
                 unsigned int sampleActiveObject(const PlanningBlackboard& pb) const;
 
                 ::ompl::base::ValidStateSamplerPtr _state_sampler;
+                mps::planner::ompl::control::SimEnvStatePropagatorPtr _state_propagator;
                 mps::planner::ompl::state::SimEnvWorldStateDistanceMeasurePtr _distance_measure;
                 ::ompl::RNGPtr _rng;
                 mutable MotionCache<> _motion_cache;
@@ -180,7 +187,6 @@ namespace planner {
                     std::vector<mps::planner::ompl::planning::essentials::MotionPtr>& state_action_seq,
                     PlanningBlackboard& pb);
                 void freeMotionList(std::vector<mps::planner::ompl::planning::essentials::MotionPtr>& motions);
-                mps::planner::ompl::control::SimEnvStatePropagatorPtr _state_propagator;
                 mps::planner::pushing::oracle::OracleControlSamplerPtr _oracle_sampler;
             };
             typedef std::shared_ptr<HybridActionRRT> HybridActionRRTPtr;
@@ -228,7 +234,6 @@ namespace planner {
 
                 float _action_randomness; // parameter in [0, 1] that determines randomness of action sampling (prand)
                 float _feasible_state_noise; // probability (in [0,1]) to sample a feasible state uniformly rather than from the oracle
-                mps::planner::ompl::control::SimEnvStatePropagatorPtr _state_propagator;
                 mps::planner::pushing::oracle::OracleControlSamplerPtr _oracle_sampler;
             };
 

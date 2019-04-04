@@ -90,6 +90,11 @@ void RearrangementPlanner::setDebugDrawer(DebugDrawerPtr debug_drawer)
     _debug_drawer = debug_drawer;
 }
 
+::ompl::control::SpaceInformationPtr RearrangementPlanner::getSpaceInformation()
+{
+    return _si;
+}
+
 void RearrangementPlanner::setupBlackboard(PlanningBlackboard& pb)
 {
     pb.robot_id = 0;
@@ -116,6 +121,61 @@ void RearrangementPlanner::printState(const std::string& msg, ::ompl::base::Stat
     if (_debug_drawer)
         _debug_drawer->showState(world_state, _state_space);
 #endif
+}
+
+/**********************************************************************************************
+ ************************************  ExecutionMonitor  **************************************
+ **********************************************************************************************/
+ExecutionMonitor::ExecutionMonitor(RearrangementPlannerPtr planner, ExecutionCallback excall)
+    : _planner(planner)
+    , _excall(excall)
+{
+}
+
+ExecutionMonitor::ExecutionMonitor(RearrangementPlannerPtr planner)
+    : _planner(planner)
+{
+}
+
+ExecutionMonitor::~ExecutionMonitor() = default;
+
+bool ExecutionMonitor::planAndExecute(RearrangementPlanner::PlanningQueryPtr pq)
+{
+    if (_planner->plan(pq)) {
+        return execute(pq);
+    }
+    return false;
+}
+
+bool ExecutionMonitor::execute(RearrangementPlanner::PlanningQueryPtr pq)
+{
+    static const std::string log_prefix("[mps::planner::pushing::algorithm::ExecutionMonitor::execute]");
+    if (pq->path == nullptr) {
+        logging::logWarn("There is no solution to execute.", log_prefix);
+        return false;
+    }
+    auto si = _planner->getSpaceInformation();
+    auto s = dynamic_cast<mps_state::SimEnvWorldState*>(si->allocState());
+    bool no_error = true;
+    for (unsigned int i = 0; i < pq->path->getNumMotions(); ++i) {
+        auto m = pq->path->getConstMotion(i);
+        no_error = _excall(m, s);
+        if (!no_error)
+            break;
+    }
+    bool goal_reached = pq->goal_region->isSatisfied(s);
+    si->freeState(s);
+    return no_error and goal_reached;
+}
+
+void ExecutionMonitor::setExecutionCallback(const ExecutionCallback& excall)
+{
+    _excall = excall;
+}
+
+RearrangementPlannerPtr ExecutionMonitor::getPlanner() const
+{
+    return _planner;
 }
 
 /**********************************************************************************************

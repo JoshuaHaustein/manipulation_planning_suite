@@ -5,6 +5,7 @@
 #ifndef MPS_ALGORITHM_INTERFACES_H
 #define MPS_ALGORITHM_INTERFACES_H
 // ompl includes
+#include <ompl/base/State.h>
 #include <ompl/datastructures/NearestNeighbors.h>
 // stl includes
 #include <iomanip>
@@ -175,6 +176,19 @@ namespace planner {
 
                 void setDebugDrawer(DebugDrawerPtr debug_drawer);
 
+                ::ompl::control::SpaceInformationPtr getSpaceInformation();
+
+                /**
+                 *  Returns whether the given path is a valid solution for the given planning query,
+                 *  assuming the world is initially in state start.
+                 */
+                virtual bool isGoalPath(
+                    mps::planner::ompl::planning::essentials::PathConstPtr path,
+                    const mps::planner::ompl::state::SimEnvWorldState* start,
+                    RearrangementPlanner::PlanningQueryPtr pq,
+                    mps::planner::ompl::planning::essentials::PathPtr updated_path = nullptr)
+                    = 0;
+
             protected:
                 struct PlanningBlackboard {
                     PlanningQueryPtr pq;
@@ -194,6 +208,49 @@ namespace planner {
             typedef std::shared_ptr<const RearrangementPlanner> RearrangementPlannerConstPtr;
             typedef std::weak_ptr<RearrangementPlanner> RearrangementPlannerWeakPtr;
             typedef std::weak_ptr<const RearrangementPlanner> RearrangementPlannerConstWeakPtr;
+
+            class ExecutionMonitor {
+            public:
+                // ExecutionCallback executes the action stored in the passed motion on a real robot.
+                // The result is supposed to be stored in the provided state. In case any error occurs
+                // during execution, false should be returned, else true.
+                typedef std::function<bool(const mps::planner::ompl::planning::essentials::MotionConstPtr&, ompl::state::SimEnvWorldState*)> ExecutionCallback;
+                ExecutionMonitor(RearrangementPlannerPtr planner, ExecutionCallback excall);
+                ExecutionMonitor(RearrangementPlannerPtr planner);
+                virtual ~ExecutionMonitor();
+                /**
+                 * Plan and execute the given planning query. The planning query must be set up
+                 * for the planner passed during construction.
+                 * @param pq - planning query
+                 * @return true, if success, else false
+                 */
+                virtual bool planAndExecute(RearrangementPlanner::PlanningQueryPtr pq);
+
+                /**
+                 * Execute the path stored in the given planning query.
+                 * The planning query must have been solved by the planner passed during construction or a copy thereof.
+                 * @param pq - planning query
+                 * @return true, if success, else false
+                 */
+                virtual bool execute(RearrangementPlanner::PlanningQueryPtr pq);
+
+                /**
+                 * Set the execution callback. The execution callback is a function that executes
+                 * a given control (within a motion) on a robot.
+                 */
+                void setExecutionCallback(const ExecutionCallback& excall);
+
+                /**
+                 * Return the planner this monitor was constructed for.
+                 */
+                RearrangementPlannerPtr getPlanner() const;
+
+            protected:
+                RearrangementPlannerPtr _planner;
+                ExecutionCallback _excall;
+            };
+            typedef std::shared_ptr<ExecutionMonitor> ExecutionMonitorPtr;
+            typedef std::shared_ptr<const ExecutionMonitor> ExecutionMonitorConstPtr;
 
             /***
              *  A slice of the joint configuration space of robot and objects.

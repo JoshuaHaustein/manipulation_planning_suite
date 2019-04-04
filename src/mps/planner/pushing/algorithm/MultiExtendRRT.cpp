@@ -216,6 +216,45 @@ float MultiExtendRRT::getPushingStateEps() const
     return _pushing_state_eps;
 }
 
+bool MultiExtendRRT::isGoalPath(PathConstPtr path, const mps_state::SimEnvWorldState* start, PlanningQueryPtr pq, PathPtr updated_path)
+{
+    if (!_si->isValid(start))
+        return false;
+    auto motion = std::make_shared<PushMotion>(_si);
+    auto prev_motion = motion;
+    _si->copyState(motion->getState(), start);
+    _si->nullControl(motion->getControl());
+    auto robot_state_space = _state_space->getObjectStateSpace(pq->robot_name);
+    unsigned int robot_id = _state_space->getSubspaceIndex(pq->robot_name);
+    bool valid_path = true;
+
+    for (unsigned int i = 0; i < path->getNumMotions(); ++i) {
+        auto m = path->getConstMotion(i);
+        auto pm = std::dynamic_pointer_cast<PushMotion>(m);
+        motion->setTargetId(pm->getTargetId());
+        if (pm and pm->isTeleportTransit()) {
+            motion->setTeleportTransit(true);
+            // copy robot state
+            auto target_robot_s = dynamic_cast<const mps_state::SimEnvWorldState*>(pm->getConstState());
+            auto motion_robot_s = dynamic_cast<const mps_state::SimEnvWorldState*>(motion->getState());
+            robot_state_space->copyState(motion_robot_s->getObjectState(robot_id), target_robot_s->getObjectState(robot_id));
+            valid_path = _si->isValid(motion->getState());
+        } else {
+            // propagate action
+            valid_path = _state_propagator->propagate(prev_motion->getState(), motion->getControl(), motion->getState());
+        }
+        if (!valid_path)
+            break;
+        if (updated_path) {
+            updated_path->append(motion);
+            prev_motion = motion;
+            motion = std::make_shared<PushMotion>(_si);
+        }
+    }
+    bool goal_reached = pq->goal_region->isSatisfied(motion->getState());
+    return goal_reached && valid_path;
+}
+
 void MultiExtendRRT::sample(const PushMotionPtr& sample, PlanningBlackboard& pb)
 {
     static const std::string log_prefix("mps::planner::pushing::algorithm::MultiExtendRRT::sample]");
@@ -646,3 +685,125 @@ unsigned int GreedyMultiExtendRRT::getNumPushingTrials() const
 // {
 //     return _orientation_tolerance;
 // }
+
+MERRTExecutionMonitor::MERRTExecutionMonitor(MultiExtendRRTPtr planner, ExecutionCallback excall)
+    : ExecutionMonitor(planner, excall)
+{
+    _si = _planner->getSpaceInformation();
+    _propagator = std::dynamic_pointer_cast<mps_control::SimEnvStatePropagator>(_si->getStatePropagator());
+    assert(_propagator);
+    _state_space = std::dynamic_pointer_cast<mps_state::SimEnvWorldStateSpace>(_si->getStateSpace());
+    assert(_state_space);
+}
+
+MERRTExecutionMonitor::MERRTExecutionMonitor(MultiExtendRRTPtr planner)
+    : ExecutionMonitor(planner)
+{
+    _si = _planner->getSpaceInformation();
+    _propagator = std::dynamic_pointer_cast<mps_control::SimEnvStatePropagator>(_si->getStatePropagator());
+}
+
+MERRTExecutionMonitor::~MERRTExecutionMonitor() = default;
+
+bool MERRTExecutionMonitor::execute(RearrangementPlanner::PlanningQueryPtr pq)
+{
+    static const std::string log_prefix("[mps::planner::pushing::algorithm::MERRTExecutionMonitor::execute]");
+    if (pq->path == nullptr) {
+        logging::logWarn("There is no solution to execute.", log_prefix);
+        return false;
+    }
+    auto si = _planner->getSpaceInformation();
+    auto s = dynamic_cast<mps_state::SimEnvWorldState*>(si->allocState());
+    auto path = pq->path->deepCopy();
+    bool no_error = true;
+    unsigned int i = 0;
+    while (path->getNumMotions()) {
+        if (updatePath(path, s, pq)) {
+            no_error = _excall(path->getMotion(0), s);
+            if (!no_error)
+                break;
+            path = path->getSubPath(i);
+        } else {
+            logging::logWarn("Execution significantly deviated from solution, need to replan", log_prefix);
+            // TODO replan
+            break;
+        }
+    }
+    bool goal_reached = pq->goal_region->isSatisfied(s);
+    si->freeState(s);
+    return no_error and goal_reached;
+}
+
+void MERRTExecutionMonitor::segmentPath(mps::planner::ompl::planning::essentials::PathPtr path,
+    std::list<std::pair<TransitSegment, TransferSegment>>& segments,
+    unsigned int robot_id) const
+{
+    PushMotionPtr motion = std::dynamic_pointer_cast<PushMotion>(path->getMotion(0));
+    unsigned int prev_target = motion->getTargetId();
+    segments.clear();
+    segments.push_back(std::make_pair(TransitSegment(), TransferSegment()));
+
+    for (unsigned int i = 0; i < path->getNumMotions(); ++i) {
+        PushMotionPtr current_motion = std::dynamic_pointer_cast<PushMotion>(path->getMotion(i));
+        unsigned int current_target = current_motion->getTargetId();
+        if (current_target != prev_target and current_target != robot_id) { // change in target from transfer to transit
+            segments.push_back(std::make_pair(TransitSegment(), TransferSegment()));
+        }
+        if (current_target == robot_id) {
+            segments.back().first.push_back(current_motion);
+        } else {
+            segments.back().second.push_back(current_motion);
+        }
+        prev_target = current_target;
+    }
+}
+
+bool MERRTExecutionMonitor::updatePath(PathPtr path, mps_state::SimEnvWorldState* s, RearrangementPlanner::PlanningQueryPtr pq)
+{
+    static const std::string log_prefix("[mps::planner::pushing::algorithm::MERRTExecutionMonitor::updatePath]");
+    PathPtr new_path = std::make_shared<Path>(_si);
+    if (_planner->isGoalPath(path, s, pq, new_path)) {
+        return true;
+    }
+    if (!_si->isValid(s)) {
+        logging::logWarn("Can not update path. Current state is invalid.", log_prefix);
+        return false;
+    }
+    // the path is no longer valid, try to save it
+    // auto tmp_state = dynamic_cast<mps_state::SimEnvWorldState*>(_si->allocState());
+    // _si->copyState(tmp_state, s);
+    auto robot_state_space = _state_space->getObjectStateSpace(pq->robot_name);
+    unsigned int robot_id = _state_space->getSubspaceIndex(pq->robot_name);
+    std::list<std::pair<TransitSegment, TransferSegment>> segments;
+    segmentPath(new_path, segments, robot_id);
+
+    for (auto& [transit, transfer] : segments) {
+        if (!transit.empty()) {
+            // we have a transit
+            // get the pushing state that this transit is supposed to reach
+            auto* pushing_state = dynamic_cast<mps_state::SimEnvWorldState*>(transit.back()->getState());
+        }
+        // auto m = path->getMotion(i);
+        // auto pm = std::dynamic_pointer_cast<PushMotion>(m);
+        // if (pm and pm->isTeleportTransit()) {
+        //     // copy robot state
+        //     auto target_robot_s = dynamic_cast<const mps_state::SimEnvObjectState*>(pm->getConstState());
+        //     robot_state_space->copyState(tmp_state->getObjectState(robot_id), target_robot_s);
+        //     // if (!_si->isValid(tmp_state)) {
+        //     // TODO implement this
+
+        //     // }
+        // } else {
+        //     // propagate action
+        //     // bool prop_success = _state_propagator->propagate(tmp_state.get(), m->getControl(), tmp_state.get());
+        //     // if (!prop_success)
+        //     //     return false;
+        // }
+    }
+    return false;
+}
+
+bool MERRTExecutionMonitor::tryPush(unsigned int t, const mps_state::SimEnvWorldState* ts,
+    mps_state::SimEnvWorldState* cs)
+{
+}

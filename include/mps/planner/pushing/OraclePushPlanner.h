@@ -121,10 +121,13 @@ namespace planner {
              */
         struct PlanningSolution {
             mps::planner::ompl::planning::essentials::PathPtr path;
+            mps::planner::pushing::algorithm::RearrangementPlanner::PlanningQueryPtr pq;
             bool solved;
             mps::planner::pushing::algorithm::PlanningStatistics stats;
             PlanningSolution();
         };
+
+        typedef mps::planner::pushing::algorithm::ExecutionMonitor::ExecutionCallback ExecutionCallback;
 
         /**
              * This planner utilizes a kinodynamic RRT algorithm in combination
@@ -141,10 +144,31 @@ namespace planner {
 
             bool setup(PlanningProblem& problem);
             bool solve(PlanningSolution& solution);
-            // TODO should we move this playback function somewhere else?
+            /**
+             * Execute the given solution in simulation without execution monitoring.
+             * @param solution - solution to playback
+             * @param interrupt_callback - callback that returns true, if playback should be interrupted.
+             * @param force_synch - if true, after each motion set the simulator state to what it is supposed
+             *  to be within the planned solution (to compensate for non-deterministic behavior of the physics simulator).
+             */
             void playback(const PlanningSolution& solution,
                 const std::function<bool()>& interrupt_callback = []() { return false; },
                 bool force_synch = false);
+
+            /**
+             *  Execute the given solution.
+             * If an ExecutionCallback is provided, the solution will be executed by calling exec_callb for each motion.
+             * A ExecutionMonitor may adapt the solution, or replan if the execution deviates from the planned solution.
+             * @param solution - the solution to execute
+             * @param exec_callb - execution callback. A function bool(const MotionConstPtr&, SimEnvWorldState*) 
+             *  that executes the control in the given motion and saves the resulting state in the second argument. 
+             *  It should return false, if any error occurred during the execution, requiring an abortion.
+             *  If not provided, execution will be performed in simulation, i.e. on the world used for planning.
+             * @param interrupt_callback - callback that returns true, if execution should be interrupted.
+             */
+            bool execute(const PlanningSolution& solution,
+                const ExecutionCallback& exec_callb = ExecutionCallback(),
+                const std::function<bool()>& interrupt_callback = []() { return false; });
             /**
                  * Saves the given solution under the specified filename.
                  * The solution needs to be a solution to the currently setup planning problem, else
@@ -214,13 +238,14 @@ namespace planner {
             mps::planner::ompl::control::SimEnvStatePropagatorPtr _state_propagator;
             PlanningProblem _planning_problem;
             mps::planner::pushing::algorithm::RearrangementPlannerPtr _algorithm;
+            mps::planner::pushing::algorithm::ExecutionMonitorPtr _exec_monitor;
             mps::planner::pushing::algorithm::ShortcutterPtr _shortcutter;
             mps::planner::pushing::oracle::ElasticBandRampComputerPtr _eb_computer;
             mps::planner::pushing::algorithm::DebugDrawerPtr _rrt_debug_drawer;
             mps::planner::pushing::oracle::EBDebugDrawerPtr _eb_debug_drawer;
             std::vector<float> _distance_weights;
             void prepareDistanceWeights();
-            void createAlgorithm(); // sets _algorithm and _shortcutter
+            void createAlgorithm(); // sets _algorithm, _exec_monitor and _shortcutter
             void createShortcutAlgorithm(oracle::PushingOraclePtr pushing_oracle,
                 oracle::RobotOraclePtr robot_oracle);
             //                ::ompl::control::DirectedControlSamplerPtr allocateDirectedControlSampler(const ::ompl::control::SpaceInformation* si);

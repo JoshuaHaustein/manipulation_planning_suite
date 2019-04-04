@@ -185,6 +185,15 @@ void Path::initBacktrackMotion(MotionPtr motion)
     std::reverse(_motions.begin(), _motions.end());
 }
 
+PathPtr Path::getSubPath(unsigned int s) const
+{
+    auto new_path = std::make_shared<Path>(_sic);
+    for (unsigned int i = s; i < _motions.size(); ++i) {
+        new_path->append(_motions.at(i));
+    }
+    return new_path;
+}
+
 void Path::clear()
 {
     _motions.clear();

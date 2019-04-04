@@ -4,6 +4,7 @@
 
 // stl
 #include <chrono>
+#include <functional>
 #include <thread>
 // mps
 #include <mps/planner/ompl/control/NaiveControlSampler.h>
@@ -25,6 +26,7 @@
 using namespace mps::planner::pushing;
 namespace mps_state = mps::planner::ompl::state;
 namespace mps_control = mps::planner::ompl::control;
+namespace mps_algorithm = mps::planner::pushing::algorithm;
 namespace mps_essentials = mps::planner::ompl::planning::essentials;
 namespace mps_logging = mps::planner::util::logging;
 
@@ -98,6 +100,7 @@ PlanningProblem::PlanningProblem(sim_env::WorldPtr world, sim_env::RobotPtr robo
 
 PlanningSolution::PlanningSolution()
     : path(nullptr)
+    , pq(nullptr)
     , solved(false)
 {
 }
@@ -194,38 +197,38 @@ bool OraclePushPlanner::solve(PlanningSolution& solution)
     _goal_region = std::make_shared<ompl::state::goal::ObjectsRelocationGoal>(_space_information,
         _planning_problem.relocation_goals);
     // planning query
-    auto pq = _algorithm->createPlanningQuery(_goal_region, start_state,
+    solution.pq = _algorithm->createPlanningQuery(_goal_region, start_state,
         _planning_problem.robot->getName(),
         _planning_problem.planning_time_out);
-    pq->stopping_condition = _planning_problem.stopping_condition;
-    pq->weights = _distance_weights;
+    solution.pq->stopping_condition = _planning_problem.stopping_condition;
+    solution.pq->weights = _distance_weights;
     // TODO this is dependend on the locale!
-    if (pq->parameters->hasParam("action_randomness")) {
-        pq->parameters->setParam("action_randomness", std::to_string(_planning_problem.action_noise));
+    if (solution.pq->parameters->hasParam("action_randomness")) {
+        solution.pq->parameters->setParam("action_randomness", std::to_string(_planning_problem.action_noise));
     }
-    if (pq->parameters->hasParam("state_noise")) {
-        pq->parameters->setParam("state_noise", std::to_string(_planning_problem.state_noise));
+    if (solution.pq->parameters->hasParam("state_noise")) {
+        solution.pq->parameters->setParam("state_noise", std::to_string(_planning_problem.state_noise));
     }
-    if (pq->parameters->hasParam("goal_bias")) {
-        pq->parameters->setParam("goal_bias", std::to_string(_planning_problem.goal_bias));
+    if (solution.pq->parameters->hasParam("goal_bias")) {
+        solution.pq->parameters->setParam("goal_bias", std::to_string(_planning_problem.goal_bias));
     }
-    if (pq->parameters->hasParam("target_bias")) {
-        pq->parameters->setParam("target_bias", std::to_string(_planning_problem.target_bias));
+    if (solution.pq->parameters->hasParam("target_bias")) {
+        solution.pq->parameters->setParam("target_bias", std::to_string(_planning_problem.target_bias));
     }
-    if (pq->parameters->hasParam("robot_bias")) {
-        pq->parameters->setParam("robot_bias", std::to_string(_planning_problem.robot_bias));
+    if (solution.pq->parameters->hasParam("robot_bias")) {
+        solution.pq->parameters->setParam("robot_bias", std::to_string(_planning_problem.robot_bias));
     }
-    if (pq->parameters->hasParam("num_control_samples")) {
-        pq->parameters->setParam("num_control_samples", std::to_string(_planning_problem.num_control_samples));
+    if (solution.pq->parameters->hasParam("num_control_samples")) {
+        solution.pq->parameters->setParam("num_control_samples", std::to_string(_planning_problem.num_control_samples));
     }
     // TODO set other parameters (tolerances)
     solution.path = nullptr;
     // before planning. let's save the state of the world
     auto world_state = _planning_problem.world->getWorldState();
     // PLAAAAAAANNN
-    solution.solved = _algorithm->plan(pq, solution.stats);
+    solution.solved = _algorithm->plan(solution.pq, solution.stats);
     if (solution.solved) {
-        solution.path = pq->path;
+        solution.path = solution.pq->path;
         solution.stats.reproducible = verifySolution(solution);
         if (!solution.stats.reproducible) {
             mps_logging::logWarn("Planner produced a non-reproducible solution", "[OraclePushPlanner::solve");
@@ -261,6 +264,25 @@ void OraclePushPlanner::playback(const PlanningSolution& solution,
             interrupt_callback,
             force_synch);
     }
+}
+
+bool OraclePushPlanner::execute(const PlanningSolution& solution,
+    const ExecutionCallback& exec,
+    const std::function<bool()>& interrupt_callback)
+{
+    bool exec_success = false;
+    if (solution.solved) {
+        ExecutionCallback callback;
+        if (exec) {
+            callback = exec;
+        } else {
+            callback = std::bind(mps::planner::util::playback::playMotion, _planning_problem.world, _planning_problem.robot_controller,
+                _state_space, interrupt_callback, std::placeholders::_1, std::placeholders::_2);
+        }
+        _exec_monitor->setExecutionCallback(callback);
+        exec_success = _exec_monitor->execute(solution.pq);
+    }
+    return exec_success;
 }
 
 bool OraclePushPlanner::saveSolution(const PlanningSolution& solution, const std::string& filename)
@@ -500,6 +522,7 @@ void OraclePushPlanner::dummyTest()
 
 bool OraclePushPlanner::verifySolution(PlanningSolution& solution)
 {
+    // TODO update to be able to work with PushMotion (teleports)
     // first make sure we actually have a path
     if (!solution.path)
         return false;
@@ -697,13 +720,15 @@ void OraclePushPlanner::createAlgorithm()
                 robot_oracle,
                 _planning_problem.robot->getName());
             util::logging::logInfo("Using OracleRRT", log_prefix);
+            _exec_monitor = std::make_shared<algorithm::ExecutionMonitor>(_algorithm);
             break;
         }
-        case PlanningProblem::AlgorithmType ::SliceOracleRRT: {
+        case PlanningProblem::AlgorithmType::SliceOracleRRT: {
             _algorithm = std::make_shared<algorithm::SliceBasedOracleRRT>(_space_information,
                 pushing_oracle,
                 robot_oracle,
                 _planning_problem.robot->getName());
+            _exec_monitor = std::make_shared<algorithm::ExecutionMonitor>(_algorithm);
             util::logging::logInfo("Using SliceOracleRRT", log_prefix);
             break;
         }
@@ -712,6 +737,7 @@ void OraclePushPlanner::createAlgorithm()
                 pushing_oracle,
                 robot_oracle, _planning_problem.robot->getName());
             util::logging::logInfo("Using HybridActionRRT", log_prefix);
+            _exec_monitor = std::make_shared<algorithm::ExecutionMonitor>(_algorithm);
             break;
         }
         case PlanningProblem::AlgorithmType::GreedyMultiExtendRRT: {
@@ -719,6 +745,8 @@ void OraclePushPlanner::createAlgorithm()
                 pushing_oracle,
                 robot_oracle,
                 _planning_problem.robot->getName());
+            // TODO create MERRTExecutionMonitor instead
+            _exec_monitor = std::make_shared<algorithm::ExecutionMonitor>(_algorithm);
             break;
         }
         default: {

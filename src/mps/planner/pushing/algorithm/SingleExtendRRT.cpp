@@ -32,6 +32,10 @@ SingleExtendRRT::SingleExtendRRT(::ompl::control::SpaceInformationPtr si)
     if (!_state_space) {
         throw std::logic_error(_log_prefix + "setup] Could not cast state space to SimEnvWorldStateSpace");
     }
+    _state_propagator = std::dynamic_pointer_cast<mps_control::SimEnvStatePropagator>(si->getStatePropagator());
+    if (!_state_propagator) {
+        throw std::logic_error(_log_prefix + "setup] Could not cast state propagator to SimEnvWorldStatePropagator");
+    }
     _distance_measure = std::make_shared<mps::planner::ompl::state::SimEnvWorldStateDistanceMeasure>(_state_space);
     _state_space->setDistanceMeasure(_distance_measure);
     // set up our search tree
@@ -152,6 +156,35 @@ RearrangementPlanner::PlanningQueryPtr SingleExtendRRT::createPlanningQuery(
     pq->parameters->declareParam<float>("robot_bias", rb_setter, rb_getter);
     pq->parameters->setParam("robot_bias", "0.0");
     return pq;
+}
+
+bool SingleExtendRRT::isGoalPath(PathConstPtr path, const mps_state::SimEnvWorldState* start, PlanningQueryPtr pq,
+    PathPtr update_path)
+{
+    if (!_si->isValid(start))
+        return false;
+    auto motion = std::make_shared<Motion>(_si);
+    auto prev_motion = motion;
+    _si->copyState(motion->getState(), start);
+    _si->nullControl(motion->getControl());
+    auto robot_state_space = _state_space->getObjectStateSpace(pq->robot_name);
+    unsigned int robot_id = _state_space->getSubspaceIndex(pq->robot_name);
+    bool valid_path = true;
+    for (unsigned int i = 0; i < path->getNumMotions(); ++i) {
+        auto pathm = path->getConstMotion(i);
+        // propagate action
+        _si->copyControl(motion->getControl(), pathm->getConstControl());
+        valid_path = _state_propagator->propagate(prev_motion->getState(), motion->getControl(), motion->getState());
+        if (!valid_path)
+            break;
+        if (update_path) {
+            update_path->append(motion);
+            prev_motion = motion;
+            motion = std::make_shared<Motion>(_si);
+        }
+    }
+    bool goal_reached = pq->goal_region->isSatisfied(motion->getState());
+    return goal_reached and valid_path;
 }
 
 bool SingleExtendRRT::sample(mps::planner::ompl::planning::essentials::MotionPtr motion,
@@ -336,7 +369,6 @@ HybridActionRRT::HybridActionRRT(::ompl::control::SpaceInformationPtr si,
     : SingleExtendRRT(si)
 {
     _oracle_sampler = std::make_shared<mps::planner::pushing::oracle::OracleControlSampler>(si, pushing_oracle, robot_oracle, robot_name);
-    _state_propagator = std::dynamic_pointer_cast<mps_control::SimEnvStatePropagator>(si->getStatePropagator());
     assert(_state_propagator);
 }
 
@@ -519,8 +551,6 @@ OracleRearrangementRRT::OracleRearrangementRRT(::ompl::control::SpaceInformation
     : SingleExtendRRT(si)
 {
     _oracle_sampler = std::make_shared<mps::planner::pushing::oracle::OracleControlSampler>(si, pushing_oracle, robot_oracle, robot_name);
-    _state_propagator = std::dynamic_pointer_cast<mps_control::SimEnvStatePropagator>(si->getStatePropagator());
-    assert(_state_propagator);
 }
 
 OracleRearrangementRRT::~OracleRearrangementRRT() = default;
