@@ -230,7 +230,7 @@ bool MultiExtendRRT::isGoalPath(PathConstPtr path, const mps_state::SimEnvWorldS
 
     for (unsigned int i = 0; i < path->getNumMotions(); ++i) {
         auto m = path->getConstMotion(i);
-        auto pm = std::dynamic_pointer_cast<PushMotion>(m);
+        auto pm = std::dynamic_pointer_cast<const PushMotion>(m);
         motion->setTargetId(pm->getTargetId());
         if (pm and pm->isTeleportTransit()) {
             motion->setTeleportTransit(true);
@@ -752,12 +752,15 @@ void MERRTExecutionMonitor::segmentPath(mps::planner::ompl::planning::essentials
         }
         if (current_target == robot_id) {
             segments.back().first.intended.push_back(current_motion);
-            // TODO what if predicted path is shorter than intended???
-            segments.back().first.predicted.push_back(std::dynamic_pointer_cast<PushMotion>(predicted_path->getMotion(i)));
+            // predicted path is only extended as long as it goes, i.e. is valid
+            if (predicted_path->getNumMotions() > i) {
+                segments.back().first.predicted.push_back(std::dynamic_pointer_cast<PushMotion>(predicted_path->getMotion(i)));
+            }
         } else {
             segments.back().second.intended.push_back(current_motion);
-            // TODO what if predicted path is shorter than intended???
-            segments.back().second.predicted.push_back(std::dynamic_pointer_cast<PushMotion>(predicted_path->getMotion(i)));
+            if (predicted_path->getNumMotions() > i) {
+                segments.back().second.predicted.push_back(std::dynamic_pointer_cast<PushMotion>(predicted_path->getMotion(i)));
+            }
         }
         prev_target = current_target;
     }
@@ -780,14 +783,14 @@ bool MERRTExecutionMonitor::updatePath(PathPtr path, mps_state::SimEnvWorldState
     auto robot_state_space = _state_space->getObjectStateSpace(pq->robot_name);
     unsigned int robot_id = _state_space->getSubspaceIndex(pq->robot_name);
     std::list<std::pair<TransitSegment, TransferSegment>> segments;
-    segmentPath(new_path, segments, robot_id);
+    segmentPath(path, new_path, segments, robot_id);
 
     for (auto& [transit, transfer] : segments) {
-        if (!transit.empty()) {
+        if (!transit.intended.empty()) {
             // we have a transit
             // get the pushing state that this transit is supposed to reach
-            auto* pushing_state = dynamic_cast<mps_state::SimEnvWorldState*>(transit.back()->getState());
-            if
+            // auto* pushing_state = dynamic_cast<mps_state::SimEnvWorldState*>(transit.back()->getState());
+            // if
         }
         // auto m = path->getMotion(i);
         // auto pm = std::dynamic_pointer_cast<PushMotion>(m);
@@ -812,4 +815,5 @@ bool MERRTExecutionMonitor::updatePath(PathPtr path, mps_state::SimEnvWorldState
 bool MERRTExecutionMonitor::tryPush(unsigned int t, const mps_state::SimEnvWorldState* ts,
     mps_state::SimEnvWorldState* cs)
 {
+    return false;
 }
