@@ -734,25 +734,30 @@ bool MERRTExecutionMonitor::execute(RearrangementPlanner::PlanningQueryPtr pq)
     return no_error and goal_reached;
 }
 
-void MERRTExecutionMonitor::segmentPath(mps::planner::ompl::planning::essentials::PathPtr path,
+void MERRTExecutionMonitor::segmentPath(mps::planner::ompl::planning::essentials::PathPtr intended_path,
+    mps::planner::ompl::planning::essentials::PathPtr predicted_path,
     std::list<std::pair<TransitSegment, TransferSegment>>& segments,
     unsigned int robot_id) const
 {
-    PushMotionPtr motion = std::dynamic_pointer_cast<PushMotion>(path->getMotion(0));
+    PushMotionPtr motion = std::dynamic_pointer_cast<PushMotion>(intended_path->getMotion(0));
     unsigned int prev_target = motion->getTargetId();
     segments.clear();
     segments.push_back(std::make_pair(TransitSegment(), TransferSegment()));
 
-    for (unsigned int i = 0; i < path->getNumMotions(); ++i) {
-        PushMotionPtr current_motion = std::dynamic_pointer_cast<PushMotion>(path->getMotion(i));
+    for (unsigned int i = 0; i < intended_path->getNumMotions(); ++i) {
+        PushMotionPtr current_motion = std::dynamic_pointer_cast<PushMotion>(intended_path->getMotion(i));
         unsigned int current_target = current_motion->getTargetId();
         if (current_target != prev_target and current_target != robot_id) { // change in target from transfer to transit
             segments.push_back(std::make_pair(TransitSegment(), TransferSegment()));
         }
         if (current_target == robot_id) {
-            segments.back().first.push_back(current_motion);
+            segments.back().first.intended.push_back(current_motion);
+            // TODO what if predicted path is shorter than intended???
+            segments.back().first.predicted.push_back(std::dynamic_pointer_cast<PushMotion>(predicted_path->getMotion(i)));
         } else {
-            segments.back().second.push_back(current_motion);
+            segments.back().second.intended.push_back(current_motion);
+            // TODO what if predicted path is shorter than intended???
+            segments.back().second.predicted.push_back(std::dynamic_pointer_cast<PushMotion>(predicted_path->getMotion(i)));
         }
         prev_target = current_target;
     }
@@ -782,6 +787,7 @@ bool MERRTExecutionMonitor::updatePath(PathPtr path, mps_state::SimEnvWorldState
             // we have a transit
             // get the pushing state that this transit is supposed to reach
             auto* pushing_state = dynamic_cast<mps_state::SimEnvWorldState*>(transit.back()->getState());
+            if
         }
         // auto m = path->getMotion(i);
         // auto pm = std::dynamic_pointer_cast<PushMotion>(m);
