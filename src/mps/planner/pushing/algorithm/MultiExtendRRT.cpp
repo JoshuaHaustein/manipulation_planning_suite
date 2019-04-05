@@ -729,7 +729,7 @@ bool MERRTExecutionMonitor::execute(RearrangementPlanner::PlanningQueryPtr pq)
             no_error = _excall(path->getMotion(0), s);
             if (!no_error)
                 break;
-            path = path->getSubPath(i);
+            path = path->getSubPath(1); // TODO replace by pop front
         } else {
             logging::logWarn("Execution significantly deviated from solution, need to replan", log_prefix);
             // TODO replan
@@ -808,7 +808,7 @@ bool MERRTExecutionMonitor::updatePath(PathPtr path, mps_state::SimEnvWorldState
     // bool path_fixed = false;
     // run over segments and try to figure out which one fail and see whether we can fix it
     for (auto iter = segments.begin(); iter != segments.end(); ++iter) {
-        auto& [transit, transfer] = *iter();
+        auto& [transit, transfer] = *iter;
         bool need_new_transfer = false;
         // do we have a transit?
         if (!transit.intended.empty()) {
@@ -869,5 +869,6 @@ bool MERRTExecutionMonitor::updatePath(PathPtr path, mps_state::SimEnvWorldState
 
 TransferUpdateResult MERRTExecutionMonitor::updateTransfer(SegmentedPath& path, SegmentedPath::iterator pos)
 {
+
     return TransferUpdateResult::UPDATE_FAIL;
 }
