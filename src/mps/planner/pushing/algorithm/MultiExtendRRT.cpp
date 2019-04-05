@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <mps/planner/pushing/algorithm/MultiExtendRRT.h>
+#include <ompl/base/ScopedState.h>
 #include <ompl/datastructures/NearestNeighborsGNAT.h>
 
 namespace logging = mps::planner::util::logging;
@@ -455,8 +456,8 @@ std::tuple<GreedyMultiExtendRRT::ExtensionProgress, PushMotionPtr> GreedyMultiEx
         std::tie(push_result, after_push) = tryPush(t, current, movables, blockers, target_slice, false, pb);
     }
     // push finished, check what happened
-    if (push_result == GreedyMultiExtendRRT::PushResult::REACHED) {
-        // we succeeded at pushing t to its goal, try pushing the remaining targets
+    if (push_result == GreedyMultiExtendRRT::PushResult::REACHED || push_result == GreedyMultiExtendRRT::PushResult::POLICY_FAIL) {
+        // we succeeded at pushing t to its goal (or the policy can not push it closer), try pushing the remaining targets
         for (auto t_prime : targets) {
             MovableSet sub_targets(targets);
             sub_targets.erase(t_prime);
@@ -526,6 +527,7 @@ std::tuple<GreedyMultiExtendRRT::PushResult, PushMotionPtr> GreedyMultiExtendRRT
     _state_space->copyState(approach_motion->getState(), current.first->getState());
     // init tmp approach motion
     _state_space->copyState(tmp_approach_motion->getState(), current.first->getState());
+    bool no_policy_fail = false;
     // try pushing
     for (unsigned int trial = 0; trial < _num_pushing_trials; ++trial) {
         if (trial > 0 or new_push) {
@@ -553,6 +555,7 @@ std::tuple<GreedyMultiExtendRRT::PushResult, PushMotionPtr> GreedyMultiExtendRRT
 #endif
         // evaluate the result
         bool made_progress = madeProgress(tmp_approach_motion, tmp_pushing_motion, target_slice, t);
+        no_policy_fail |= made_progress; // if we made progress once, we can not blame the policy for failing
         MovableSet tmp_blockers;
         bool valid_blockers = getPushBlockers(tmp_approach_motion, tmp_pushing_motion, target_slice, movables, tmp_blockers, pb);
         if (valid_blockers and made_progress and blockers.size() < min_num_blockers) {
@@ -571,7 +574,10 @@ std::tuple<GreedyMultiExtendRRT::PushResult, PushMotionPtr> GreedyMultiExtendRRT
     if (min_num_blockers == std::numeric_limits<unsigned int>::max()) {
         _motion_cache.cacheMotion(approach_motion);
         _motion_cache.cacheMotion(pushing_motion);
-        return { GreedyMultiExtendRRT::PushResult::FAIL, nullptr };
+        if (no_policy_fail) {
+            return { GreedyMultiExtendRRT::PushResult::FAIL, nullptr };
+        }
+        return { GreedyMultiExtendRRT::PushResult::POLICY_FAIL, nullptr };
     } else if (min_num_blockers == 0) {
         // set up approach motion
         approach_motion->setTargetId(pb.robot_id);
@@ -688,6 +694,7 @@ unsigned int GreedyMultiExtendRRT::getNumPushingTrials() const
 
 MERRTExecutionMonitor::MERRTExecutionMonitor(MultiExtendRRTPtr planner, ExecutionCallback excall)
     : ExecutionMonitor(planner, excall)
+    , _transfer_tolerance(0.01)
 {
     _si = _planner->getSpaceInformation();
     _propagator = std::dynamic_pointer_cast<mps_control::SimEnvStatePropagator>(_si->getStatePropagator());
@@ -698,6 +705,7 @@ MERRTExecutionMonitor::MERRTExecutionMonitor(MultiExtendRRTPtr planner, Executio
 
 MERRTExecutionMonitor::MERRTExecutionMonitor(MultiExtendRRTPtr planner)
     : ExecutionMonitor(planner)
+    , _transfer_tolerance(0.01)
 {
     _si = _planner->getSpaceInformation();
     _propagator = std::dynamic_pointer_cast<mps_control::SimEnvStatePropagator>(_si->getStatePropagator());
@@ -716,7 +724,6 @@ bool MERRTExecutionMonitor::execute(RearrangementPlanner::PlanningQueryPtr pq)
     auto s = dynamic_cast<mps_state::SimEnvWorldState*>(si->allocState());
     auto path = pq->path->deepCopy();
     bool no_error = true;
-    unsigned int i = 0;
     while (path->getNumMotions()) {
         if (updatePath(path, s, pq)) {
             no_error = _excall(path->getMotion(0), s);
@@ -726,6 +733,7 @@ bool MERRTExecutionMonitor::execute(RearrangementPlanner::PlanningQueryPtr pq)
         } else {
             logging::logWarn("Execution significantly deviated from solution, need to replan", log_prefix);
             // TODO replan
+            path->clear(); // TODO remove
             break;
         }
     }
@@ -734,9 +742,19 @@ bool MERRTExecutionMonitor::execute(RearrangementPlanner::PlanningQueryPtr pq)
     return no_error and goal_reached;
 }
 
+float MERRTExecutionMonitor::getTransferTolerance() const
+{
+    return _transfer_tolerance;
+}
+
+void MERRTExecutionMonitor::setTransferTolerance(float val)
+{
+    _transfer_tolerance = val;
+}
+
 void MERRTExecutionMonitor::segmentPath(mps::planner::ompl::planning::essentials::PathPtr intended_path,
     mps::planner::ompl::planning::essentials::PathPtr predicted_path,
-    std::list<std::pair<TransitSegment, TransferSegment>>& segments,
+    MERRTExecutionMonitor::SegmentedPath& segments,
     unsigned int robot_id) const
 {
     PushMotionPtr motion = std::dynamic_pointer_cast<PushMotion>(intended_path->getMotion(0));
@@ -757,6 +775,7 @@ void MERRTExecutionMonitor::segmentPath(mps::planner::ompl::planning::essentials
                 segments.back().first.predicted.push_back(std::dynamic_pointer_cast<PushMotion>(predicted_path->getMotion(i)));
             }
         } else {
+            segments.back().second.target_id = current_motion->getTargetId();
             segments.back().second.intended.push_back(current_motion);
             if (predicted_path->getNumMotions() > i) {
                 segments.back().second.predicted.push_back(std::dynamic_pointer_cast<PushMotion>(predicted_path->getMotion(i)));
@@ -769,8 +788,8 @@ void MERRTExecutionMonitor::segmentPath(mps::planner::ompl::planning::essentials
 bool MERRTExecutionMonitor::updatePath(PathPtr path, mps_state::SimEnvWorldState* s, RearrangementPlanner::PlanningQueryPtr pq)
 {
     static const std::string log_prefix("[mps::planner::pushing::algorithm::MERRTExecutionMonitor::updatePath]");
-    PathPtr new_path = std::make_shared<Path>(_si);
-    if (_planner->isGoalPath(path, s, pq, new_path)) {
+    PathPtr predicted_path = std::make_shared<Path>(_si);
+    if (_planner->isGoalPath(path, s, pq, predicted_path)) {
         return true;
     }
     if (!_si->isValid(s)) {
@@ -778,42 +797,77 @@ bool MERRTExecutionMonitor::updatePath(PathPtr path, mps_state::SimEnvWorldState
         return false;
     }
     // the path is no longer valid, try to save it
-    // auto tmp_state = dynamic_cast<mps_state::SimEnvWorldState*>(_si->allocState());
-    // _si->copyState(tmp_state, s);
     auto robot_state_space = _state_space->getObjectStateSpace(pq->robot_name);
     unsigned int robot_id = _state_space->getSubspaceIndex(pq->robot_name);
-    std::list<std::pair<TransitSegment, TransferSegment>> segments;
-    segmentPath(path, new_path, segments, robot_id);
-
-    for (auto& [transit, transfer] : segments) {
+    // create tmp state
+    ::ompl::base::ScopedState<mps_state::SimEnvWorldStateSpace> tmp_state(_si);
+    mps_state::SimEnvWorldState* curr_predicted_state = s;
+    // segment path
+    SegmentedPath segments;
+    segmentPath(path, predicted_path, segments, robot_id);
+    // bool path_fixed = false;
+    // run over segments and try to figure out which one fail and see whether we can fix it
+    for (auto iter = segments.begin(); iter != segments.end(); ++iter) {
+        auto& [transit, transfer] = *iter();
+        bool need_new_transfer = false;
+        // do we have a transit?
         if (!transit.intended.empty()) {
-            // we have a transit
-            // get the pushing state that this transit is supposed to reach
-            // auto* pushing_state = dynamic_cast<mps_state::SimEnvWorldState*>(transit.back()->getState());
-            // if
+            // get pushing state (i.e. target of transit)
+            auto* intended_state = dynamic_cast<const mps_state::SimEnvWorldState*>(transit.intended.back()->getConstState());
+            // set the robot to its pushing state
+            _state_space->copyState(tmp_state.get(), curr_predicted_state);
+            robot_state_space->copyState(tmp_state->getObjectState(robot_id), intended_state);
+            // is the pushing state still valid in our predicted world state?
+            if (_si->isValid(tmp_state.get())) {
+                // check whether we would reach the goal if this transit was valid and took the robot to the pushing state
+                // TODO implement in case we have actual transit motions
+                // bool would_reach_goal = _planner->isGoalPath(path->getSubPath(transfer.start_id), tmp_state, pq, tmp_new_path);
+                // if (would_reach_goal) {
+                //     // this transit breaks the solution, thus replan it
+                //     bool replan_success = replan_transit(transit);
+                //     if (replan_success) {
+                //         // TODO update path
+                //         return true;
+                //     }
+                //     need_new_transfer = true;
+                // }
+            } else {
+                need_new_transfer = true;
+            }
         }
-        // auto m = path->getMotion(i);
-        // auto pm = std::dynamic_pointer_cast<PushMotion>(m);
-        // if (pm and pm->isTeleportTransit()) {
-        //     // copy robot state
-        //     auto target_robot_s = dynamic_cast<const mps_state::SimEnvObjectState*>(pm->getConstState());
-        //     robot_state_space->copyState(tmp_state->getObjectState(robot_id), target_robot_s);
-        //     // if (!_si->isValid(tmp_state)) {
-        //     // TODO implement this
-
-        //     // }
-        // } else {
-        //     // propagate action
-        //     // bool prop_success = _state_propagator->propagate(tmp_state.get(), m->getControl(), tmp_state.get());
-        //     // if (!prop_success)
-        //     //     return false;
-        // }
+        // check whether we need a new transfer
+        need_new_transfer |= transfer.predicted.empty();
+        if (!need_new_transfer) { // if we already know, no need to check more
+            // else check whether we reach the desired target state of the transfer
+            auto* intended_state = dynamic_cast<const mps_state::SimEnvWorldState*>(transfer.intended.back()->getConstState());
+            auto* predicted_state = dynamic_cast<const mps_state::SimEnvWorldState*>(transfer.predicted.back()->getConstState());
+            float transfer_error = robot_state_space->distance(intended_state->getObjectState(transfer.target_id),
+                predicted_state->getObjectState(transfer.target_id));
+            need_new_transfer = transfer_error > _transfer_tolerance;
+        }
+        if (need_new_transfer) {
+            TransferUpdateResult tur = updateTransfer(segments, iter);
+            switch (tur) {
+            case TransferUpdateResult::UPDATE_FAIL:
+                return false;
+            case TransferUpdateResult::UPDATE_SUCCESS:
+                // nothing to do?
+                break;
+            case TransferUpdateResult::FIXED_PATH:
+                // extract new planned path
+                extractNewPath(segments, path);
+                return true;
+                break;
+            default:
+                break;
+            }
+        }
+        curr_predicted_state = dynamic_cast<mps_state::SimEnvWorldState*>(transfer.predicted.last().getState());
     }
     return false;
 }
 
-bool MERRTExecutionMonitor::tryPush(unsigned int t, const mps_state::SimEnvWorldState* ts,
-    mps_state::SimEnvWorldState* cs)
+TransferUpdateResult MERRTExecutionMonitor::updateTransfer(SegmentedPath& path, SegmentedPath::iterator pos)
 {
-    return false;
+    return TransferUpdateResult::UPDATE_FAIL;
 }

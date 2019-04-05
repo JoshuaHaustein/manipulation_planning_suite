@@ -146,9 +146,10 @@ namespace planner {
                 // definitions for extension function
                 enum class PushResult {
                     FAIL = 0,
-                    MOVABLES_BLOCK_PUSH = 1,
-                    PROGRESS = 2,
-                    REACHED = 3
+                    POLICY_FAIL = 1,
+                    MOVABLES_BLOCK_PUSH = 2,
+                    PROGRESS = 3,
+                    REACHED = 4
                 };
                 enum class ExtensionProgress {
                     FAIL = 0,
@@ -191,6 +192,9 @@ namespace planner {
                 ~MERRTExecutionMonitor() override;
                 bool execute(RearrangementPlanner::PlanningQueryPtr pq) override;
 
+                float getTransferTolerance() const;
+                void setTransferTolerance(float val);
+
             protected:
                 struct TransitSegment {
                     std::vector<PushMotionConstPtr> intended;
@@ -200,18 +204,27 @@ namespace planner {
                 struct TransferSegment {
                     std::vector<PushMotionConstPtr> intended;
                     std::vector<PushMotionPtr> predicted;
+                    unsigned int target_id;
                 };
 
+                typedef std::vector<std::pair<TransitSegment, TransferSegment>> SegmentedPath;
                 void segmentPath(mps::planner::ompl::planning::essentials::PathPtr intended_path,
                     mps::planner::ompl::planning::essentials::PathPtr predicted_path,
-                    std::list<std::pair<TransitSegment, TransferSegment>>& segments, unsigned int robot_id) const;
+                    SegmentedPath& segments, unsigned int robot_id) const;
                 virtual bool updatePath(mps::planner::ompl::planning::essentials::PathPtr path,
                     mps::planner::ompl::state::SimEnvWorldState* state, RearrangementPlanner::PlanningQueryPtr pq);
-                virtual bool tryPush(unsigned int t, const mps::planner::ompl::state::SimEnvWorldState* ts,
-                    mps::planner::ompl::state::SimEnvWorldState* cs);
+
+                enum class TransferUpdateResult {
+                    UPDATE_FAIL = 0, // could not update transfer
+                    UPDATE_SUCCESS = 1, // update worked
+                    FIXED_PATH = 2 // update worked + resulting path leads to a goal again
+                };
+                virtual TransferUpdateResult updateTransfer(SegmentedPath& path, SegmentedPath::iterator pos);
+
                 ::ompl::control::SpaceInformationPtr _si;
                 mps::planner::ompl::control::SimEnvStatePropagatorPtr _propagator;
                 mps::planner::ompl::state::SimEnvWorldStateSpacePtr _state_space;
+                float _transfer_tolerance;
             };
         }
     }
