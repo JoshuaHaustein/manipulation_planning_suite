@@ -1079,6 +1079,12 @@ double SimEnvWorldStateSpace::distance(const ::ompl::base::State* state_1, const
     return ::ompl::base::CompoundStateSpace::distance(state_1, state_2);
 }
 
+double SimEnvWorldStateSpace::objectStateDistance(const StateType* a, const StateType* b, unsigned int id) const
+{
+    auto object_state_space = std::dynamic_pointer_cast<SimEnvObjectStateSpace>(getSubspace(id));
+    return object_state_space->distance(a->getObjectState(id), b->getObjectState(id));
+}
+
 void SimEnvWorldStateSpace::copySubState(::ompl::base::State* state_1,
     const ::ompl::base::State* state_2,
     unsigned int obj_id) const

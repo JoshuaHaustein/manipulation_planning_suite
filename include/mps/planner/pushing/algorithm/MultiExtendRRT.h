@@ -19,6 +19,9 @@ namespace mps {
 namespace planner {
     namespace pushing {
         namespace algorithm {
+            // Forward declarations
+            class MERRTExecutionMonitor;
+
             /**
              * A PushMotion is a Motion that in addition to a state and control, 
              * stores the id of the target object that is supposed to be moved by the control.
@@ -83,6 +86,7 @@ namespace planner {
                     override;
 
             protected:
+                friend class MERRTExecutionMonitor;
                 // high-level algorithm stubs
                 virtual void sample(const PushMotionPtr& sample, PlanningBlackboard& pb);
                 virtual void select(const PushMotionPtr& sample, SlicePtr& selected_slice, PlanningBlackboard& pb) const;
@@ -95,6 +99,22 @@ namespace planner {
                 SlicePtr addToTree(PushMotionPtr new_motion, PushMotionPtr parent, PlanningBlackboard& pb);
                 SlicePtr getSlice(ompl::planning::essentials::MotionPtr motion, PlanningBlackboard& pb) const;
                 float distanceToSlice(ompl::planning::essentials::MotionPtr motion, SlicePtr slice) const;
+                /**
+                 *  Sample a push: 1. sample pushing state, 2. query policy, 3. propagate
+                 *  @param start_state - world state to push from
+                 *  @param target_state - world state to push to (only cares about t's state)
+                 *  @param approach - store pushing state in approach->getState(), if sample_pushing_state is true
+                 *  @param push - store pushing action and result in
+                 *  @param unsigned int t - target object
+                 *  @param sample_pushing_state - if true, sample a pushing state, else try to push from robot state in
+                 *                                start_state
+                 *  @returns true, if valid push was sampled, else false
+                 */
+                bool samplePush(const ompl::state::SimEnvWorldState* start_state,
+                    const ompl::state::SimEnvWorldState* target_state,
+                    PushMotionPtr approach, PushMotionPtr push,
+                    unsigned int t,
+                    bool sample_pushing_state);
                 // member variables
                 const RobotStateDistanceFnPtr _robot_state_dist_fn; // distance fn within slices
                 const ObjectArrangementDistanceFnPtr _slice_distance_fn; // distance fn between slices
@@ -165,7 +185,6 @@ namespace planner {
                 virtual std::tuple<PushResult, PushMotionPtr> tryPush(unsigned int t, const StateSlicePair& current,
                     MovableSet& movables, MovableSet& blockers, SliceConstPtr target_slice, bool new_push, PlanningBlackboard& pb);
                 bool isCloseEnough(const PushMotionPtr& current, SliceConstPtr target_slice, unsigned int t) const;
-                bool madeProgress(PushMotionPtr x_b, PushMotionPtr x_a, SliceConstPtr target_slice, unsigned int t) const;
                 bool getPushBlockers(const PushMotionConstPtr& x_b, const PushMotionConstPtr& x_a,
                     const SliceConstPtr& target_slice, const MovableSet& movables,
                     MovableSet& blockers, PlanningBlackboard& pb) const;
@@ -210,21 +229,35 @@ namespace planner {
                 typedef std::vector<std::pair<TransitSegment, TransferSegment>> SegmentedPath;
                 void segmentPath(mps::planner::ompl::planning::essentials::PathPtr intended_path,
                     mps::planner::ompl::planning::essentials::PathPtr predicted_path,
-                    SegmentedPath& segments, unsigned int robot_id) const;
+                    SegmentedPath& segments) const;
+                void extractNewPath(SegmentedPath& segments, mps::planner::ompl::planning::essentials::PathPtr path) const;
                 virtual bool updatePath(mps::planner::ompl::planning::essentials::PathPtr path,
                     mps::planner::ompl::state::SimEnvWorldState* state, RearrangementPlanner::PlanningQueryPtr pq);
 
-                enum class TransferUpdateResult {
-                    UPDATE_FAIL = 0, // could not update transfer
-                    UPDATE_SUCCESS = 1, // update worked
-                    FIXED_PATH = 2 // update worked + resulting path leads to a goal again
+                bool updatePathPrediction(SegmentedPath& segments, const SegmentedPath::iterator& iter,
+                    RearrangementPlanner::PlanningQueryPtr pq);
+                enum class PredictionUpdate {
+                    INVALID = 0,
+                    VALID = 1,
+                    GOAL_REACHED = 2
                 };
-                virtual TransferUpdateResult updateTransfer(SegmentedPath& path, SegmentedPath::iterator pos);
+                PredictionUpdate simulateSegment(const std::vector<PushMotionConstPtr>& intended, std::vector<PushMotionPtr>& predicted,
+                    PushMotionPtr& prev_motion, RearrangementPlanner::PlanningQueryPtr pq);
+                virtual bool updateTransfer(const mps::planner::ompl::state::SimEnvWorldState* start,
+                    TransitSegment& transit, TransferSegment& transfer, PushMotionPtr prev_motion);
+                virtual std::tuple<PushMotionPtr, PushMotionPtr> tryPush(unsigned int t,
+                    const mps::planner::ompl::state::SimEnvWorldState* start,
+                    const mps::planner::ompl::state::SimEnvWorldState* goal);
 
-                ::ompl::control::SpaceInformationPtr _si;
-                mps::planner::ompl::control::SimEnvStatePropagatorPtr _propagator;
-                mps::planner::ompl::state::SimEnvWorldStateSpacePtr _state_space;
+                const MultiExtendRRTPtr _merrt_planner;
+                const ::ompl::control::SpaceInformationPtr _si;
+                const mps::planner::ompl::control::SimEnvStatePropagatorPtr _propagator;
+                const mps::planner::ompl::state::SimEnvWorldStateSpacePtr _state_space;
+                mps::planner::ompl::state::SimEnvObjectStateSpacePtr _robot_state_space;
+                unsigned int _robot_id;
                 float _transfer_tolerance;
+                unsigned int _num_pushing_trials;
+                mutable MotionCache<PushMotion> _motion_cache;
             };
         }
     }

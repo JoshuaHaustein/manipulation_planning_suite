@@ -404,6 +404,7 @@ namespace planner {
                 ::ompl::base::State* allocState() const override;
                 void freeState(::ompl::base::State* state) const override;
                 double distance(const ::ompl::base::State* state_1, const ::ompl::base::State* state_2) const override;
+                double objectStateDistance(const StateType* a, const StateType* b, unsigned int obj_id) const;
                 void copySubState(::ompl::base::State* state_1, const ::ompl::base::State* state_2, unsigned int obj_id) const;
 
             private:

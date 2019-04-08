@@ -331,6 +331,18 @@ namespace planner {
                     motions.clear();
                 }
 
+                void cacheMotions(std::vector<std::shared_ptr<MotionType>>& motions,
+                    typename std::vector<std::shared_ptr<MotionType>>::iterator begin,
+                    typename std::vector<std::shared_ptr<MotionType>>::iterator end)
+                {
+                    for (auto iter = begin; iter != end; ++iter) {
+                        auto& motion = *iter;
+                        motion->reset();
+                        _motions_cache.push(motion);
+                    }
+                    motions.erase(begin, end);
+                }
+
             private:
                 std::stack<std::shared_ptr<MotionType>> _motions_cache;
                 ::ompl::control::SpaceInformationPtr _si;
