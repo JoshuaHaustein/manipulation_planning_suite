@@ -13,8 +13,13 @@ find_package(catkin REQUIRED
 ## System dependencies are found with CMake's conventions
 # find_package(Boost REQUIRED COMPONENTS system)
 find_package(Eigen 3.2 REQUIRED)
-find_package(OMPL REQUIRED)
+find_package(ompl REQUIRED)
 # find_package(Protobuf REQUIRED)
+
+if (ompl_VERSION VERSION_GREATER_EQUAL "1.3.1")
+        message("OMPL version is greater than 1.3.1. Setting compatibility flag to new version.")
+       add_definitions(-DOMPL_NEW_VERSION)
+endif()
 
 add_subdirectory(proto)
 ## Uncomment this if the package has a setup.py. This macro ensures
@@ -47,7 +52,6 @@ add_definitions(-std=c++17)
 add_definitions(-Wno-deprecated-register)
 set(CMAKE_CXX_FLAGS_DEBUG "-g -O0 -Wall -DDEBUG_VISUALIZE -DDEBUG_PRINTOUTS")
 set(CMAKE_CXX_FLAGS_RELEASE "-O3")
-# add_definitions(-DUSE_SLICE_BALL)
 
 #message("Proto source: " ${PROTO_SRCS})
 #message("Proto header: " ${PROTO_HDRS})
@@ -58,7 +62,7 @@ set(CMAKE_CXX_FLAGS_RELEASE "-O3")
         #  /usr/include/valgrind/
          ${Eigen_INCLUDE_DIRS}
 #         ${CUDA_INCLUDE_DIRS}
-         ${ompl_INCLUDE_DIRS}
+         ${OMPL_INCLUDE_DIRS}
          ${catkin_INCLUDE_DIRS}
          ${PROTOBUF_INCLUDE_DIRS}
          ${CMAKE_CURRENT_BINARY_DIR}
