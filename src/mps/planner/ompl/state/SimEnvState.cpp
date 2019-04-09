@@ -1043,6 +1043,7 @@ SimEnvWorldStateSpace::SimEnvWorldStateSpace(sim_env::WorldConstPtr world,
                 position_limits,
                 velocity_limits,
                 obj_weight);
+            state_space->setName(object->getName());
             _state_space_map[object->getName()] = state_space;
             addSubspace(state_space, 1.0);
             _object_names.push_back(object->getName());

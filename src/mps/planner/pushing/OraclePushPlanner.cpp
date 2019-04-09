@@ -202,7 +202,7 @@ bool OraclePushPlanner::solve(PlanningSolution& solution)
         _planning_problem.planning_time_out);
     solution.pq->stopping_condition = _planning_problem.stopping_condition;
     solution.pq->weights = _distance_weights;
-    // TODO this is dependend on the locale!
+    std::setlocale(LC_NUMERIC, "en_US.UTF-8");
     if (solution.pq->parameters->hasParam("action_randomness")) {
         solution.pq->parameters->setParam("action_randomness", std::to_string(_planning_problem.action_noise));
     }
@@ -590,7 +590,7 @@ mps::planner::ompl::planning::essentials::PathPtr OraclePushPlanner::testOracle(
         if (approach) {
             auto pushing_state = dynamic_cast<mps::planner::ompl::state::SimEnvWorldState*>(_state_space->allocState());
             _state_space->copyState(pushing_state, start_motion->getState());
-            oracle_sampler->sampleFeasibleState(pushing_state, target_state, target_id);
+            oracle_sampler->samplePushingState(pushing_state, target_state, target_id);
             success = oracle_sampler->steerRobot(oracle_controls, start_motion->getState(), pushing_state);
             _state_space->freeState(pushing_state);
         } else {
@@ -741,12 +741,12 @@ void OraclePushPlanner::createAlgorithm()
             break;
         }
         case PlanningProblem::AlgorithmType::GreedyMultiExtendRRT: {
-            _algorithm = std::make_shared<algorithm::GreedyMultiExtendRRT>(_space_information,
+            auto merrtplanner = std::make_shared<algorithm::GreedyMultiExtendRRT>(_space_information,
                 pushing_oracle,
                 robot_oracle,
                 _planning_problem.robot->getName());
-            // TODO create MERRTExecutionMonitor instead
-            _exec_monitor = std::make_shared<algorithm::ExecutionMonitor>(_algorithm);
+            _algorithm = merrtplanner;
+            _exec_monitor = std::make_shared<algorithm::MERRTExecutionMonitor>(merrtplanner);
             break;
         }
         default: {

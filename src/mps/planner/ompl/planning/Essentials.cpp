@@ -108,6 +108,18 @@ void Motion::reset()
     _parent = nullptr;
 }
 
+MotionPtr Motion::deepCopy() const
+{
+    auto si = _weak_si.lock();
+    if (!si) {
+        throw std::logic_error("Could not copy Motion. Space Information does no longer exist.");
+    }
+    auto new_motion = std::make_shared<Motion>(si);
+    si->copyState(new_motion->getState(), _state);
+    si->copyControl(new_motion->getControl(), _control);
+    return new_motion;
+}
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////// Path //////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -223,9 +235,7 @@ PathPtr Path::deepCopy() const
 {
     PathPtr new_path = std::make_shared<Path>(_sic);
     for (auto motion : _motions) {
-        auto new_motion = std::make_shared<Motion>(_sic);
-        _sic->copyState(new_motion->getState(), motion->getState());
-        _sic->copyControl(new_motion->getControl(), motion->getControl());
+        auto new_motion = motion->deepCopy();
         new_path->append(new_motion);
     }
     return new_path;

@@ -42,6 +42,8 @@ namespace planner {
                     void setParent(MotionPtr parent);
                     // Reset parent and any other data set after construction
                     virtual void reset();
+                    // return a deep copy of this motion
+                    virtual MotionPtr deepCopy() const;
 
                 protected:
                     std::weak_ptr<::ompl::control::SpaceInformation> _weak_si;

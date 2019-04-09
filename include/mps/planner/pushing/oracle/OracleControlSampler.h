@@ -44,20 +44,17 @@ namespace planner {
                     const ::ompl::base::State* dest,
                     unsigned int local_target_obj);
                 /**
-                     * Samples a robot state from oracle feasibility p(x_r | x_t, x'_t)
+                     * Samples a robot state from oracle pushing feasbility p(x_r | x_t, x'_t)
                      * @param sample_state - contains x_t and as a result will contain the sampled x_r. WARNING: Must be an instance of SimEnvState
                      * @param target_state - contains x'_t. WARNING: Must be an instance of SimEnvState
                      * @param local_target_obj - object identifier t
                      * @param p_uniform - if > 0.0f, feasible state is sampled uniformly rather than using oracle with
                      *          probability p_uniform;.
                      */
-                void sampleFeasibleState(::ompl::base::State* x_state,
+                void samplePushingState(::ompl::base::State* x_state,
                     const ::ompl::base::State* x_prime_state,
                     unsigned int local_target_obj,
                     const float& p_uniform = 0.0f);
-                float getFeasibility(const ::ompl::base::State* x_state,
-                    const ::ompl::base::State* x_prime_state,
-                    unsigned int active_obj_id) const;
 
                 /**
                      * Steers the robot to a given goal state.
@@ -117,6 +114,10 @@ namespace planner {
                 std::vector<mps::planner::ompl::control::RealValueParameterizedControl*> _controls;
                 unsigned int _robot_id;
                 ::ompl::RNGPtr _rng;
+                Eigen::VectorXf _eigen_robot_state;
+                Eigen::VectorXf _eigen_current_object_state;
+                Eigen::VectorXf _eigen_target_object_state;
+                Eigen::VectorXf _eigen_control;
 
                 inline mps::planner::ompl::control::RealValueParameterizedControl* getControl();
                 inline void resetControlIdx();

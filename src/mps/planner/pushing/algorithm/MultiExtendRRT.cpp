@@ -99,6 +99,20 @@ void PushMotion::reset()
     _is_teleport_transit = false;
 }
 
+MotionPtr PushMotion::deepCopy() const
+{
+    auto si = _weak_si.lock();
+    if (!si) {
+        throw std::logic_error("Could not copy Motion. Space Information does no longer exist.");
+    }
+    auto new_motion = std::make_shared<PushMotion>(si);
+    si->copyState(new_motion->getState(), _state);
+    si->copyControl(new_motion->getControl(), _control);
+    new_motion->setTargetId(_target_id);
+    new_motion->setTeleportTransit(_is_teleport_transit);
+    return new_motion;
+}
+
 /**************************************** MultiExtendRRT *******************************************/
 MultiExtendRRT::MultiExtendRRT(oc::SpaceInformationPtr si, oracle::PushingOraclePtr pushing_oracle,
     oracle::RobotOraclePtr robot_oracle, const std::string& robot_name)
@@ -244,23 +258,24 @@ bool MultiExtendRRT::isGoalPath(PathConstPtr path, const mps_state::SimEnvWorldS
     auto prev_motion = motion;
     _si->copyState(motion->getState(), start);
     _si->nullControl(motion->getControl());
-    auto robot_state_space = _state_space->getObjectStateSpace(pq->robot_name);
     unsigned int robot_id = _state_space->getSubspaceIndex(pq->robot_name);
     bool valid_path = true;
-
+    // run over path and forward simulate motions
     for (unsigned int i = 0; i < path->getNumMotions(); ++i) {
         auto m = path->getConstMotion(i);
         auto pm = std::dynamic_pointer_cast<const PushMotion>(m);
         motion->setTargetId(pm->getTargetId());
         if (pm and pm->isTeleportTransit()) {
+            _si->nullControl(motion->getControl());
             motion->setTeleportTransit(true);
-            // copy robot state
-            auto target_robot_s = dynamic_cast<const mps_state::SimEnvWorldState*>(pm->getConstState());
-            auto motion_robot_s = dynamic_cast<const mps_state::SimEnvWorldState*>(motion->getState());
-            robot_state_space->copyState(motion_robot_s->getObjectState(robot_id), target_robot_s->getObjectState(robot_id));
+            // copy previous state
+            _state_space->copyState(motion->getState(), prev_motion->getState());
+            // copy robot state (teleportation)
+            _state_space->copySubState(motion->getState(), m->getConstState(), robot_id);
             valid_path = _si->isValid(motion->getState());
         } else {
             // propagate action
+            _si->copyControl(motion->getControl(), m->getConstControl());
             valid_path = _state_propagator->propagate(prev_motion->getState(), motion->getControl(), motion->getState());
         }
         if (!valid_path)
@@ -271,7 +286,7 @@ bool MultiExtendRRT::isGoalPath(PathConstPtr path, const mps_state::SimEnvWorldS
             motion = std::make_shared<PushMotion>(_si);
         }
     }
-    bool goal_reached = pq->goal_region->isSatisfied(motion->getState());
+    bool goal_reached = pq->goal_region->isSatisfied(prev_motion->getState());
     return goal_reached && valid_path;
 }
 
@@ -379,7 +394,7 @@ bool MultiExtendRRT::samplePush(const ompl::state::SimEnvWorldState* start_state
     _state_space->copyState(approach->getState(), start_state);
     if (sample_pushing_state) {
         // sample a pushing state
-        _oracle_sampler->sampleFeasibleState(approach->getState(), target_state, t, _pushing_state_eps);
+        _oracle_sampler->samplePushingState(approach->getState(), target_state, t, _pushing_state_eps);
         // check if its valid or not
         if (!_si->isValid(approach->getState()))
             return false;
@@ -537,7 +552,7 @@ std::tuple<GreedyMultiExtendRRT::ExtensionProgress, PushMotionPtr> GreedyMultiEx
                     remainers.clear();
                     std::set_intersection(old_remainers.cbegin(), old_remainers.cend(),
                         sub_remainers.cbegin(), sub_remainers.cend(), std::inserter(remainers, remainers.begin()));
-                    // uipdate target set
+                    // update target set
                     MovableSet remaining_targets(targets);
                     std::set_intersection(targets.cbegin(), targets.cend(), sub_remainers.cbegin(), sub_remainers.cend(),
                         std::inserter(remaining_targets, remaining_targets.begin()));
@@ -715,12 +730,13 @@ unsigned int GreedyMultiExtendRRT::getNumPushingTrials() const
 
 MERRTExecutionMonitor::MERRTExecutionMonitor(MultiExtendRRTPtr planner, ExecutionCallback excall)
     : ExecutionMonitor(planner, excall)
-    , _transfer_tolerance(0.01)
-    , _si(_planner->getSpaceInformation())
-    , _motion_cache(_si)
     , _merrt_planner(planner)
+    , _si(_planner->getSpaceInformation())
     , _propagator(std::dynamic_pointer_cast<mps_control::SimEnvStatePropagator>(_si->getStatePropagator()))
     , _state_space(std::dynamic_pointer_cast<mps_state::SimEnvWorldStateSpace>(_si->getStateSpace()))
+    , _motion_cache(_si)
+    , _transfer_tolerance(0.01)
+    , _num_pushing_trials(10)
 {
     assert(_propagator);
     assert(_state_space);
@@ -744,8 +760,10 @@ bool MERRTExecutionMonitor::execute(RearrangementPlanner::PlanningQueryPtr pq)
     _robot_id = _state_space->getSubspaceIndex(pq->robot_name);
     auto s = dynamic_cast<mps_state::SimEnvWorldState*>(_si->allocState());
     auto path = pq->path->deepCopy();
-    bool no_error = true;
-    while (path->getNumMotions()) {
+    // execute the first motion
+    bool no_error = _excall(path->getMotion(0), s);
+    path = path->getSubPath(1); // TODO replace by pop front
+    while (path->getNumMotions() and no_error) {
         if (updatePath(path, s, pq)) {
             no_error = _excall(path->getMotion(0), s);
             if (!no_error)
@@ -785,7 +803,7 @@ void MERRTExecutionMonitor::segmentPath(mps::planner::ompl::planning::essentials
     for (unsigned int i = 0; i < intended_path->getNumMotions(); ++i) {
         PushMotionPtr current_motion = std::dynamic_pointer_cast<PushMotion>(intended_path->getMotion(i));
         unsigned int current_target = current_motion->getTargetId();
-        if (current_target != prev_target and current_target != _robot_id) { // change in target from transfer to transit
+        if (current_target != prev_target and current_target == _robot_id) { // change in target from transfer to transit
             segments.push_back(std::make_pair(TransitSegment(), TransferSegment()));
         }
         if (current_target == _robot_id) {
@@ -795,7 +813,7 @@ void MERRTExecutionMonitor::segmentPath(mps::planner::ompl::planning::essentials
                 segments.back().first.predicted.push_back(std::dynamic_pointer_cast<PushMotion>(predicted_path->getMotion(i)));
             }
         } else {
-            segments.back().second.target_id = current_motion->getTargetId();
+            segments.back().second.target_id = current_target;
             segments.back().second.intended.push_back(current_motion);
             if (predicted_path->getNumMotions() > i) {
                 segments.back().second.predicted.push_back(std::dynamic_pointer_cast<PushMotion>(predicted_path->getMotion(i)));
@@ -835,7 +853,7 @@ bool MERRTExecutionMonitor::updatePath(PathPtr path, mps_state::SimEnvWorldState
             auto* intended_state = dynamic_cast<const mps_state::SimEnvWorldState*>(transit.intended.back()->getConstState());
             // set the robot to its pushing state
             _state_space->copyState(tmp_state.get(), curr_predicted_state);
-            _robot_state_space->copyState(tmp_state->getObjectState(_robot_id), intended_state);
+            _state_space->copySubState(tmp_state.get(), intended_state, _robot_id);
             // is the pushing state still valid in our predicted world state?
             if (_si->isValid(tmp_state.get())) {
                 // check whether we would reach the goal if this transit was valid and took the robot to the pushing state

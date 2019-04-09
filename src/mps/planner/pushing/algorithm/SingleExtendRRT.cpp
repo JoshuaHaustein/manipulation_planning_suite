@@ -168,7 +168,6 @@ bool SingleExtendRRT::isGoalPath(PathConstPtr path, const mps_state::SimEnvWorld
     _si->copyState(motion->getState(), start);
     _si->nullControl(motion->getControl());
     auto robot_state_space = _state_space->getObjectStateSpace(pq->robot_name);
-    unsigned int robot_id = _state_space->getSubspaceIndex(pq->robot_name);
     bool valid_path = true;
     for (unsigned int i = 0; i < path->getNumMotions(); ++i) {
         auto pathm = path->getConstMotion(i);
@@ -482,7 +481,7 @@ void HybridActionRRT::sampleActionSequence(std::vector<::ompl::control::Control 
             auto new_motion = _motion_cache.getNewMotion();
             _state_space->copyState(new_motion->getState(), start->getState());
             // first sample robot state
-            _oracle_sampler->sampleFeasibleState(new_motion->getState(), dest, obj_id);
+            _oracle_sampler->samplePushingState(new_motion->getState(), dest, obj_id);
 #ifdef DEBUG_PRINTOUTS
             printState(log_prefix + " Steering robot first to feasible state ", new_motion->getState());
 #endif
@@ -613,7 +612,7 @@ void OracleRearrangementRRT::selectTreeNode(const ompl::planning::essentials::Mo
         // tmp_motion = slice_representative
         _state_space->copyState(tmp_motion->getState(), selected_node->getState());
         // tmp_motion's robot state gets updated with feasible robot state
-        _oracle_sampler->sampleFeasibleState(tmp_motion->getState(), sample_motion->getState(), active_obj_id, _feasible_state_noise);
+        _oracle_sampler->samplePushingState(tmp_motion->getState(), sample_motion->getState(), active_obj_id, _feasible_state_noise);
 // save that robot state in sample_motion
 #ifdef DEBUG_PRINTOUTS
         printState(log_prefix + " For sample ", sample_motion->getState());
@@ -777,7 +776,7 @@ void SliceBasedOracleRRT::selectTreeNode(const ompl::planning::essentials::Motio
         printState("Sample to move to is ", sample->getState());
 #endif
         // tmp_motion's robot state gets updated with feasible robot state
-        _oracle_sampler->sampleFeasibleState(tmp_motion->getState(), sample->getState(), active_obj_id,
+        _oracle_sampler->samplePushingState(tmp_motion->getState(), sample->getState(), active_obj_id,
             _feasible_state_noise);
 #ifdef DEBUG_PRINTOUTS
         printState("Sampled feasible state is ", tmp_motion->getState());

@@ -460,7 +460,7 @@ std::pair<bool, bool> LocalOracleShortcutter::computeShortcut(
         // first sample a feasible state
         auto feasible_state_mtn = _motion_cache.getNewMotion();
         _si->copyState(feasible_state_mtn->getState(), start->getState());
-        _oracle_sampler->sampleFeasibleState(feasible_state_mtn->getState(),
+        _oracle_sampler->samplePushingState(feasible_state_mtn->getState(),
             end_state,
             object_id);
         // steer robot to feasible state
@@ -687,7 +687,7 @@ bool OracleShortcutter::computeShortcut(mps::planner::ompl::planning::essentials
         // first sample a feasible state
         auto feasible_state_mtn = _motion_cache.getNewMotion();
         _si->copyState(feasible_state_mtn->getState(), start->getState());
-        _oracle_sampler->sampleFeasibleState(feasible_state_mtn->getState(),
+        _oracle_sampler->samplePushingState(feasible_state_mtn->getState(),
             destination->getState(),
             object_id);
         // steer robot to feasible state

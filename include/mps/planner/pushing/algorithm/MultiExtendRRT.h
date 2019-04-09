@@ -41,6 +41,7 @@ namespace planner {
                 void setTeleportTransit(bool btransit);
                 bool isTeleportTransit() const;
                 void reset() override;
+                mps::planner::ompl::planning::essentials::MotionPtr deepCopy() const override;
 
             private:
                 unsigned int _target_id;
@@ -249,15 +250,19 @@ namespace planner {
                     const mps::planner::ompl::state::SimEnvWorldState* start,
                     const mps::planner::ompl::state::SimEnvWorldState* goal);
 
+                // const members
                 const MultiExtendRRTPtr _merrt_planner;
                 const ::ompl::control::SpaceInformationPtr _si;
                 const mps::planner::ompl::control::SimEnvStatePropagatorPtr _propagator;
                 const mps::planner::ompl::state::SimEnvWorldStateSpacePtr _state_space;
-                mps::planner::ompl::state::SimEnvObjectStateSpacePtr _robot_state_space;
-                unsigned int _robot_id;
+                // motion cache
+                mutable MotionCache<PushMotion> _motion_cache;
+                // parameters
                 float _transfer_tolerance;
                 unsigned int _num_pushing_trials;
-                mutable MotionCache<PushMotion> _motion_cache;
+                // robot specific members that change depending on the planning query
+                mps::planner::ompl::state::SimEnvObjectStateSpacePtr _robot_state_space;
+                unsigned int _robot_id;
             };
         }
     }

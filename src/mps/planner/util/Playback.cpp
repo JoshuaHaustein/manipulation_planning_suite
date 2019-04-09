@@ -41,8 +41,10 @@ void mps::planner::util::playback::playPath(sim_env::WorldPtr world,
         }
         auto current_motion = path->getConstMotion(idx);
         playMotion(world, controller, state_space, interrupt_callback, current_motion, world_sim_env_state);
-        if (force_synch)
+        if (force_synch) {
+            path_sim_env_state = dynamic_cast<mps_state::SimEnvWorldState const*>(current_motion->getConstState());
             state_space->setToState(world, path_sim_env_state);
+        }
     }
     state_space->freeState(world_sim_env_state);
 }
