@@ -342,12 +342,19 @@ RampVelocityControlSampler::RampVelocityControlSampler(RampVelocityControlSpaceC
     : ControlSampler(control_space.get())
     , _control_space(control_space)
 {
+    #ifdef OMPL_NEW_VERSION
+    _values_buffer.resize(control_space->getDimension());
+    #else
     _values_buffer = new double[control_space->getDimension()];
+    #endif
 }
 
 RampVelocityControlSampler::~RampVelocityControlSampler()
 {
+    #ifdef OMPL_NEW_VERSION
+    #else
     delete[] _values_buffer;
+    #endif
 }
 
 void RampVelocityControlSampler::sample(omc::Control* control)
@@ -373,7 +380,13 @@ void RampVelocityControlSampler::sample(omc::Control* control)
     for (auto& subspace : subspaces) {
         auto subspace_dim = (unsigned int)subspace.indices.size();
         assert(subspace_dim <= num_dofs);
+        #ifdef OMPL_NEW_VERSION
+        _values_buffer.resize(subspace_dim);
+        rng->uniformInBall(subspace.norm_limits[1], _values_buffer);
+        #else
         rng->uniformInBall(subspace.norm_limits[1], subspace_dim, _values_buffer);
+        #endif
+
         for (long i = 0; i < subspace_dim; ++i) {
             auto idx = subspace.indices[i];
             velocity[idx] = _values_buffer[i];

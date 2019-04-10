@@ -53,7 +53,7 @@ namespace planner {
                 unsigned int getNumParameters() const override;
 
                 /**
-                     * Initialize from a local twist (for holonomic SE(2) robots). 
+                     * Initialize from a local twist (for holonomic SE(2) robots).
                      * A local twist is a tuple (v, w, t, theta), where
                      *  v in (0, v_max) is the translational velocity
                      *  w in (-w_max, w_max) the angular velocity
@@ -105,7 +105,11 @@ namespace planner {
 
             private:
                 const RampVelocityControlSpaceConstWeakPtr _control_space;
+                #ifdef OMPL_NEW_VERSION
+                std::vector<double> _values_buffer;
+                #else
                 double* _values_buffer;
+                #endif
             };
 
             class RampVelocityControlSpace : public ::ompl::control::ControlSpace,
