@@ -8,6 +8,7 @@
 #include <mps/planner/pushing/oracle/Oracle.h>
 #include <mps/planner/pushing/oracle/RampComputer.h>
 #include <mps/planner/util/Random.h>
+#include <sim_env/SimEnv.h>
 
 namespace mps {
 namespace planner {
@@ -20,7 +21,7 @@ namespace planner {
             public:
                 struct Parameters {
                     Parameters(); // inits values suitable for rigid_fingers hand
-                    Eigen::Vector2f obj_pos; // ideal object position for pushing relative to robot frame
+                    Eigen::Vector3f robot_pose; // ideal robot pose relative to the object, if it should be pushed along the x-axis
                     float alpha; // size of arc (radians) on which the robot may be placed relative to the pushed object
                     // alpha = 0 -> the robot needs to be on the opposite side of the pushing direction
                     // alpha = pi / 2 -> the robot may also be placed next to the object facing orhogonal to the pushing direction
@@ -42,25 +43,29 @@ namespace planner {
                 // };
 
                 explicit HumanOracle(RobotOraclePtr robot_oracle,
-                    const std::vector<ObjectData>& object_data,
+                    unsigned int robot_id,
+                    const std::vector<sim_env::ObjectPtr>& objects,
                     const Parameters& params = Parameters());
                 ~HumanOracle() override;
 
-                void predictAction(const Eigen::VectorXf& current_robot_state,
-                    const Eigen::VectorXf& current_obj_state,
-                    const Eigen::VectorXf& next_obj_state,
-                    const unsigned int& obj_id,
-                    Eigen::VectorXf& control) override;
+                void predictAction(const mps::planner::ompl::state::SimEnvWorldState* current_state,
+                    const mps::planner::ompl::state::SimEnvWorldState* target_state,
+                    const unsigned int& obj_id, ::ompl::control::Control* control) override;
 
-                void samplePushingState(const Eigen::VectorXf& current_obj_state,
-                    const Eigen::VectorXf& next_obj_state,
+                void samplePushingState(const mps::planner::ompl::state::SimEnvWorldState* current_state,
+                    const mps::planner::ompl::state::SimEnvWorldState* next_state,
                     const unsigned int& obj_id,
-                    Eigen::VectorXf& new_robot_state) override;
+                    mps::planner::ompl::state::SimEnvObjectState* new_robot_state) override;
 
             private:
                 Parameters _params;
                 RobotOraclePtr _robot_steerer;
+                unsigned int _robot_id;
                 ::ompl::RNGPtr _rng;
+                Eigen::VectorXf _next_obj_state;
+                Eigen::VectorXf _current_obj_state;
+                Eigen::VectorXf _robot_state;
+                Eigen::VectorXf _next_robot_state;
                 // Takes the first three components of state and ref and computes state - ref
                 // The third component is assumed to be an angle in range [-pi, pi], hence the shortest
                 Eigen::Vector3f relativeSE2(const Eigen::VectorXf& state, const Eigen::VectorXf& ref);

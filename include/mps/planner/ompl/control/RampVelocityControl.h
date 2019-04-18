@@ -30,7 +30,7 @@ namespace planner {
                  * The ramp velocity control is a simple velocity control that follows a ramp-shaped velocity profile.
                  * All degrees of freedom move synchronously.
                  */
-            class RampVelocityControl : public virtual SemiDynamicVelocityControl {
+            class RampVelocityControl : public VelocityControl, public SemiDynamicControl, public RealValueParameterizedControl {
             public:
                 RampVelocityControl(RampVelocityControlSpaceConstPtr control_space);
                 ~RampVelocityControl();
@@ -79,10 +79,11 @@ namespace planner {
 
                 float getAccelerationTime() const;
 
-                /** FiniteRestingVelocityControl interface **/
-                float getRestTime() const override;
-                void addRestTime(float dt) override;
-                void setRestTime(float t) override;
+                /** SemiDynamicControl interface **/
+                float getPreRestDuration() const override;
+                float getRestDuration() const override;
+                void addRestDuration(float dt) override;
+                void setRestDuration(float t) override;
 
             private:
                 RampVelocityControlSpaceConstWeakPtr _control_space;
@@ -105,11 +106,11 @@ namespace planner {
 
             private:
                 const RampVelocityControlSpaceConstWeakPtr _control_space;
-                #ifdef OMPL_NEW_VERSION
+#ifdef OMPL_NEW_VERSION
                 std::vector<double> _values_buffer;
-                #else
+#else
                 double* _values_buffer;
-                #endif
+#endif
             };
 
             class RampVelocityControlSpace : public ::ompl::control::ControlSpace,

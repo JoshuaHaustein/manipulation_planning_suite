@@ -108,6 +108,8 @@ set(PLANNER_H
         include/mps/planner/util/yaml/SortingParsing.h
         include/mps/sdf/SDF.h
         include/mps/sdf/FMM.h
+        include/mps/external/Path.h
+        include/mps/external/Trajectory.h
         )
 
 ## Define all source files
@@ -145,6 +147,8 @@ set(PLANNER_SRC
         src/mps/planner/sorting/PushSortingPlanner.cpp
         src/mps/planner/sorting/algorithm/MCTS.cpp
         src/mps/sdf/SDF.cpp
+        src/mps/external/Path.cpp
+        src/mps/external/Trajectory.cpp
 )
 
 ## Declare a C++ library

@@ -10,8 +10,9 @@ namespace mps_logging = mps::planner::util::logging;
 
 HumanOracle::Parameters::Parameters()
 {
-    obj_pos[0] = 0.0;
-    obj_pos[1] = 0.08;
+    robot_pose[0] = -0.08;
+    robot_pose[1] = 0.0;
+    robot_pose[2] = -1.57;
     alpha = 1.97;
     sig_trans = 0.02;
     sig_rot = 0.2;
@@ -30,37 +31,39 @@ HumanOracle::Parameters::Parameters()
 // }
 
 HumanOracle::HumanOracle(RobotOraclePtr robot_oracle,
-    const std::vector<ObjectData>& object_data,
+    unsigned int robot_id,
+    const std::vector<sim_env::ObjectPtr>& objects,
     const Parameters& params)
     : _params(params)
     , _robot_steerer(robot_oracle)
+    , _robot_id(robot_id)
 {
     // _params.computeInverses();
     _rng = mps::planner::util::random::getDefaultRandomGenerator();
-    _object_data = object_data;
 }
 
 HumanOracle::~HumanOracle() = default;
 
-void HumanOracle::predictAction(const Eigen::VectorXf& current_robot_state,
-    const Eigen::VectorXf& current_obj_state,
-    const Eigen::VectorXf& next_obj_state,
-    const unsigned int& obj_id,
-    Eigen::VectorXf& control)
+void HumanOracle::predictAction(
+    const mps::planner::ompl::state::SimEnvWorldState* current_state,
+    const mps::planner::ompl::state::SimEnvWorldState* target_state,
+    const unsigned int& obj_id, ::ompl::control::Control* control)
 {
     static const std::string log_prefix("[HumanOracle::predictAction]");
-    Eigen::Vector3f rel_obj(relativeSE2(next_obj_state, current_obj_state));
+    current_state->getObjectState(obj_id)->getConfiguration(_current_obj_state);
+    current_state->getObjectState(_robot_id)->getConfiguration(_robot_state);
+    target_state->getObjectState(obj_id)->getConfiguration(_next_obj_state);
+    Eigen::Vector3f rel_obj(relativeSE2(_next_obj_state, _current_obj_state));
     float dtheta_r = _rng->gaussian(rel_obj[2], _params.sig_rot);
-    Eigen::Vector3f next_robot_state(current_robot_state[0], current_robot_state[1], current_robot_state[2] + dtheta_r);
+    _next_robot_state.resize(3);
+    _next_robot_state.head(2) = _robot_state.head(2);
+    _next_robot_state[2] = _robot_state[2] + dtheta_r;
     float cart_dist = rel_obj.head(2).norm();
     if (cart_dist != 0.0) {
-        next_robot_state.head(2) = next_obj_state.head(2);
-        next_robot_state.head(2) += Eigen::Rotation2D(dtheta_r) * (current_robot_state.head(2) - current_obj_state.head(2));
+        _next_robot_state.head(2) = _next_obj_state.head(2);
+        _next_robot_state.head(2) += Eigen::Rotation2D(dtheta_r) * (_robot_state.head(2) - _current_obj_state.head(2));
     }
-    std::vector<Eigen::VectorXf> controls;
-    _robot_steerer->steer(current_robot_state, next_robot_state, controls);
-    assert(not controls.empty());
-    control = controls.at(0);
+    _robot_steerer->steer(_robot_state, _next_robot_state, control);
 
     // OLD HUMAN ORACLE
     // Eigen::Vector3f next_robot_state(next_obj_state[0], next_obj_state[1], current_robot_state[2]);
@@ -83,26 +86,34 @@ void HumanOracle::predictAction(const Eigen::VectorXf& current_robot_state,
     // }
 }
 
-void HumanOracle::samplePushingState(const Eigen::VectorXf& current_obj_state,
-    const Eigen::VectorXf& next_obj_state,
+void HumanOracle::samplePushingState(const mps::planner::ompl::state::SimEnvWorldState* current_state,
+    const mps::planner::ompl::state::SimEnvWorldState* next_state,
     const unsigned int& obj_id,
-    Eigen::VectorXf& new_robot_state)
+    mps::planner::ompl::state::SimEnvObjectState* new_robot_state)
 {
-    Eigen::Vector3f se2_push_dir = relativeSE2(next_obj_state, current_obj_state);
+    current_state->getObjectState(obj_id)->getConfiguration(_current_obj_state);
+    current_state->getObjectState(_robot_id)->getConfiguration(_robot_state);
+    next_state->getObjectState(obj_id)->getConfiguration(_next_obj_state);
+    Eigen::Vector3f se2_push_dir = relativeSE2(_next_obj_state, _current_obj_state);
     Eigen::Vector2f cart_dir(se2_push_dir[0], se2_push_dir[1]);
     cart_dir.normalize();
     // compute where on the partial circle around the object to place the robot
     float beta = 2.0f * _rng->uniform01() * _params.alpha - _params.alpha;
     // compute position of robot relative to object
-    Eigen::Vector2f robot_pos = Eigen::Rotation2D(beta) * -_params.obj_pos;
+    Eigen::Vector2f robot_pos = Eigen::Rotation2D(beta) * _params.robot_pose.head(2);
     // transform robot pose to global frame
     float gamma = std::atan2(cart_dir[1], cart_dir[0]);
-    robot_pos = Eigen::Rotation2D(gamma) * robot_pos + current_obj_state.head(2);
-    float robot_orientation = beta - M_PI + gamma;
+    robot_pos = Eigen::Rotation2D(gamma) * robot_pos + _current_obj_state.head(2);
+    float robot_orientation = beta + gamma + _params.robot_pose[2];
     // save state
-    new_robot_state.resize(3);
-    new_robot_state.head(2) = robot_pos;
-    new_robot_state[2] = robot_orientation;
+    _next_robot_state.resize(3);
+    _next_robot_state.head(2) = robot_pos;
+    _next_robot_state[2] = robot_orientation;
+    new_robot_state->setConfiguration(_next_robot_state);
+    _next_robot_state.setZero();
+    if (new_robot_state->hasVelocity()) {
+        new_robot_state->setVelocity(_next_robot_state);
+    }
 
     // OLD HUMAN ORACLE
     // double pushing_dist = _rng->gaussian(_params.optimal_push_distance, _params.push_distance_tolerance);

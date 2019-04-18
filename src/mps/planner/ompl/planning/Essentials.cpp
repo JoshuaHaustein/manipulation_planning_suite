@@ -160,7 +160,7 @@ void Path::print(std::ostream& out) const
         // TODO it's unnecessary to restrict this class to SimEnvWorldStates and SemiDYnamicVelocityControl
         motion->getState()->as<mps_state::SimEnvWorldState>()->print(out);
         out << " Control: ";
-        auto control = dynamic_cast<mps_control::SemiDynamicVelocityControl*>(motion->getControl());
+        auto control = dynamic_cast<mps_control::RealValueParameterizedControl*>(motion->getControl());
         if (!control) {
             throw std::logic_error("[mps::planner::ompl::planning::essentials::Path::print] Could not cast control to SemiDynamicVelocityControl");
         }

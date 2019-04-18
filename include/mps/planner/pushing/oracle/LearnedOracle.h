@@ -13,26 +13,37 @@ namespace planner {
         namespace oracle {
             class LearnedPipeOracle : public PushingOracle {
             public:
-                LearnedPipeOracle(const std::vector<ObjectData>& object_data);
+                LearnedPipeOracle(const std::vector<sim_env::ObjectPtr>& objects, unsigned int robot_id);
                 ~LearnedPipeOracle() override;
 
-                void predictAction(const Eigen::VectorXf& current_robot_state,
-                    const Eigen::VectorXf& current_obj_state,
-                    const Eigen::VectorXf& next_obj_state,
-                    const unsigned int& obj_id,
-                    Eigen::VectorXf& control) override;
+                void predictAction(const mps::planner::ompl::state::SimEnvWorldState* current_state,
+                    const mps::planner::ompl::state::SimEnvWorldState* target_state,
+                    const unsigned int& obj_id, ::ompl::control::Control* control) override;
 
-                void samplePushingState(const Eigen::VectorXf& current_obj_state,
-                    const Eigen::VectorXf& next_obj_state,
+                void samplePushingState(const mps::planner::ompl::state::SimEnvWorldState* current_state,
+                    const mps::planner::ompl::state::SimEnvWorldState* next_state,
                     const unsigned int& obj_id,
-                    Eigen::VectorXf& new_robot_state) override;
+                    mps::planner::ompl::state::SimEnvObjectState* new_robot_state) override;
 
             private:
+                struct ObjectData {
+                    float mass;
+                    float inertia;
+                    float mu;
+                    float width;
+                    float height;
+                };
                 /* Paths to pipes for communication with oracle */
                 const char* _action_request_path;
                 const char* _action_response_path;
                 const char* _state_sample_request_path;
                 const char* _state_sample_response_path;
+                std::vector<ObjectData> _object_data;
+                Eigen::VectorXf _current_robot_state;
+                Eigen::VectorXf _current_obj_state;
+                Eigen::VectorXf _target_obj_state;
+                Eigen::VectorXf _control;
+                unsigned int robot_id;
             };
         }
     }

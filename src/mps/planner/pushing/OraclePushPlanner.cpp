@@ -689,26 +689,19 @@ void OraclePushPlanner::createAlgorithm()
         }
         }
         // create object data
-        std::vector<mps::planner::pushing::oracle::PushingOracle::ObjectData> object_data;
+        std::vector<sim_env::ObjectPtr> objects;
         for (unsigned int i = 0; i < _state_space->getNumObjects(); ++i) {
-            auto object = _state_space->getObject(i);
-            mps::planner::pushing::oracle::PushingOracle::ObjectData data;
-            data.mass = object->getMass();
-            data.inertia = object->getInertia();
-            data.mu = object->getGroundFriction();
-            auto aabb = object->getLocalAABB();
-            data.width = aabb.getWidth();
-            data.height = aabb.getHeight();
-            object_data.push_back(data);
+            // TODO Change state space to be able to return non-const object pointers?
+            objects.push_back(_planning_problem.world->getObject(_state_space->getObjectName(i)));
         }
         switch (_planning_problem.oracle_type) {
         case PlanningProblem::OracleType::Human: {
-            pushing_oracle = std::make_shared<oracle::HumanOracle>(robot_oracle, object_data);
+            pushing_oracle = std::make_shared<oracle::HumanOracle>(robot_oracle, objects);
             util::logging::logInfo("Using human made oracle!", log_prefix);
             break;
         }
         case PlanningProblem::OracleType::Learned: {
-            pushing_oracle = std::make_shared<oracle::LearnedPipeOracle>(object_data);
+            pushing_oracle = std::make_shared<oracle::LearnedPipeOracle>(objects);
             util::logging::logInfo("Using learned oracle!", log_prefix);
             break;
         }

@@ -644,10 +644,13 @@ std::tuple<GreedyMultiExtendRRT::PushResult, PushMotionPtr> GreedyMultiExtendRRT
 bool GreedyMultiExtendRRT::isCloseEnough(const PushMotionPtr& current,
     SliceConstPtr target_slice, unsigned int t) const
 {
-    auto object_state_space = _state_space->getSubspace(t);
+    auto object_state_space = std::dynamic_pointer_cast<mps_state::SimEnvObjectStateSpace>(_state_space->getSubspace(t));
     auto current_state = dynamic_cast<mps_state::SimEnvWorldState*>(current->getState());
     auto target_state = dynamic_cast<mps_state::SimEnvWorldState*>(target_slice->repr->getState());
-    auto dist = object_state_space->distance(current_state->getObjectState(t), target_state->getObjectState(t));
+    // auto dist = object_state_space->distance(current_state->getObjectState(t), target_state->getObjectState(t));
+    auto ccurrent = current_state->getObjectState(t)->getConfigurationState()->getConfiguration();
+    auto ctarget = target_state->getObjectState(t)->getConfigurationState()->getConfiguration();
+    float dist = (ccurrent.head(2) - ctarget.head(2)).norm();
     return dist < _target_tolerance;
 }
 
