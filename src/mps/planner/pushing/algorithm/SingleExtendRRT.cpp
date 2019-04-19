@@ -424,10 +424,13 @@ bool HybridActionRRT::extend(mps::planner::ompl::planning::essentials::MotionPtr
     float best_distance = std::numeric_limits<float>::max();
     std::vector<MotionPtr> best_state_action_sequence;
     for (unsigned int i = 0; i < _num_control_samples; ++i) {
-        std::vector<::ompl::control::Control const*> controls;
+        std::vector<::ompl::control::Control*> controls;
         sampleActionSequence(controls, start, dest, pb);
         std::vector<MotionPtr> new_motion_sequence;
         forwardPropagateActionSequence(controls, start, new_motion_sequence, pb);
+        for (auto control : controls) {
+            _si->freeControl(control);
+        }
         if (not new_motion_sequence.empty()) {
             // compute the distance between the last state of this sequence and our destination
             auto& last_motion_candidate = new_motion_sequence[new_motion_sequence.size() - 1];
@@ -456,7 +459,7 @@ bool HybridActionRRT::extend(mps::planner::ompl::planning::essentials::MotionPtr
     return false;
 }
 
-void HybridActionRRT::sampleActionSequence(std::vector<::ompl::control::Control const*>& controls,
+void HybridActionRRT::sampleActionSequence(std::vector<::ompl::control::Control*>& controls,
     mps::planner::ompl::planning::essentials::MotionPtr start,
     ::ompl::base::State* dest,
     PlanningBlackboard& pb)
@@ -490,13 +493,15 @@ void HybridActionRRT::sampleActionSequence(std::vector<::ompl::control::Control 
             // TODO we could now either forward propagate these controls, or we beam the robot to this state
             // forward propagating would make the primitive slower to compute, but a bit more capable
             // for now we beam it only, i.e. we assume the world state didn't change by the previous movement
-            _oracle_sampler->steerPush(controls, new_motion->getState(), dest, obj_id);
+            auto push_control = _si->allocControl();
+            _oracle_sampler->queryPolicy(push_control, new_motion->getState(), dest, obj_id);
+            controls.push_back(push_control);
             _motion_cache.cacheMotion(new_motion);
         }
     }
 }
 
-void HybridActionRRT::forwardPropagateActionSequence(const std::vector<::ompl::control::Control const*>& controls,
+void HybridActionRRT::forwardPropagateActionSequence(const std::vector<::ompl::control::Control*>& controls,
     mps::planner::ompl::planning::essentials::MotionPtr start,
     std::vector<MotionPtr>& state_action_seq,
     PlanningBlackboard& pb)
@@ -632,7 +637,7 @@ bool OracleRearrangementRRT::extend(mps::planner::ompl::planning::essentials::Mo
 {
     static const std::string log_prefix("[mps::planner::pushing::algorithm::OracleRearrangementRRT::extend]");
     logging::logDebug("Attempting to extend search tree", log_prefix);
-    std::vector<const ::ompl::control::Control*> controls;
+    std::vector<::ompl::control::Control*> controls;
     bool b_goal = false;
     bool extension_success = false;
     float random_die = _rng->uniform01();
@@ -649,18 +654,24 @@ bool OracleRearrangementRRT::extend(mps::planner::ompl::planning::essentials::Mo
             return false;
         }
         extendStep(controls, start, last_motion, pb, extension_success, b_goal);
+        for (auto control : controls) {
+            _si->freeControl(control);
+        }
+        controls.clear();
         // next, if the active object is not the robot, try a push
         if (extension_success and active_obj_id != pb.robot_id and not b_goal) {
             logging::logDebug("Steering robot to feasible state successful, attempting push", log_prefix);
-            controls.clear();
-            _oracle_sampler->steerPush(controls, last_motion->getState(), dest, active_obj_id);
+            auto push_control = _si->allocControl();
+            _oracle_sampler->queryPolicy(push_control, last_motion->getState(), dest, active_obj_id);
+            controls.push_back(push_control);
             extendStep(controls, last_motion, last_motion, pb, extension_success, b_goal);
+            _si->freeControl(push_control);
         }
     }
     return b_goal;
 }
 
-void OracleRearrangementRRT::extendStep(const std::vector<const ::ompl::control::Control*>& controls,
+void OracleRearrangementRRT::extendStep(const std::vector<::ompl::control::Control*>& controls,
     const mps::planner::ompl::planning::essentials::MotionPtr& start_motion,
     mps::planner::ompl::planning::essentials::MotionPtr& result_motion,
     PlanningBlackboard& pb,

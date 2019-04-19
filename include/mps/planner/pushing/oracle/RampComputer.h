@@ -17,30 +17,30 @@ namespace planner {
             class RampComputer : public RobotOracle {
             public:
                 RampComputer(ompl::state::SimEnvObjectConfigurationSpacePtr robot_space,
-                    ompl::control::RampVelocityControlSpacePtr control_space);
-                RampComputer(const RampComputer& other);
+                    ompl::control::RampVelocityControlSpacePtr control_space, unsigned int robot_id);
+                RampComputer(const RampComputer& other, unsigned int robot_id);
                 ~RampComputer() override;
                 RampComputer& operator=(const RampComputer& other);
                 virtual void steer(const ompl::state::SimEnvObjectState* current_robot_state,
                     const ompl::state::SimEnvObjectState* desired_robot_state,
-                    std::vector<::ompl::control::Control*>& controls) const = 0;
+                    std::vector<::ompl::control::Control*>& controls) const override;
                 virtual void steer(const ompl::state::SimEnvWorldState* current_state,
                     const ompl::state::SimEnvObjectState* desired_robot_state,
-                    std::vector<::ompl::control::Control*>& controls) const = 0;
+                    std::vector<::ompl::control::Control*>& controls) const override;
                 /**
                          *  Compute a single control steering the robot from current_robot_state 
                          * to target_robot_state (as far as possible within one control).
                          */
                 virtual void steer(const Eigen::VectorXf& current_robot_state,
                     const Eigen::VectorXf& target_robot_state,
-                    ::ompl::control::Control* control) const = 0;
+                    ::ompl::control::Control* control) const override;
                 /**
                          *  Compute a sequence of controls steering the robot from current_robot_state 
                          * to target_robot_state.
                          */
                 virtual void steer(const Eigen::VectorXf& current_robot_state,
                     const Eigen::VectorXf& target_robot_state,
-                    std::vector<::ompl::control::Control*>& controls) const = 0;
+                    std::vector<::ompl::control::Control*>& controls) const override;
 
             private:
                 void compute_controls(const Eigen::VectorXf& current_robot_state,
@@ -49,6 +49,7 @@ namespace planner {
                 ompl::control::RampVelocityControlSpacePtr _control_space;
                 ompl::state::SimEnvObjectConfigurationSpacePtr _robot_space;
                 ompl::control::RampVelocityControl* _ramp_control;
+                unsigned int _robot_id;
             };
             typedef std::shared_ptr<RampComputer> RampComputerPtr;
             typedef std::shared_ptr<const RampComputer> RampComputerConstPtr;

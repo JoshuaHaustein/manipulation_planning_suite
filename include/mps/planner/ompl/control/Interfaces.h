@@ -52,7 +52,7 @@ namespace planner {
             class SemiDynamicControl {
             public:
                 virtual ~SemiDynamicControl() = 0;
-                virtual float getPreRestDuration() const;
+                virtual float getPreRestDuration() const = 0;
                 virtual float getRestDuration() const = 0;
                 virtual void addRestDuration(float dt) = 0;
                 virtual void setRestDuration(float dt) = 0;

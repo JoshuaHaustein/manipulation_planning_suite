@@ -17,7 +17,7 @@
 #include <mps/planner/pushing/algorithm/RearrangementPlanner.h>
 #include <mps/planner/pushing/algorithm/Shortcut.h>
 #include <mps/planner/pushing/oracle/DataGenerator.h>
-#include <mps/planner/pushing/oracle/ElasticBandRampComputer.h>
+// #include <mps/planner/pushing/oracle/ElasticBandRampComputer.h>
 #include <mps/planner/pushing/oracle/Oracle.h>
 // sim_env
 #include <sim_env/SimEnv.h>
@@ -240,9 +240,9 @@ namespace planner {
             mps::planner::pushing::algorithm::RearrangementPlannerPtr _algorithm;
             mps::planner::pushing::algorithm::ExecutionMonitorPtr _exec_monitor;
             mps::planner::pushing::algorithm::ShortcutterPtr _shortcutter;
-            mps::planner::pushing::oracle::ElasticBandRampComputerPtr _eb_computer;
+            // mps::planner::pushing::oracle::ElasticBandRampComputerPtr _eb_computer;
             mps::planner::pushing::algorithm::DebugDrawerPtr _rrt_debug_drawer;
-            mps::planner::pushing::oracle::EBDebugDrawerPtr _eb_debug_drawer;
+            // mps::planner::pushing::oracle::EBDebugDrawerPtr _eb_debug_drawer;
             std::vector<float> _distance_weights;
             void prepareDistanceWeights();
             void createAlgorithm(); // sets _algorithm, _exec_monitor and _shortcutter

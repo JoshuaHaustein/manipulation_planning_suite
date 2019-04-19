@@ -51,6 +51,10 @@ namespace planner {
                 Eigen::VectorXf getParameters() const override;
                 void getParameters(Eigen::VectorXf& params) const override;
                 unsigned int getNumParameters() const override;
+                /**
+                 * Set this velocity control to zero motion.
+                 */
+                void setZero();
 
                 /**
                      * Initialize from a local twist (for holonomic SE(2) robots).

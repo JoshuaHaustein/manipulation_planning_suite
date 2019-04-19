@@ -89,7 +89,7 @@ set(PLANNER_H
         include/mps/planner/pushing/oracle/Oracle.h
         include/mps/planner/pushing/oracle/LearnedOracle.h
         include/mps/planner/pushing/oracle/HumanOracle.h
-        include/mps/planner/pushing/oracle/ElasticBandRampComputer.h
+        # include/mps/planner/pushing/oracle/ElasticBandRampComputer.h
         include/mps/planner/pushing/oracle/RampComputer.h
         include/mps/planner/pushing/oracle/DataGenerator.h
         include/mps/planner/pushing/algorithm/SingleExtendRRT.h
@@ -137,7 +137,7 @@ set(PLANNER_SRC
         src/mps/planner/pushing/oracle/Oracle.cpp
         src/mps/planner/pushing/oracle/LearnedOracle.cpp
         src/mps/planner/pushing/oracle/HumanOracle.cpp
-        src/mps/planner/pushing/oracle/ElasticBandRampComputer.cpp
+        # src/mps/planner/pushing/oracle/ElasticBandRampComputer.cpp
         src/mps/planner/pushing/oracle/RampComputer.cpp
         src/mps/planner/pushing/oracle/DataGenerator.cpp
         src/mps/planner/pushing/algorithm/SingleExtendRRT.cpp

@@ -178,11 +178,11 @@ namespace planner {
                 float _action_randomness; // parameter in [0, 1] that determines randomness of action sampling (prand)
 
             private:
-                void sampleActionSequence(std::vector<::ompl::control::Control const*>& controls,
+                void sampleActionSequence(std::vector<::ompl::control::Control*>& controls,
                     mps::planner::ompl::planning::essentials::MotionPtr start,
                     ::ompl::base::State* dest,
                     PlanningBlackboard& pb);
-                void forwardPropagateActionSequence(const std::vector<::ompl::control::Control const*>& controls,
+                void forwardPropagateActionSequence(const std::vector<::ompl::control::Control*>& controls,
                     mps::planner::ompl::planning::essentials::MotionPtr start,
                     std::vector<mps::planner::ompl::planning::essentials::MotionPtr>& state_action_seq,
                     PlanningBlackboard& pb);
@@ -225,7 +225,7 @@ namespace planner {
                 mps::planner::pushing::oracle::OracleControlSamplerPtr getOracleSampler() const;
 
             protected:
-                void extendStep(const std::vector<const ::ompl::control::Control*>& controls,
+                void extendStep(const std::vector<::ompl::control::Control*>& controls,
                     const mps::planner::ompl::planning::essentials::MotionPtr& start_motion,
                     mps::planner::ompl::planning::essentials::MotionPtr& result_motion,
                     PlanningBlackboard& pb,

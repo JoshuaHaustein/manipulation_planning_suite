@@ -65,6 +65,15 @@ unsigned int RampVelocityControl::getNumParameters() const
     return _num_dofs + 1; // velocity_dofs + duration + waiting time
 }
 
+void RampVelocityControl::setZero()
+{
+    _plateau_duration = 0.0;
+    _acceleration_duration = 0.0;
+    _rest_time = 0.0;
+    _accelerations.setZero();
+    _max_velocities.setZero();
+}
+
 void RampVelocityControl::setFromLocalTwist(const Eigen::Vector3f& robot_pose, const Eigen::Vector4f& ltwist)
 {
     assert(_num_dofs == 4); // this only works for SE(2) robots

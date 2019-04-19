@@ -153,34 +153,20 @@ void DataGenerator::evaluateOracle(mps::planner::ompl::state::goal::RelocationGo
 
         // Sample feasible state and try to move robot there
         oracle_sampler->samplePushingState(feasible_state, goal_state, target_id);
-        std::vector<::ompl::control::Control const*> oracle_controls_robot;
-        success = oracle_sampler->steerRobot(oracle_controls_robot, start_state, feasible_state);
-        if (not success) {
-            _world->getLogger()->logWarn("Sampling feasible state produced no controls, trying push");
-        } else {
-            for (auto* control_const : oracle_controls_robot) {
-                auto* control = const_cast<::ompl::control::Control*>(control_const);
-                success = _state_propagator->propagate(start_state, control, start_state);
-                if (not success) {
-                    _world->getLogger()->logErr("State propagation to feasible state failed!!!");
-                }
+        std::vector<::ompl::control::Control*> oracle_controls_robot;
+        oracle_sampler->steerRobot(oracle_controls_robot, start_state, feasible_state);
+        for (auto* lcontrol : oracle_controls_robot) {
+            success = _state_propagator->propagate(start_state, lcontrol, start_state);
+            if (not success) {
+                _world->getLogger()->logErr("State propagation to feasible state failed!!!");
             }
         }
 
         // TODO change to steer from achieved feasible state
-        std::vector<::ompl::control::Control const*> oracle_controls_push;
-        success = oracle_sampler->steerPush(oracle_controls_push, start_state, goal_state, target_id);
+        oracle_sampler->queryPolicy(control, start_state, goal_state, target_id);
+        success = _state_propagator->propagate(start_state, control, start_state);
         if (not success) {
-            _world->getLogger()->logWarn("Could not sample pushing controls! Skipping");
-            continue;
-        } else {
-            for (auto* control_const : oracle_controls_push) {
-                auto* control = const_cast<::ompl::control::Control*>(control_const);
-                success = _state_propagator->propagate(start_state, control, start_state);
-                if (not success) {
-                    _world->getLogger()->logErr("State propagation with pushing failed!!!");
-                }
-            }
+            _world->getLogger()->logErr("State propagation with pushing failed!!!");
         }
 
         // Start state is now incrementally changed to the resulting state

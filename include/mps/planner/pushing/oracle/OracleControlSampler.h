@@ -70,14 +70,14 @@ namespace planner {
                   * Compute a sequence of controls that move the robot from its state in source to its state in dest.
                   * The underlying robot_oracle determines whether this function considers obstacles, or not.
                   */
-                bool steerRobot(std::vector<::ompl::control::Control*>& controls,
+                void steerRobot(std::vector<::ompl::control::Control*>& controls,
                     const mps::planner::ompl::state::SimEnvWorldState* source,
                     const mps::planner::ompl::state::SimEnvWorldState* dest);
                 // Convenience function of the function above. The states will be downcasted to SimEnvWorldState*
-                bool steerRobot(std::vector<::ompl::control::Control*>& controls,
+                void steerRobot(std::vector<::ompl::control::Control*>& controls,
                     const ::ompl::base::State* source,
                     const ::ompl::base::State* dest);
-                bool steerRobot(std::vector<::ompl::control::Control*>& controls,
+                void steerRobot(std::vector<::ompl::control::Control*>& controls,
                     const mps::planner::ompl::state::SimEnvWorldState* source,
                     const mps::planner::ompl::state::SimEnvObjectState* dest);
                 /**

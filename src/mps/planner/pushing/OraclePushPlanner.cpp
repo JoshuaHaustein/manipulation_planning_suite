@@ -420,10 +420,10 @@ void OraclePushPlanner::setSliceDrawer(algorithm::SliceDrawerInterfacePtr slice_
 
 void OraclePushPlanner::renderSDF(float resolution)
 {
-    if (_eb_computer) {
-        _eb_debug_drawer = _eb_computer->getDebugDrawer();
-        _eb_computer->renderSDF(resolution);
-    }
+    // if (_eb_computer) {
+    //     _eb_debug_drawer = _eb_computer->getDebugDrawer();
+    //     _eb_computer->renderSDF(resolution);
+    // }
 }
 
 void OraclePushPlanner::clearVisualizations()
@@ -434,9 +434,9 @@ void OraclePushPlanner::clearVisualizations()
         if (slice_drawer)
             slice_drawer->clear();
     }
-    if (_eb_debug_drawer) {
-        _eb_debug_drawer->clear();
-    }
+    // if (_eb_debug_drawer) {
+    //     _eb_debug_drawer->clear();
+    // }
 }
 
 void OraclePushPlanner::generateData(const std::string& file_name,
@@ -581,36 +581,35 @@ mps::planner::ompl::planning::essentials::PathPtr OraclePushPlanner::testOracle(
     Eigen::VectorXf target_config(3);
     target_config.head(3) = goal.goal_position.head(3);
     object_state->setConfiguration(target_config);
-    std::vector<::ompl::control::Control const*> oracle_controls;
-    bool success = false;
+    std::vector<::ompl::control::Control*> oracle_controls;
     if (target_id == robot_id) {
-        success = oracle_sampler->steerRobot(oracle_controls, start_motion->getState(), target_state);
+        oracle_sampler->steerRobot(oracle_controls, start_motion->getState(), target_state);
     } else {
         // check whether we want to move to a pushing state or
         if (approach) {
             auto pushing_state = dynamic_cast<mps::planner::ompl::state::SimEnvWorldState*>(_state_space->allocState());
             _state_space->copyState(pushing_state, start_motion->getState());
             oracle_sampler->samplePushingState(pushing_state, target_state, target_id);
-            success = oracle_sampler->steerRobot(oracle_controls, start_motion->getState(), pushing_state);
+            oracle_sampler->steerRobot(oracle_controls, start_motion->getState(), pushing_state);
             _state_space->freeState(pushing_state);
         } else {
-            success = oracle_sampler->steerPush(oracle_controls, dynamic_cast<ompl::state::SimEnvWorldState*>(start_motion->getState()), target_state, target_id);
+            auto* push_control = _control_space->allocControl();
+            oracle_sampler->queryPolicy(push_control, dynamic_cast<ompl::state::SimEnvWorldState*>(start_motion->getState()), target_state, target_id);
+            oracle_controls.push_back(push_control);
         }
     }
     // Done, cleanup
     _state_space->freeState(target_state);
-    if (not success) {
-        logger->logWarn("The oracle failed at providing controls", log_prefix);
-        return nullptr;
-    }
     // Create Path
     auto path = std::make_shared<ompl::planning::essentials::Path>(_space_information);
     _control_space->copyControl(start_motion->getControl(), oracle_controls.at(0));
+    _control_space->freeControl(oracle_controls.at(0));
     path->append(start_motion);
     for (size_t i = 1; i < oracle_controls.size(); ++i) {
         auto new_motion = std::make_shared<ompl::planning::essentials::Motion>(_space_information);
         _control_space->copyControl(new_motion->getControl(), oracle_controls.at(i));
         new_motion->setParent(path->getMotion(i - 1));
+        _control_space->freeControl(oracle_controls.at(i));
         path->append(new_motion);
     }
     return path;
@@ -665,26 +664,29 @@ void OraclePushPlanner::createAlgorithm()
         // all other algorithms need an oracle
         auto robot_state_space = _state_space->getObjectStateSpace(_planning_problem.robot->getName());
         auto robot_configuration_space = robot_state_space->getConfigurationSpace();
+        unsigned int robot_id = _state_space->getObjectIndex(_planning_problem.robot->getName());
         oracle::PushingOraclePtr pushing_oracle;
         oracle::RobotOraclePtr robot_oracle;
         switch (_planning_problem.local_planner_type) {
-        case PlanningProblem::LocalPlanner::Line: {
-            auto ramp_computer = std::make_shared<oracle::RampComputer>(robot_configuration_space, _control_space);
-            robot_oracle = ramp_computer;
-            break;
-        }
         case PlanningProblem::LocalPlanner::PotentialField: {
-            if (!_eb_computer) {
-                _eb_computer = std::make_shared<oracle::ElasticBandRampComputer>();
-            }
-            _eb_computer->init(_planning_problem.world,
-                _planning_problem.robot,
-                _state_space,
-                _control_space,
-                _planning_problem.workspace_bounds,
-                _planning_problem.sdf_resolution,
-                _planning_problem.sdf_error_threshold);
-            robot_oracle = _eb_computer;
+            // if (!_eb_computer) {
+            // _eb_computer = std::make_shared<oracle::ElasticBandRampComputer>();
+            // }
+            // _eb_computer->init(_planning_problem.world,
+            //     _planning_problem.robot,
+            //     _state_space,
+            //     _control_space,
+            //     _planning_problem.workspace_bounds,
+            //     _planning_problem.sdf_resolution,
+            //     _planning_problem.sdf_error_threshold);
+            // robot_oracle = _eb_computer;
+            util::logging::logErr("PotentialField no longer supported.", log_prefix);
+            // robot_oracle = nullptr;
+            // break;
+        }
+        case PlanningProblem::LocalPlanner::Line: {
+            auto ramp_computer = std::make_shared<oracle::RampComputer>(robot_configuration_space, _control_space, robot_id);
+            robot_oracle = ramp_computer;
             break;
         }
         }
@@ -696,12 +698,12 @@ void OraclePushPlanner::createAlgorithm()
         }
         switch (_planning_problem.oracle_type) {
         case PlanningProblem::OracleType::Human: {
-            pushing_oracle = std::make_shared<oracle::HumanOracle>(robot_oracle, objects);
+            pushing_oracle = std::make_shared<oracle::HumanOracle>(robot_oracle, robot_id, objects);
             util::logging::logInfo("Using human made oracle!", log_prefix);
             break;
         }
         case PlanningProblem::OracleType::Learned: {
-            pushing_oracle = std::make_shared<oracle::LearnedPipeOracle>(objects);
+            pushing_oracle = std::make_shared<oracle::LearnedPipeOracle>(objects, robot_id);
             util::logging::logInfo("Using learned oracle!", log_prefix);
             break;
         }

@@ -72,7 +72,7 @@ void OracleControlSampler::samplePushingState(::ompl::base::State* x_state_ompl,
     auto x_prime_state = dynamic_cast<const ompl::state::SimEnvWorldState*>(x_prime_state_ompl);
     assert(x_state);
     assert(x_prime_state);
-    samplePushingState(x_state, x_prime_state_ompl, local_target_obj, p_uniform);
+    samplePushingState(x_state, x_prime_state, local_target_obj, p_uniform);
 }
 
 void OracleControlSampler::queryPolicy(::ompl::control::Control* control,
@@ -97,36 +97,31 @@ void OracleControlSampler::queryPolicy(::ompl::control::Control* control,
     static const std::string log_prefix("[mps::planner::pushing::oracle::OracleControlSampler::queryPolicy]");
     const auto* world_source = dynamic_cast<const mps_state::SimEnvWorldState*>(source);
     const auto* world_dest = dynamic_cast<const mps_state::SimEnvWorldState*>(dest);
-    const auto* current_robot_state = world_source->getObjectState(_robot_id);
-    const auto* current_obj_state = world_source->getObjectState(obj_id);
-    const auto* dest_obj_state = world_dest->getObjectState(obj_id);
     queryPolicy(control, world_source, world_dest, obj_id, p_uniform);
 }
 
-bool OracleControlSampler::steerRobot(std::vector<::ompl::control::Control*>& controls,
+void OracleControlSampler::steerRobot(std::vector<::ompl::control::Control*>& controls,
     const ::ompl::base::State* source,
     const ::ompl::base::State* dest)
 {
     auto x_state = dynamic_cast<const ompl::state::SimEnvWorldState*>(source);
     auto x_prime_state = dynamic_cast<const ompl::state::SimEnvWorldState*>(dest);
-    return steerRobot(controls, x_state, x_prime_state);
+    steerRobot(controls, x_state, x_prime_state);
 }
 
-bool OracleControlSampler::steerRobot(std::vector<::ompl::control::Control*>& controls,
+void OracleControlSampler::steerRobot(std::vector<::ompl::control::Control*>& controls,
     const mps::planner::ompl::state::SimEnvWorldState* source,
     const mps::planner::ompl::state::SimEnvWorldState* dest)
 {
     auto* dest_robot_state = dest->getObjectState(_robot_id);
-    return steerRobot(controls, source, dest_robot_state);
+    steerRobot(controls, source, dest_robot_state);
 }
 
-bool OracleControlSampler::steerRobot(std::vector<::ompl::control::Control*>& controls,
+void OracleControlSampler::steerRobot(std::vector<::ompl::control::Control*>& controls,
     const mps::planner::ompl::state::SimEnvWorldState* source,
     const mps::planner::ompl::state::SimEnvObjectState* dest)
 {
-    // TODO do we wanna enable this also for dynamic search spaces?
     _robot_oracle->steer(source, dest, controls);
-    return not controls.empty();
 }
 
 // bool OracleControlSampler::steerPush(std::vector<::ompl::control::Control const*>& controls,
@@ -169,7 +164,7 @@ void OracleControlSampler::randomControl(std::vector<::ompl::control::Control*>&
     mps_logging::logDebug("Sampling random control", "[mps::planner::pushing::oracle::OracleControlSampler::randomControl]");
     auto* control = _si->allocControl();
     _control_sampler->sample(control);
-    controls.push_back((control);
+    controls.push_back((control));
 }
 
 void OracleControlSampler::randomControl(::ompl::control::Control* control)

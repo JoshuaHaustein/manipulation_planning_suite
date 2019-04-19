@@ -14,6 +14,7 @@
 #include <proto/oracle.pb.h>
 
 namespace mps_logging = mps::planner::util::logging;
+namespace mps_control = mps::planner::ompl::control;
 
 mps::planner::pushing::oracle::LearnedPipeOracle::LearnedPipeOracle(const std::vector<sim_env::ObjectPtr>& objects, unsigned int robot_id)
     : _action_request_path(std::getenv("ORACLE_REQUEST_PIPE_PATH"))
@@ -29,7 +30,7 @@ mps::planner::pushing::oracle::LearnedPipeOracle::LearnedPipeOracle(const std::v
         raise(SIGABRT);
     }
     // init object data
-    for (unsigned int i = 0; i < _state_space->getNumObjects(); ++i) {
+    for (unsigned int i = 0; i < objects.size(); ++i) {
         ObjectData data;
         auto object = objects.at(i);
         data.mass = object->getMass();
@@ -93,14 +94,14 @@ void mps::planner::pushing::oracle::LearnedPipeOracle::samplePushingState(
     response.ParseFromIstream(&fd_in);
     fd_in.close();
 
-    _new_robot_state.resize(3);
-    _new_robot_state[0] = response.robot_x();
-    _new_robot_state[1] = response.robot_y();
-    _new_robot_state[2] = response.robot_radians();
-    new_robot_state->setConfiguration(_new_robot_state);
+    _robot_state.resize(3);
+    _robot_state[0] = response.robot_x();
+    _robot_state[1] = response.robot_y();
+    _robot_state[2] = response.robot_radians();
+    new_robot_state->setConfiguration(_robot_state);
     if (new_robot_state->hasVelocity()) {
-        _new_robot_state.zero();
-        new_robot_state->setVelocity(_new_robot_state);
+        _robot_state.setZero();
+        new_robot_state->setVelocity(_robot_state);
     }
 
     if (timer) {
@@ -119,10 +120,10 @@ void mps::planner::pushing::oracle::LearnedPipeOracle::predictAction(
     auto request = oracle_communication::ActionRequest();
 
     // Initial state
-    current_state->getObjectState(_robot_id)->getConfiguration(_current_robot_state);
-    request.set_robot_x(_current_robot_state[0]);
-    request.set_robot_y(_current_robot_state[1]);
-    request.set_robot_radians(_current_robot_state[2]);
+    current_state->getObjectState(_robot_id)->getConfiguration(_robot_state);
+    request.set_robot_x(_robot_state[0]);
+    request.set_robot_y(_robot_state[1]);
+    request.set_robot_radians(_robot_state[2]);
 
     current_state->getObjectState(obj_id)->getConfiguration(_current_obj_state);
     request.set_object_x(_current_obj_state[0]);
@@ -164,7 +165,7 @@ void mps::planner::pushing::oracle::LearnedPipeOracle::predictAction(
 
     // TODO should also work for new control type
     // cast control to RampVelocityTwist
-    auto ramp_twist = dynamic_pointer_cast<mps_control::RampVelocityControl*>(control);
+    auto ramp_twist = dynamic_cast<mps_control::RampVelocityControl*>(control);
     ramp_twist->setParameters(_control);
 
     if (timer) {

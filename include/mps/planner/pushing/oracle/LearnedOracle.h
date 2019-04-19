@@ -38,12 +38,12 @@ namespace planner {
                 const char* _action_response_path;
                 const char* _state_sample_request_path;
                 const char* _state_sample_response_path;
+                unsigned int _robot_id;
                 std::vector<ObjectData> _object_data;
-                Eigen::VectorXf _current_robot_state;
+                Eigen::VectorXf _robot_state;
                 Eigen::VectorXf _current_obj_state;
                 Eigen::VectorXf _target_obj_state;
                 Eigen::VectorXf _control;
-                unsigned int robot_id;
             };
         }
     }

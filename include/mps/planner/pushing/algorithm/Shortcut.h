@@ -89,7 +89,7 @@ namespace planner {
                     std::vector<mps::planner::ompl::planning::essentials::MotionPtr>& new_motions,
                     ShortcutQuery& sq);
                 std::pair<bool, bool> forwardPropagatePath(mps::planner::ompl::planning::essentials::PathPtr path,
-                    const std::vector<const ::ompl::control::Control*>& controls,
+                    const std::vector<::ompl::control::Control*>& controls,
                     ShortcutQuery& sq);
                 /***
                          *  Forward propagates the actions stored in old_path starting from the state
@@ -247,7 +247,7 @@ namespace planner {
                     ShortcutQuery& sq);
                 void fillPairQueue(PairQueue& all_pairs, unsigned int n) const;
                 bool extendPath(mps::planner::ompl::planning::essentials::PathPtr path,
-                    const std::vector<const ::ompl::control::Control*>& controls,
+                    const std::vector<::ompl::control::Control*>& controls,
                     bool& goal_reached,
                     ShortcutQuery& sq);
             };

@@ -1,13 +1,13 @@
 //
 // Created by joshua on 8/14/17.
 //
+#include <boost/functional/hash.hpp>
+#include <mps/planner/ompl/control/RampVelocityControl.h>
+#include <mps/planner/pushing/oracle/RampComputer.h>
 #include <mps/planner/sorting/algorithm/MCTS.h>
 #include <mps/planner/util/Logging.h>
-#include <mps/planner/pushing/oracle/RampComputer.h>
-#include <mps/planner/ompl/control/RampVelocityControl.h>
 #include <ompl/datastructures/NearestNeighborsGNAT.h>
 #include <queue>
-#include <boost/functional/hash.hpp>
 
 namespace logging = mps::planner::util::logging;
 namespace ob = ::ompl::base;
@@ -20,22 +20,23 @@ using namespace mps::planner::ompl::planning::essentials;
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////// PlanningQuery ///////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-MCTSBase::PlanningQuery::PlanningQuery(ob::State *start_state,
-                                       float time_out,
-                                       std::vector<unsigned int>& lgroups,
-                                       const std::string& robot_name) :
-    start_state(start_state),
-    robot_name(robot_name),
-    time_out(time_out),
-    groups(lgroups)
+MCTSBase::PlanningQuery::PlanningQuery(ob::State* start_state,
+    float time_out,
+    std::vector<unsigned int>& lgroups,
+    const std::string& robot_name)
+    : start_state(start_state)
+    , robot_name(robot_name)
+    , time_out(time_out)
+    , groups(lgroups)
 {
-    stopping_condition = []() {return false;};
+    stopping_condition = []() { return false; };
     num_control_samples = 10;
 }
 
-MCTSBase::PlanningQuery::PlanningQuery(const PlanningQuery &other) = default;
+MCTSBase::PlanningQuery::PlanningQuery(const PlanningQuery& other) = default;
 
-std::string MCTSBase::PlanningQuery::toString() const {
+std::string MCTSBase::PlanningQuery::toString() const
+{
     std::stringstream ss;
     // TODO for completeness should also print target and start state
     ss << "Robot name: " << robot_name << "\n";
@@ -48,18 +49,18 @@ std::string MCTSBase::PlanningQuery::toString() const {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////// PlanningBlackboard ////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-MCTSBase::PlanningBlackboard::PlanningBlackboard(PlanningQuery pq) :
-        pq(pq),
-        robot_id(0)
+MCTSBase::PlanningBlackboard::PlanningBlackboard(PlanningQuery pq)
+    : pq(pq)
+    , robot_id(0)
 {
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////// MCTSBase /////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-MCTSBase::MCTSBase(::ompl::control::SpaceInformationPtr si) :
-        _si(si),
-        _log_prefix("[mps::planner::sorting::algorithm::MCTSBase::")
+MCTSBase::MCTSBase(::ompl::control::SpaceInformationPtr si)
+    : _si(si)
+    , _log_prefix("[mps::planner::sorting::algorithm::MCTSBase::")
 {
     _state_space = std::dynamic_pointer_cast<mps_state::SimEnvWorldStateSpace>(_si->getStateSpace());
     if (!_state_space) {
@@ -77,7 +78,8 @@ MCTSBase::MCTSBase(::ompl::control::SpaceInformationPtr si) :
 
 MCTSBase::~MCTSBase() = default;
 
-void MCTSBase::setup(const PlanningQuery& pq, PlanningBlackboard& blackboard) {
+void MCTSBase::setup(const PlanningQuery& pq, PlanningBlackboard& blackboard)
+{
     static const std::string log_prefix(_log_prefix + "setup]");
     // Setup things here that are specific to a planning query.
     setupBlackboard(blackboard);
@@ -85,8 +87,9 @@ void MCTSBase::setup(const PlanningQuery& pq, PlanningBlackboard& blackboard) {
 }
 
 bool MCTSBase::plan(const PlanningQuery& pq,
-                            PathPtr path,
-                            PlanningStatistics& stats) {
+    PathPtr path,
+    PlanningStatistics& stats)
+{
     // Code the general procedure of MCTS in this function
     static const std::string log_prefix(_log_prefix + "plan]");
     PlanningBlackboard blackboard(pq);
@@ -109,10 +112,10 @@ bool MCTSBase::plan(const PlanningQuery& pq,
     _si->copyState(my_motion->getState(), pq.start_state);
     // Similiarly, you can copy controls, or set a control to be null
     _si->nullControl(my_motion->getControl());
-    // You can print a state using the printState  member function
-    #ifdef DEBUG_PRINTOUTS // this allows you to compile without these print statements
+// You can print a state using the printState  member function
+#ifdef DEBUG_PRINTOUTS // this allows you to compile without these print statements
     printState("Sampled state is ", my_motion->getState());
-    #endif
+#endif
     // You can also create new states or controls without using motions
     ::ompl::base::State* a_state = _si->allocState();
     ::ompl::control::Control* a_control = _si->allocControl();
@@ -160,7 +163,7 @@ bool MCTSBase::plan(const PlanningQuery& pq,
     // that move the robot on a straight line from one state to another:
     auto control_space = std::dynamic_pointer_cast<mps_control::RampVelocityControlSpace>(_si->getControlSpace());
     auto robot_state_space = _state_space->getObjectStateSpace(blackboard.robot_id);
-    mps::planner::pushing::oracle::RampComputer ramp_computer(robot_state_space->getConfigurationSpace(), control_space);
+    mps::planner::pushing::oracle::RampComputer ramp_computer(robot_state_space->getConfigurationSpace(), control_space, blackboard.robot_id);
     std::vector<::ompl::control::Control*> controls; // will contain the computed actions
     // let's get the current robot state
     _si->copyState(sim_env_state, pq.start_state); // copies pq.start_state to sim_env_state
@@ -187,18 +190,18 @@ bool MCTSBase::plan(const PlanningQuery& pq,
     auto propagator = std::dynamic_pointer_cast<mps_control::SimEnvStatePropagator>(_si->getStatePropagator());
     // with this the whole physics simulation is simply a call to a single function
     bool valid = propagator->propagate(pq.start_state, ramp_control, sim_env_state);
-    // this simulates what happens if you execute the action ramp_control from the world state
-    // sim_env_state. The result is stored in sim_env_state
-    // The function returns a bool indicating whether during the simulation everything went
-    // fine, that is the robot didn't collide with static walls and all objects came to rest
-    // The function also takes care of the aforementioned waiting time. That means it sets
-    // the waiting time of ramp_control such that all objects come to rest within this waiting time.
-    // This only really matters if you have objects that slide like balls though. If you have high
-    // fricition the waitting times should usually be around 0.
-    // Let's see what the outcome of this action actually is, and print the resulting state
-    #ifdef DEBUG_PRINTOUTS // this allows you to compile without these print statements
+// this simulates what happens if you execute the action ramp_control from the world state
+// sim_env_state. The result is stored in sim_env_state
+// The function returns a bool indicating whether during the simulation everything went
+// fine, that is the robot didn't collide with static walls and all objects came to rest
+// The function also takes care of the aforementioned waiting time. That means it sets
+// the waiting time of ramp_control such that all objects come to rest within this waiting time.
+// This only really matters if you have objects that slide like balls though. If you have high
+// fricition the waitting times should usually be around 0.
+// Let's see what the outcome of this action actually is, and print the resulting state
+#ifdef DEBUG_PRINTOUTS // this allows you to compile without these print statements
     printState("Resulting state is ", sim_env_state);
-    #endif
+#endif
     // So as you see, you don't really need to interact much with the simulator. In particular,
     // you will never have to interact with Box2D itself. All of this is abstracted. You should
     // focus here on your planning algorithm and keep things general so that we can apply your algorithm
@@ -210,7 +213,7 @@ bool MCTSBase::plan(const PlanningQuery& pq,
     bool solved = false;
     // loop as long as the problem is not solved, aborted or a timeout occurred
     // the stopping condition can check for instance whether the button in the GUI is still pressed
-    while(not _timer.timeOutExceeded() and not pq.stopping_condition() && !solved) {
+    while (not _timer.timeOutExceeded() and not pq.stopping_condition() && !solved) {
         blackboard.stats.num_iterations++;
         // TODO implement MCTS here
     }
@@ -220,9 +223,9 @@ bool MCTSBase::plan(const PlanningQuery& pq,
     std::stringstream ss;
     blackboard.stats.print(ss);
     logging::logDebug("Main loop finished, stats:\n" + ss.str(),
-                      log_prefix);
+        log_prefix);
     // create the path if we found a solution
-    if(solved){
+    if (solved) {
         logging::logInfo("Found a solution", log_prefix);
         // path->initBacktrackMotion(final_motion); // creates a path starting from the last motion
     }
@@ -242,7 +245,8 @@ bool MCTSBase::plan(const PlanningQuery& pq,
     return solved;
 }
 
-void MCTSBase::printState(const std::string& msg, ::ompl::base::State *state) const {
+void MCTSBase::printState(const std::string& msg, ::ompl::base::State* state) const
+{
     std::stringstream ss;
     auto* world_state = dynamic_cast<mps_state::SimEnvWorldState*>(state);
     ss.str("");
@@ -252,7 +256,8 @@ void MCTSBase::printState(const std::string& msg, ::ompl::base::State *state) co
     // see RRT.h and RRT.cpp to see how you could also use the GUI to visualize a state
 }
 
-MotionPtr MCTSBase::getNewMotion() {
+MotionPtr MCTSBase::getNewMotion()
+{
     if (not _motions_cache.empty()) {
         MotionPtr ptr = _motions_cache.top();
         _motions_cache.pop();
@@ -261,17 +266,20 @@ MotionPtr MCTSBase::getNewMotion() {
     return std::make_shared<Motion>(_si);
 }
 
-void MCTSBase::cacheMotion(MotionPtr ptr) {
+void MCTSBase::cacheMotion(MotionPtr ptr)
+{
     _motions_cache.push(ptr);
 }
 
-void MCTSBase::setupBlackboard(PlanningBlackboard &pb) {
+void MCTSBase::setupBlackboard(PlanningBlackboard& pb)
+{
     pb.robot_id = 0;
     {
         int tmp_robot_id = _state_space->getObjectIndex(pb.pq.robot_name);
         if (tmp_robot_id < 0) {
             throw std::logic_error("[mps::planner::pushing::oracle::MCTSBase::setupBlackboard]"
-                    "Could not retrieve id for robot " + pb.pq.robot_name);
+                                   "Could not retrieve id for robot "
+                + pb.pq.robot_name);
         }
         pb.robot_id = (unsigned int)tmp_robot_id;
     }
@@ -280,22 +288,23 @@ void MCTSBase::setupBlackboard(PlanningBlackboard &pb) {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////// DeterministicMCTSBase /////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-DeterministicMCTS::DeterministicMCTS(::ompl::control::SpaceInformationPtr si) :
-        MCTSBase(si)
+DeterministicMCTS::DeterministicMCTS(::ompl::control::SpaceInformationPtr si)
+    : MCTSBase(si)
 {
 }
 
 DeterministicMCTS::~DeterministicMCTS() = default;
 
-void DeterministicMCTS::setup(const PlanningQuery& pq, PlanningBlackboard& blackboard) {
+void DeterministicMCTS::setup(const PlanningQuery& pq, PlanningBlackboard& blackboard)
+{
     MCTSBase::setup(pq, blackboard);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 /////////////////////////////////// NonDeterministicMCTS /////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-NonDeterministicMCTS::NonDeterministicMCTS(::ompl::control::SpaceInformationPtr si) :
-        MCTSBase(si)
+NonDeterministicMCTS::NonDeterministicMCTS(::ompl::control::SpaceInformationPtr si)
+    : MCTSBase(si)
 {
 }
 

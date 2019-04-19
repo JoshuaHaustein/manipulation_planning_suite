@@ -73,7 +73,7 @@ std::pair<bool, bool> Shortcutter::forwardPropagatePath(mps::planner::ompl::plan
 }
 
 std::pair<bool, bool> Shortcutter::forwardPropagatePath(mps::planner::ompl::planning::essentials::PathPtr path,
-    const std::vector<const ::ompl::control::Control*>& controls,
+    const std::vector<::ompl::control::Control*>& controls,
     ShortcutQuery& sq)
 {
     std::vector<MotionPtr> motions;
@@ -242,15 +242,14 @@ void NaiveShortcutter::computeRobotActions(std::vector<mps::planner::ompl::plann
 {
     auto sim_env_start_state = dynamic_cast<mps_state::SimEnvWorldState*>(start_state);
     auto sim_env_end_state = dynamic_cast<mps_state::SimEnvWorldState*>(end_state);
-    auto current_robot_state = sim_env_start_state->getObjectState(robot_id);
     auto target_robot_state = sim_env_end_state->getObjectState(robot_id);
-    std::vector<Eigen::VectorXf> control_params;
-    _robot_oracle->steer(current_robot_state, target_robot_state, sim_env_start_state, control_params);
-    for (auto& control_param : control_params) {
+    std::vector<::ompl::control::Control*> controls;
+    _robot_oracle->steer(sim_env_start_state, target_robot_state, controls);
+    for (auto& control : controls) {
         auto new_motion = _motion_cache.getNewMotion();
-        auto control = dynamic_cast<mps_control::RealValueParameterizedControl*>(new_motion->getControl());
-        control->setParameters(control_param);
+        _si->copyControl(new_motion->getControl(), control);
         motions.push_back(new_motion);
+        _si->freeControl(control);
     }
 }
 
@@ -394,15 +393,14 @@ void LocalShortcutter::computeRobotActions(std::vector<mps::planner::ompl::plann
 {
     auto sim_env_start_state = dynamic_cast<mps_state::SimEnvWorldState*>(start_state);
     auto sim_env_end_state = dynamic_cast<mps_state::SimEnvWorldState*>(end_state);
-    auto current_robot_state = sim_env_start_state->getObjectState(_robot_id);
     auto target_robot_state = sim_env_end_state->getObjectState(_robot_id);
-    std::vector<Eigen::VectorXf> control_params;
-    _robot_oracle->steer(current_robot_state, target_robot_state, sim_env_start_state, control_params);
-    for (auto& control_param : control_params) {
+    std::vector<::ompl::control::Control*> controls;
+    _robot_oracle->steer(sim_env_start_state, target_robot_state, controls);
+    for (auto& control : controls) {
         auto new_motion = _motion_cache.getNewMotion();
-        auto control = dynamic_cast<mps_control::RealValueParameterizedControl*>(new_motion->getControl());
-        control->setParameters(control_param);
+        _si->copyControl(new_motion->getControl(), control);
         motions.push_back(new_motion);
+        _si->freeControl(control);
     }
 }
 
@@ -451,7 +449,7 @@ std::pair<bool, bool> LocalOracleShortcutter::computeShortcut(
     ::ompl::base::State* end_state, ShortcutQuery& sq)
 {
     static const std::string log_prefix("[LocalOracleShortcutter::computeShortcut]");
-    std::vector<const ::ompl::control::Control*> controls; // stores controls computed by the oracle
+    std::vector<::ompl::control::Control*> controls; // stores controls computed by the oracle
     bool propagation_success = false; // stores whether propagations succeeed
     auto start = prefix_path->last();
     bool goal_reached = false;
@@ -472,6 +470,9 @@ std::pair<bool, bool> LocalOracleShortcutter::computeShortcut(
         }
         // forward simulate this
         std::tie(propagation_success, goal_reached) = forwardPropagatePath(prefix_path, controls, sq);
+        for (auto control : controls) {
+            _si->freeControl(control);
+        }
         controls.clear();
         if (!propagation_success)
             return std::make_pair(false, false);
@@ -484,11 +485,14 @@ std::pair<bool, bool> LocalOracleShortcutter::computeShortcut(
 #endif
 
         // next attempt to push
-        _oracle_sampler->steerPush(controls, prefix_path->last()->getState(),
+        ::ompl::control::Control* push_control = _si->allocControl();
+        _oracle_sampler->queryPolicy(push_control, prefix_path->last()->getState(),
             end_state, object_id);
-        // forward propagate these controls
+        // forward propagate push
+        controls.push_back(push_control);
         std::tie(propagation_success, goal_reached) = forwardPropagatePath(prefix_path, controls, sq);
         controls.clear();
+        _si->freeControl(push_control);
         if (!propagation_success)
             return std::make_pair(false, false);
         if (goal_reached)
@@ -503,6 +507,9 @@ std::pair<bool, bool> LocalOracleShortcutter::computeShortcut(
     _oracle_sampler->steerRobot(controls, prefix_path->last()->getState(),
         end_state);
     std::tie(propagation_success, goal_reached) = forwardPropagatePath(prefix_path, controls, sq);
+    for (auto control : controls) {
+        _si->freeControl(control);
+    }
     controls.clear();
 #ifdef DEBUG_PRINTOUTS
     {
@@ -678,7 +685,7 @@ bool OracleShortcutter::computeShortcut(mps::planner::ompl::planning::essentials
     unsigned int object_id, ShortcutQuery& sq)
 {
     static const std::string log_prefix("[mps::planner::pushing::algorithm::OracleShortcutter::computeShortcut]");
-    std::vector<const ::ompl::control::Control*> controls; // stores controls computed by the oracle
+    std::vector<::ompl::control::Control*> controls; // stores controls computed by the oracle
     bool propagation_success = false; // stores whether propagations succeeed
     auto start = new_path->last();
     auto destination = current_path->getMotion(destination_id);
@@ -699,6 +706,9 @@ bool OracleShortcutter::computeShortcut(mps::planner::ompl::planning::essentials
         }
         // forward simulate this
         propagation_success = extendPath(new_path, controls, goal_reached, sq);
+        for (auto control : controls) {
+            _si->freeControl(control);
+        }
         controls.clear();
         if (!propagation_success)
             return false;
@@ -711,10 +721,13 @@ bool OracleShortcutter::computeShortcut(mps::planner::ompl::planning::essentials
 #endif
 
         // next attempt to push
-        _oracle_sampler->steerPush(controls, new_path->last()->getState(),
+        auto push_control = _si->allocControl();
+        _oracle_sampler->queryPolicy(push_control, new_path->last()->getState(),
             destination->getState(), object_id);
-        // forward propagate these controls
+        // forward propagate this control
+        controls.push_back(push_control);
         propagation_success = extendPath(new_path, controls, goal_reached, sq);
+        _si->freeControl(push_control);
         controls.clear();
         if (!propagation_success)
             return false;
@@ -730,6 +743,9 @@ bool OracleShortcutter::computeShortcut(mps::planner::ompl::planning::essentials
     _oracle_sampler->steerRobot(controls, new_path->last()->getState(),
         destination->getState());
     propagation_success = extendPath(new_path, controls, goal_reached, sq);
+    for (auto control : controls) {
+        _si->freeControl(control);
+    }
     controls.clear();
     if (!propagation_success)
         return false;
@@ -752,7 +768,7 @@ bool OracleShortcutter::computeShortcut(mps::planner::ompl::planning::essentials
 
 // propagates controls starting from  the end of the given path
 bool OracleShortcutter::extendPath(PathPtr path,
-    const std::vector<const ::ompl::control::Control*>& controls,
+    const std::vector<::ompl::control::Control*>& controls,
     bool& goal_reached, ShortcutQuery& sq)
 {
     static const std::string log_prefix("[mps::planner::pushing::algorithm::OracleShortcutter::extendPath]");
