@@ -88,6 +88,7 @@ set(PLANNER_H
         include/mps/planner/pushing/oracle/OracleControlSampler.h
         include/mps/planner/pushing/oracle/Oracle.h
         include/mps/planner/pushing/oracle/LearnedOracle.h
+        include/mps/planner/pushing/oracle/QuasiStaticSE2Oracle.h
         include/mps/planner/pushing/oracle/HumanOracle.h
         # include/mps/planner/pushing/oracle/ElasticBandRampComputer.h
         include/mps/planner/pushing/oracle/RampComputer.h
@@ -108,8 +109,6 @@ set(PLANNER_H
         include/mps/planner/util/yaml/SortingParsing.h
         include/mps/sdf/SDF.h
         include/mps/sdf/FMM.h
-        include/mps/external/Path.h
-        include/mps/external/Trajectory.h
         )
 
 ## Define all source files
@@ -136,6 +135,7 @@ set(PLANNER_SRC
         src/mps/planner/pushing/oracle/OracleControlSampler.cpp
         src/mps/planner/pushing/oracle/Oracle.cpp
         src/mps/planner/pushing/oracle/LearnedOracle.cpp
+        src/mps/planner/pushing/oracle/QuasiStaticSE2Oracle.cpp
         src/mps/planner/pushing/oracle/HumanOracle.cpp
         # src/mps/planner/pushing/oracle/ElasticBandRampComputer.cpp
         src/mps/planner/pushing/oracle/RampComputer.cpp
@@ -147,8 +147,6 @@ set(PLANNER_SRC
         src/mps/planner/sorting/PushSortingPlanner.cpp
         src/mps/planner/sorting/algorithm/MCTS.cpp
         src/mps/sdf/SDF.cpp
-        src/mps/external/Path.cpp
-        src/mps/external/Trajectory.cpp
 )
 
 ## Declare a C++ library

@@ -32,7 +32,8 @@ namespace planner {
             friend class OraclePushPlanner;
             enum OracleType {
                 Human = 0,
-                Learned = 1
+                Learned = 1,
+                QuasiStaticSE2Oracle = 2
             };
 
             enum LocalPlanner {
@@ -160,8 +161,8 @@ namespace planner {
              * If an ExecutionCallback is provided, the solution will be executed by calling exec_callb for each motion.
              * A ExecutionMonitor may adapt the solution, or replan if the execution deviates from the planned solution.
              * @param solution - the solution to execute
-             * @param exec_callb - execution callback. A function bool(const MotionConstPtr&, SimEnvWorldState*) 
-             *  that executes the control in the given motion and saves the resulting state in the second argument. 
+             * @param exec_callb - execution callback. A function bool(const MotionConstPtr&, SimEnvWorldState*)
+             *  that executes the control in the given motion and saves the resulting state in the second argument.
              *  It should return false, if any error occurred during the execution, requiring an abortion.
              *  If not provided, execution will be performed in simulation, i.e. on the world used for planning.
              * @param interrupt_callback - callback that returns true, if execution should be interrupted.
@@ -175,7 +176,7 @@ namespace planner {
                  * this function will fail and return false.
                  * @param solution - a solution to the current planning problem
                  * @param filename - filename where to store the solution
-                 * @return true if storing the solution was successful, else false 
+                 * @return true if storing the solution was successful, else false
                  */
             bool saveSolution(const PlanningSolution& solution, const std::string& filename);
             /***
@@ -201,7 +202,7 @@ namespace planner {
             /***
                  * Verifies that the provided solutions is a solution to the current PlanningProblem.
                  * Returns false if the provided solution is not a reproducable solution,
-                 * i.e. forward propagating it does not lead to a goal state while satisfying 
+                 * i.e. forward propagating it does not lead to a goal state while satisfying
                  * all collision constraints.
                  */
             bool verifySolution(PlanningSolution& solution);
@@ -217,8 +218,8 @@ namespace planner {
                  *              desired state.
                  *              If the object name is an object, the oracle will be asked to
                  *              provide a control to either move to a pushing state or to push this object to the desired state.
-                 * @param approach - if true and the target is an object, the returned control will move the robot 
-                 *                  to a pushing state, else if the target is an object, it will push the object, else 
+                 * @param approach - if true and the target is an object, the returned control will move the robot
+                 *                  to a pushing state, else if the target is an object, it will push the object, else
                  *                  the parameter has no effect
                  * @return a path containing the sequence of controls provided by the oracle. Nullptr in case of failure
                  */

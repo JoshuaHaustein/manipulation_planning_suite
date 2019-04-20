@@ -37,9 +37,9 @@ namespace planner {
             class PositionControl : public ::ompl::control::Control {
             public:
                 ~PositionControl() override = 0;
-                virtual Eigen::VectorXf getPosition(float t) const;
-                virtual void getPosition(float t, Eigen::VectorXf& pos) const;
-                virtual float getDuration() const;
+                virtual Eigen::VectorXf getPosition(float t) const = 0;
+                virtual void getPosition(float t, Eigen::VectorXf& pos) const = 0;
+                virtual float getDuration() const = 0;
             };
 
             /**

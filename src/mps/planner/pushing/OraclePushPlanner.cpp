@@ -15,6 +15,7 @@
 #include <mps/planner/pushing/algorithm/SingleExtendRRT.h>
 #include <mps/planner/pushing/oracle/HumanOracle.h>
 #include <mps/planner/pushing/oracle/LearnedOracle.h>
+#include <mps/planner/pushing/oracle/QuasiStaticSE2Oracle.h>
 #include <mps/planner/pushing/oracle/OracleControlSampler.h>
 #include <mps/planner/pushing/oracle/RampComputer.h>
 #include <mps/planner/util/Logging.h>
@@ -705,6 +706,11 @@ void OraclePushPlanner::createAlgorithm()
         case PlanningProblem::OracleType::Learned: {
             pushing_oracle = std::make_shared<oracle::LearnedPipeOracle>(objects, robot_id);
             util::logging::logInfo("Using learned oracle!", log_prefix);
+            break;
+        }
+        case PlanningProblem::OracleType::QuasiStaticSE2Oracle: {
+            pushing_oracle = std::make_shared<oracle::QuasiStaticSE2Oracle>(objects, robot_id);
+            util::logging::logInfo("Using quasistatic oracle!", log_prefix);
             break;
         }
         }
