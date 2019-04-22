@@ -154,7 +154,6 @@ void mps::planner::util::yaml::configurePlanningProblem(mps::planner::pushing::P
     problem.target_bias = problem_desc.target_bias;
     problem.action_noise = problem_desc.action_noise;
     problem.state_noise = problem_desc.state_noise;
-    problem.do_slice_ball_projection = problem_desc.do_slice_ball_projection;
     problem.max_shortcut_time = problem_desc.shortcut_timeout;
     // TODO b_semi_dynamic
     // Collisions policy

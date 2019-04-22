@@ -118,6 +118,7 @@ namespace planner {
             };
 
             class RampVelocityControlSpace : public ::ompl::control::ControlSpace,
+                                             public SerializableControlSpace,
                                              public std::enable_shared_from_this<RampVelocityControlSpace> {
                 friend class RampVelocityControlSampler;
 
@@ -168,9 +169,13 @@ namespace planner {
                 void nullControl(::ompl::control::Control* control) const override;
                 ::ompl::control::ControlSamplerPtr allocDefaultControlSampler() const override;
                 void printControl(const ::ompl::control::Control* control, std::ostream& out) const override;
-                void printSettings(std::ostream& out) const override;
+                void printSettings(std::ostream& out) const override; // TODO not supported
                 void setup() override;
-                unsigned int getNumParameters() const; // TODO this function is probably doing the same as getSerializationLength() is intended for
+                // Write information characterizing this control space to the given stream.
+                void serializeSpaceInformation(std::ostream& ostream) const override;
+                // Read space information from given stream, return whether this control space is compatible.
+                bool deserializeSpaceInformation(std::istream& istream) override;
+                // unsigned int getNumParameters() const; // TODO this function is probably doing the same as getSerializationLength() is intended for
                 // TODO not implemented
                 unsigned int getSerializationLength() const override;
                 // TODO not implemented

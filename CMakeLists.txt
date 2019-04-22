@@ -77,6 +77,7 @@ set(PLANNER_H
         include/mps/planner/ompl/control/Interfaces.h
         include/mps/planner/ompl/control/NaiveControlSampler.h
         include/mps/planner/ompl/control/RampVelocityControl.h
+        include/mps/planner/ompl/control/TimedWaypoints.h
         include/mps/planner/ompl/control/SimEnvStatePropagator.h
         include/mps/planner/ompl/state/SimEnvWorldStateDistanceMeasure.h
         include/mps/planner/ompl/state/Interfaces.h
@@ -114,6 +115,7 @@ set(PLANNER_H
 ## Define all source files
 set(PLANNER_SRC
         src/mps/planner/ompl/control/RampVelocityControl.cpp
+        src/mps/planner/ompl/control/TimedWaypoints.cpp
         src/mps/planner/ompl/control/Interfaces.cpp
         src/mps/planner/ompl/control/NaiveControlSampler.cpp
         src/mps/planner/ompl/control/SimEnvStatePropagator.cpp

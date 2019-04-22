@@ -13,6 +13,15 @@ namespace mps {
 namespace planner {
     namespace ompl {
         namespace control {
+            // Inteface for control spaces for which the control can be serialized (to save/load solutions).
+            class SerializableControlSpace {
+            public:
+                virtual ~SerializableControlSpace() = 0;
+                // Write information characterizing this control space to the given stream.
+                virtual void serializeSpaceInformation(std::ostream& ostream) const = 0;
+                // Read space information from given stream, return whether this control space is compatible.
+                virtual bool deserializeSpaceInformation(std::istream& istream) = 0;
+            };
             /**
                  * A RealValueParameterizedControl is a control that can be fully described
                  * by a finite number of real values (parameters).

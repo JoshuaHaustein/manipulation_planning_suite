@@ -283,10 +283,16 @@ void RampVelocityControlSpace::setup()
     omc::ControlSpace::setup();
 }
 
-// TODO this function is probably doing the same as getSerializationLength() is intended for
-unsigned int RampVelocityControlSpace::getNumParameters() const
+void RampVelocityControlSpace::serializeSpaceInformation(std::ostream& ostream) const
 {
-    return getDimension() + 1; // includes resting time
+    ostream << getDimension() + 1 << "\n";
+}
+
+bool RampVelocityControlSpace::deserializeSpaceInformation(std::istream& istream)
+{
+    std::string line;
+    std::getline(istream, line);
+    return getDimension() + 1 == stoul(line);
 }
 
 unsigned int RampVelocityControlSpace::getSerializationLength() const

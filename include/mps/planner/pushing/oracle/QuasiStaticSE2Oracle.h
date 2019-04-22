@@ -6,8 +6,20 @@ namespace mps {
 namespace planner {
     namespace pushing {
         namespace oracle {
-            class QuasiStaticSE2Oracle : public PushingOracle{
+            /**
+             * Hand designed pushing oracle for holonomic 2D robots and objects in SE(2).
+             * This oracle is based on Zhou and Mason's work 
+             * "Pushing revisited: Differential flatness, trajectory planning and stabilization".
+             * It provides a policy for stable pushing of polygonal objects.
+             */
+            class QuasiStaticSE2Oracle : public PushingOracle {
             public:
+                struct Parameters {
+                    Parameters(); // creates default values
+                    float eps_min; // minimal half width of a pushing edge
+                    float eps_dist; // distance between pusher and object from which on to consider both to be in contact
+                };
+
                 QuasiStaticSE2Oracle(const std::vector<sim_env::ObjectPtr>& objects, unsigned int robot_id);
                 ~QuasiStaticSE2Oracle();
 
@@ -35,11 +47,11 @@ namespace planner {
                     const mps::planner::ompl::state::SimEnvWorldState* next_state,
                     const unsigned int& obj_id,
                     mps::planner::ompl::state::SimEnvObjectState* new_robot_state) override;
+
             private:
                 unsigned int _robot_id;
-
             };
-            }
         }
     }
+}
 }

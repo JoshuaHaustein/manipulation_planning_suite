@@ -7,6 +7,8 @@
 
 using namespace mps::planner::ompl::control;
 
+SerializableControlSpace::~SerializableControlSpace() = default;
+
 RealValueParameterizedControl::~RealValueParameterizedControl() = default;
 
 void RealValueParameterizedControl::serializeInNumbers(std::ostream& ostream) const
@@ -33,5 +35,6 @@ unsigned int RealValueParameterizedControl::getNumNumbers() const
     return getNumParameters();
 }
 
+PositionControl::~PositionControl() = default;
 VelocityControl::~VelocityControl() = default;
 SemiDynamicControl::~SemiDynamicControl() = default;

@@ -7,9 +7,9 @@
 
 // stl
 #include <map>
+#include <ompl/control/ControlSpace.h>
 // mps
 #include <mps/planner/ompl/control/Interfaces.h>
-#include <mps/planner/ompl/control/RampVelocityControl.h>
 #include <mps/planner/ompl/control/SimEnvStatePropagator.h>
 #include <mps/planner/ompl/state/SimEnvState.h>
 #include <mps/planner/ompl/state/SimEnvWorldStateDistanceMeasure.h>
@@ -90,7 +90,6 @@ namespace planner {
             float target_bias;
             float action_noise;
             float state_noise;
-            bool do_slice_ball_projection;
             float min_state_distance;
             // flag whether to enable debug info
             bool debug;
@@ -226,14 +225,14 @@ namespace planner {
             ompl::planning::essentials::PathPtr testOracle(const ompl::state::goal::RelocationGoalSpecification& goal, bool approach) const;
 
             mps::planner::ompl::state::SimEnvWorldStateSpacePtr getStateSpace();
-            mps::planner::ompl::control::RampVelocityControlSpacePtr getControlSpace();
+            ::ompl::control::ControlSpacePtr getControlSpace();
             mps::planner::ompl::state::SimEnvValidityCheckerPtr getValidityChecker();
             mps::planner::ompl::control::SimEnvStatePropagatorPtr getStatePropagator();
 
         private:
             bool _is_initialized;
             mps::planner::ompl::state::SimEnvWorldStateSpacePtr _state_space;
-            mps::planner::ompl::control::RampVelocityControlSpacePtr _control_space;
+            ::ompl::control::ControlSpacePtr _control_space;
             ::ompl::control::SpaceInformationPtr _space_information;
             mps::planner::ompl::state::SimEnvValidityCheckerPtr _validity_checker;
             mps::planner::ompl::control::SimEnvStatePropagatorPtr _state_propagator;

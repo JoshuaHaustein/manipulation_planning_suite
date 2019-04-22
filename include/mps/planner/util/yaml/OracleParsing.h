@@ -5,243 +5,246 @@
 #ifndef MANIPULATION_PLANNING_SUITE_ORACLEPARSING_H
 #define MANIPULATION_PLANNING_SUITE_ORACLEPARSING_H
 
+#include <Eigen/Core>
 #include <mps/planner/pushing/OraclePushPlanner.h>
 #include <sim_env/utils/YamlUtils.h>
-#include <yaml-cpp/yaml.h>
-#include <Eigen/Core>
 #include <vector>
+#include <yaml-cpp/yaml.h>
 
 namespace mps {
-    namespace planner {
-        namespace util {
-            namespace yaml {
+namespace planner {
+    namespace util {
+        namespace yaml {
 
-                struct CollisionPolicyDesc {
-                    bool static_collisions_allowed;
-                    std::vector<std::string> static_collisions_blacklist;
-                    std::vector<std::pair<std::string, std::string> > collisions_blacklist;
-                };
+            struct CollisionPolicyDesc {
+                bool static_collisions_allowed;
+                std::vector<std::string> static_collisions_blacklist;
+                std::vector<std::pair<std::string, std::string>> collisions_blacklist;
+            };
 
-                struct ControlLimitsDesc {
-                    Eigen::VectorXf velocity_limits;
-                    Eigen::VectorXf acceleration_limits;
-                    Eigen::Array2f duration_limits;
-                    std::vector<Eigen::VectorXi> subspaces;
-                };
+            struct ControlLimitsDesc {
+                Eigen::VectorXf velocity_limits;
+                Eigen::VectorXf acceleration_limits;
+                Eigen::Array2f duration_limits;
+                std::vector<Eigen::VectorXi> subspaces;
+            };
 
-                struct GoalDesc {
-                    std::string obj_name;
-                    Eigen::Vector3f goal_position;
-                    float goal_region_radius;
-                };
+            struct GoalDesc {
+                std::string obj_name;
+                Eigen::Vector3f goal_position;
+                float goal_region_radius;
+            };
 
-                struct OraclePlanningProblemDesc {
-                    std::string world_file;
-                    std::string robot_name;
-                    std::string training_object_name;
-                    Eigen::Array2f x_limits;
-                    Eigen::Array2f y_limits;
-                    Eigen::Array2f z_limits;
-                    float max_velocity;
-                    float max_rotation_vel;
-                    float planning_timeout;
-                    // todo object weights
-                    std::map<std::string, float> object_weights;
-                    // todo weight map
-                    ControlLimitsDesc control_limits;
-                    CollisionPolicyDesc collision_policy;
-                    float t_max;
-                    std::vector<GoalDesc> goals;
-                    float goal_bias;
-                    float target_bias;
-                    float robot_bias;
-                    float action_noise;
-                    float state_noise;
-                    bool do_slice_ball_projection;
-                    mps::planner::pushing::PlanningProblem::OracleType oracle_type;
-                    mps::planner::pushing::PlanningProblem::AlgorithmType algorithm_type;
-                    mps::planner::pushing::PlanningProblem::LocalPlanner local_planner_type;
-                    mps::planner::pushing::PlanningProblem::ShortcutType shortcut_type;
-                    float shortcut_timeout;
-                    unsigned int num_control_samples;
-                };
+            struct OraclePlanningProblemDesc {
+                std::string world_file;
+                std::string robot_name;
+                std::string training_object_name;
+                Eigen::Array2f x_limits;
+                Eigen::Array2f y_limits;
+                Eigen::Array2f z_limits;
+                float max_velocity;
+                float max_rotation_vel;
+                float planning_timeout;
+                // todo object weights
+                std::map<std::string, float> object_weights;
+                // todo weight map
+                ControlLimitsDesc control_limits;
+                CollisionPolicyDesc collision_policy;
+                float t_max;
+                std::vector<GoalDesc> goals;
+                float goal_bias;
+                float target_bias;
+                float robot_bias;
+                float action_noise;
+                float state_noise;
+                mps::planner::pushing::PlanningProblem::OracleType oracle_type;
+                mps::planner::pushing::PlanningProblem::AlgorithmType algorithm_type;
+                mps::planner::pushing::PlanningProblem::LocalPlanner local_planner_type;
+                mps::planner::pushing::PlanningProblem::ShortcutType shortcut_type;
+                float shortcut_timeout;
+                unsigned int num_control_samples;
+            };
 
-                std::string oracleTypeToString(mps::planner::pushing::PlanningProblem::OracleType oracle_type);
-                std::string localPlannerTypeToString(mps::planner::pushing::PlanningProblem::LocalPlanner local_type);
-                std::string algorithmTypeToString(mps::planner::pushing::PlanningProblem::AlgorithmType algo_type);
-                std::string shortcutTypeToString(mps::planner::pushing::PlanningProblem::ShortcutType shortcut_type);
+            std::string oracleTypeToString(mps::planner::pushing::PlanningProblem::OracleType oracle_type);
+            std::string localPlannerTypeToString(mps::planner::pushing::PlanningProblem::LocalPlanner local_type);
+            std::string algorithmTypeToString(mps::planner::pushing::PlanningProblem::AlgorithmType algo_type);
+            std::string shortcutTypeToString(mps::planner::pushing::PlanningProblem::ShortcutType shortcut_type);
 
-                mps::planner::pushing::PlanningProblem::AlgorithmType stringToAlgorithmType(const std::string& str);
-                mps::planner::pushing::PlanningProblem::OracleType stringToOracleType(const std::string& str);
-                mps::planner::pushing::PlanningProblem::LocalPlanner stringToLocalPlannerType(const std::string& str);
-                mps::planner::pushing::PlanningProblem::ShortcutType stringToShortcutType(const std::string& str);
+            mps::planner::pushing::PlanningProblem::AlgorithmType stringToAlgorithmType(const std::string& str);
+            mps::planner::pushing::PlanningProblem::OracleType stringToOracleType(const std::string& str);
+            mps::planner::pushing::PlanningProblem::LocalPlanner stringToLocalPlannerType(const std::string& str);
+            mps::planner::pushing::PlanningProblem::ShortcutType stringToShortcutType(const std::string& str);
 
-                void configurePlanningProblem(mps::planner::pushing::PlanningProblem& problem,
-                                              const OraclePlanningProblemDesc& problem_desc);
-            }
+            void configurePlanningProblem(mps::planner::pushing::PlanningProblem& problem,
+                const OraclePlanningProblemDesc& problem_desc);
         }
     }
 }
+}
 
 namespace YAML {
-    template<>
-    struct convert<mps::planner::util::yaml::CollisionPolicyDesc> {
-        static Node encode(const mps::planner::util::yaml::CollisionPolicyDesc& policy_desc) {
-            Node node;
-            node["static_collisions_allowed"] = policy_desc.static_collisions_allowed;
-            node["static_collisions_blacklist"] = policy_desc.static_collisions_blacklist;
-            node["collisions_blacklist"] = policy_desc.collisions_blacklist;
-            return node;
-        }
+template <>
+struct convert<mps::planner::util::yaml::CollisionPolicyDesc> {
+    static Node encode(const mps::planner::util::yaml::CollisionPolicyDesc& policy_desc)
+    {
+        Node node;
+        node["static_collisions_allowed"] = policy_desc.static_collisions_allowed;
+        node["static_collisions_blacklist"] = policy_desc.static_collisions_blacklist;
+        node["collisions_blacklist"] = policy_desc.collisions_blacklist;
+        return node;
+    }
 
-        static bool decode(const Node &node, mps::planner::util::yaml::CollisionPolicyDesc& policy_desc) {
-            policy_desc.static_collisions_allowed = node["static_collisions_allowed"].as<bool>();
-            policy_desc.static_collisions_blacklist = node["static_collisions_blacklist"].as<std::vector<std::string> >();
-            policy_desc.collisions_blacklist = node["collisions_blacklist"].as<std::vector< std::pair<std::string, std::string> > >();
-            return true;
-        }
-    };
+    static bool decode(const Node& node, mps::planner::util::yaml::CollisionPolicyDesc& policy_desc)
+    {
+        policy_desc.static_collisions_allowed = node["static_collisions_allowed"].as<bool>();
+        policy_desc.static_collisions_blacklist = node["static_collisions_blacklist"].as<std::vector<std::string>>();
+        policy_desc.collisions_blacklist = node["collisions_blacklist"].as<std::vector<std::pair<std::string, std::string>>>();
+        return true;
+    }
+};
 
-    template<>
-    struct convert<mps::planner::util::yaml::ControlLimitsDesc> {
-        static Node encode(const mps::planner::util::yaml::ControlLimitsDesc &control_desc) {
-            Node node;
-            node["velocity_limits"] = control_desc.velocity_limits;
-            node["acceleration_limits"] = control_desc.acceleration_limits;
-            node["duration_limits"] = control_desc.duration_limits;
-            node["subspaces"] = control_desc.subspaces;
-            return node;
-        }
+template <>
+struct convert<mps::planner::util::yaml::ControlLimitsDesc> {
+    static Node encode(const mps::planner::util::yaml::ControlLimitsDesc& control_desc)
+    {
+        Node node;
+        node["velocity_limits"] = control_desc.velocity_limits;
+        node["acceleration_limits"] = control_desc.acceleration_limits;
+        node["duration_limits"] = control_desc.duration_limits;
+        node["subspaces"] = control_desc.subspaces;
+        return node;
+    }
 
-        static bool decode(const Node &node, mps::planner::util::yaml::ControlLimitsDesc &control_desc) {
-            control_desc.velocity_limits = node["velocity_limits"].as<Eigen::VectorXf>();
-            control_desc.acceleration_limits = node["acceleration_limits"].as<Eigen::VectorXf>();
-            control_desc.duration_limits = node["duration_limits"].as<Eigen::VectorXf>();
-            if (node["subspaces"]) {
-                control_desc.subspaces = node["subspaces"].as<std::vector<Eigen::VectorXi> >();
-            }
-            return true;
+    static bool decode(const Node& node, mps::planner::util::yaml::ControlLimitsDesc& control_desc)
+    {
+        control_desc.velocity_limits = node["velocity_limits"].as<Eigen::VectorXf>();
+        control_desc.acceleration_limits = node["acceleration_limits"].as<Eigen::VectorXf>();
+        control_desc.duration_limits = node["duration_limits"].as<Eigen::VectorXf>();
+        if (node["subspaces"]) {
+            control_desc.subspaces = node["subspaces"].as<std::vector<Eigen::VectorXi>>();
         }
-    };
+        return true;
+    }
+};
 
-    template<>
-    struct convert<mps::planner::util::yaml::GoalDesc> {
-        static Node encode(const mps::planner::util::yaml::GoalDesc &goal_desc) {
-            Node node;
-            node["position"] = goal_desc.goal_position;
-            node["radius"] = goal_desc.goal_region_radius;
-            node["object_name"] = goal_desc.obj_name;
-            return node;
-        }
+template <>
+struct convert<mps::planner::util::yaml::GoalDesc> {
+    static Node encode(const mps::planner::util::yaml::GoalDesc& goal_desc)
+    {
+        Node node;
+        node["position"] = goal_desc.goal_position;
+        node["radius"] = goal_desc.goal_region_radius;
+        node["object_name"] = goal_desc.obj_name;
+        return node;
+    }
 
-        static bool decode(const Node &node, mps::planner::util::yaml::GoalDesc &goal_desc) {
-            goal_desc.goal_position = node["position"].as<Eigen::Vector3f>();
-            goal_desc.goal_region_radius = node["radius"].as<float>();
-            goal_desc.obj_name = node["object_name"].as<std::string>();
-            return true;
-        }
-    };
+    static bool decode(const Node& node, mps::planner::util::yaml::GoalDesc& goal_desc)
+    {
+        goal_desc.goal_position = node["position"].as<Eigen::Vector3f>();
+        goal_desc.goal_region_radius = node["radius"].as<float>();
+        goal_desc.obj_name = node["object_name"].as<std::string>();
+        return true;
+    }
+};
 
-    template<>
-    struct convert<mps::planner::util::yaml::OraclePlanningProblemDesc> {
-        static Node encode(const mps::planner::util::yaml::OraclePlanningProblemDesc &problem_desc) {
-            Node node;
-            node["world_file"] = problem_desc.world_file;
-            node["robot_name"] = problem_desc.robot_name;
-            if (not problem_desc.training_object_name.empty()) node["training_object_name"] = problem_desc.training_object_name;
-            node["collision_policy"] = problem_desc.collision_policy;
-            node["x_limits"] = problem_desc.x_limits;
-            node["y_limits"] = problem_desc.y_limits;
-            node["z_limits"] = problem_desc.z_limits;
-            node["max_velocity"] = problem_desc.max_velocity;
-            node["max_rotation_vel"] = problem_desc.max_rotation_vel;
-            node["planning_timeout"] = problem_desc.planning_timeout;
-            node["object_weights_distance_fn"] = problem_desc.object_weights;
-            // todo object weights
-            // todo weight map
-            node["control_limits"] = problem_desc.control_limits;
-            node["t_max"] = problem_desc.t_max;
-            node["robot_bias"] = problem_desc.robot_bias;
-            node["target_bias"] = problem_desc.target_bias;
-            node["goal_bias"] = problem_desc.goal_bias;
-            node["goals"] = problem_desc.goals;
-            node["oracle_type"] = mps::planner::util::yaml::oracleTypeToString(problem_desc.oracle_type);
-            node["algorithm_type"] = mps::planner::util::yaml::algorithmTypeToString(problem_desc.algorithm_type);
-            node["local_planner_type"] = mps::planner::util::yaml::localPlannerTypeToString(problem_desc.local_planner_type);
-            node["shortcut_type"] = mps::planner::util::yaml::shortcutTypeToString(problem_desc.shortcut_type);
-            node["shortcut_timeout"] = problem_desc.shortcut_timeout;
-            node["num_control_samples"] = problem_desc.num_control_samples;
-            node["action_noise"] = problem_desc.action_noise;
-            node["state_noise"] = problem_desc.state_noise;
-            node["do_slice_ball_projection"] = problem_desc.do_slice_ball_projection;
-            return node;
-        }
+template <>
+struct convert<mps::planner::util::yaml::OraclePlanningProblemDesc> {
+    static Node encode(const mps::planner::util::yaml::OraclePlanningProblemDesc& problem_desc)
+    {
+        Node node;
+        node["world_file"] = problem_desc.world_file;
+        node["robot_name"] = problem_desc.robot_name;
+        if (not problem_desc.training_object_name.empty())
+            node["training_object_name"] = problem_desc.training_object_name;
+        node["collision_policy"] = problem_desc.collision_policy;
+        node["x_limits"] = problem_desc.x_limits;
+        node["y_limits"] = problem_desc.y_limits;
+        node["z_limits"] = problem_desc.z_limits;
+        node["max_velocity"] = problem_desc.max_velocity;
+        node["max_rotation_vel"] = problem_desc.max_rotation_vel;
+        node["planning_timeout"] = problem_desc.planning_timeout;
+        node["object_weights_distance_fn"] = problem_desc.object_weights;
+        // todo object weights
+        // todo weight map
+        node["control_limits"] = problem_desc.control_limits;
+        node["t_max"] = problem_desc.t_max;
+        node["robot_bias"] = problem_desc.robot_bias;
+        node["target_bias"] = problem_desc.target_bias;
+        node["goal_bias"] = problem_desc.goal_bias;
+        node["goals"] = problem_desc.goals;
+        node["oracle_type"] = mps::planner::util::yaml::oracleTypeToString(problem_desc.oracle_type);
+        node["algorithm_type"] = mps::planner::util::yaml::algorithmTypeToString(problem_desc.algorithm_type);
+        node["local_planner_type"] = mps::planner::util::yaml::localPlannerTypeToString(problem_desc.local_planner_type);
+        node["shortcut_type"] = mps::planner::util::yaml::shortcutTypeToString(problem_desc.shortcut_type);
+        node["shortcut_timeout"] = problem_desc.shortcut_timeout;
+        node["num_control_samples"] = problem_desc.num_control_samples;
+        node["action_noise"] = problem_desc.action_noise;
+        node["state_noise"] = problem_desc.state_noise;
+        return node;
+    }
 
-        static bool decode(const Node &node, mps::planner::util::yaml::OraclePlanningProblemDesc &problem_desc) {
-            problem_desc.world_file = node["world_file"].as<std::string>();
-            problem_desc.robot_name = node["robot_name"].as<std::string>();
-            if (node["training_object_name"]) problem_desc.training_object_name = node["training_object_name"].as<std::string>();
-            problem_desc.collision_policy = node["collision_policy"].as<mps::planner::util::yaml::CollisionPolicyDesc>();
-            problem_desc.x_limits = node["x_limits"].as<Eigen::Array2f>();
-            problem_desc.y_limits = node["y_limits"].as<Eigen::Array2f>();
-            problem_desc.z_limits = node["z_limits"].as<Eigen::Array2f>();
-            problem_desc.max_velocity = node["max_velocity"].as<float>();
-            problem_desc.max_rotation_vel = node["max_rotation_vel"].as<float>();
-            problem_desc.planning_timeout = node["planning_timeout"].as<float>();
-            // object weights
-            if (node["object_weights_distance_fn"]) {
-                problem_desc.object_weights = node["object_weights_distance_fn"].as<std::map<std::string, float> >();
-            }
-            // todo weight map
-            problem_desc.control_limits = node["control_limits"].as<mps::planner::util::yaml::ControlLimitsDesc>();
-            problem_desc.t_max = node["t_max"].as<float>();
-            for (auto yaml_goal : node["goals"]) {
-                auto goal_desc = yaml_goal.as<mps::planner::util::yaml::GoalDesc>();
-                problem_desc.goals.push_back(goal_desc);
-            }
-            problem_desc.oracle_type = mps::planner::util::yaml::stringToOracleType(node["oracle_type"].as<std::string>());
-            problem_desc.algorithm_type = mps::planner::util::yaml::stringToAlgorithmType(node["algorithm_type"].as<std::string>());
-            if (node["shortcut_type"]) {
-                problem_desc.shortcut_type = mps::planner::util::yaml::stringToShortcutType(node["shortcut_type"].as<std::string>());
-            } else {
-                problem_desc.shortcut_type = mps::planner::pushing::PlanningProblem::ShortcutType::NoShortcut;
-            }
-            if (node["local_planner_type"]) {
-                problem_desc.local_planner_type = mps::planner::util::yaml::stringToLocalPlannerType(node["local_planner_type"].as<std::string>());
-            } else {
-                problem_desc.local_planner_type = mps::planner::pushing::PlanningProblem::LocalPlanner::Line;
-            }
-            if (node["num_control_samples"]) {
-                problem_desc.num_control_samples = node["num_control_samples"].as<unsigned int>();
-            } else {
-                problem_desc.num_control_samples = 1;
-            }
-            problem_desc.robot_bias = node["robot_bias"].as<float>();
-            problem_desc.target_bias = node["target_bias"].as<float>();
-            problem_desc.goal_bias = node["goal_bias"].as<float>();
-            if (node["action_noise"]) {
-                problem_desc.action_noise = node["action_noise"].as<float>();
-            } else {
-                problem_desc.action_noise = 0.001f;
-            }
-            if (node["state_noise"]) {
-                problem_desc.state_noise = node["state_noise"].as<float>();
-            } else {
-                problem_desc.state_noise = 0.001f;
-            }
-            if (node["do_slice_ball_projection"]) {
-                problem_desc.do_slice_ball_projection = node["do_slice_ball_projection"].as<bool>();
-            } else {
-                problem_desc.do_slice_ball_projection = true;
-            }
-            if (node["shortcut_timeout"]) {
-                problem_desc.shortcut_timeout = node["shortcut_timeout"].as<float>();
-            } else {
-                problem_desc.shortcut_timeout = 5.0f;
-            }
-            return true;
+    static bool decode(const Node& node, mps::planner::util::yaml::OraclePlanningProblemDesc& problem_desc)
+    {
+        problem_desc.world_file = node["world_file"].as<std::string>();
+        problem_desc.robot_name = node["robot_name"].as<std::string>();
+        if (node["training_object_name"])
+            problem_desc.training_object_name = node["training_object_name"].as<std::string>();
+        problem_desc.collision_policy = node["collision_policy"].as<mps::planner::util::yaml::CollisionPolicyDesc>();
+        problem_desc.x_limits = node["x_limits"].as<Eigen::Array2f>();
+        problem_desc.y_limits = node["y_limits"].as<Eigen::Array2f>();
+        problem_desc.z_limits = node["z_limits"].as<Eigen::Array2f>();
+        problem_desc.max_velocity = node["max_velocity"].as<float>();
+        problem_desc.max_rotation_vel = node["max_rotation_vel"].as<float>();
+        problem_desc.planning_timeout = node["planning_timeout"].as<float>();
+        // object weights
+        if (node["object_weights_distance_fn"]) {
+            problem_desc.object_weights = node["object_weights_distance_fn"].as<std::map<std::string, float>>();
         }
-    };
+        // todo weight map
+        problem_desc.control_limits = node["control_limits"].as<mps::planner::util::yaml::ControlLimitsDesc>();
+        problem_desc.t_max = node["t_max"].as<float>();
+        for (auto yaml_goal : node["goals"]) {
+            auto goal_desc = yaml_goal.as<mps::planner::util::yaml::GoalDesc>();
+            problem_desc.goals.push_back(goal_desc);
+        }
+        problem_desc.oracle_type = mps::planner::util::yaml::stringToOracleType(node["oracle_type"].as<std::string>());
+        problem_desc.algorithm_type = mps::planner::util::yaml::stringToAlgorithmType(node["algorithm_type"].as<std::string>());
+        if (node["shortcut_type"]) {
+            problem_desc.shortcut_type = mps::planner::util::yaml::stringToShortcutType(node["shortcut_type"].as<std::string>());
+        } else {
+            problem_desc.shortcut_type = mps::planner::pushing::PlanningProblem::ShortcutType::NoShortcut;
+        }
+        if (node["local_planner_type"]) {
+            problem_desc.local_planner_type = mps::planner::util::yaml::stringToLocalPlannerType(node["local_planner_type"].as<std::string>());
+        } else {
+            problem_desc.local_planner_type = mps::planner::pushing::PlanningProblem::LocalPlanner::Line;
+        }
+        if (node["num_control_samples"]) {
+            problem_desc.num_control_samples = node["num_control_samples"].as<unsigned int>();
+        } else {
+            problem_desc.num_control_samples = 1;
+        }
+        problem_desc.robot_bias = node["robot_bias"].as<float>();
+        problem_desc.target_bias = node["target_bias"].as<float>();
+        problem_desc.goal_bias = node["goal_bias"].as<float>();
+        if (node["action_noise"]) {
+            problem_desc.action_noise = node["action_noise"].as<float>();
+        } else {
+            problem_desc.action_noise = 0.001f;
+        }
+        if (node["state_noise"]) {
+            problem_desc.state_noise = node["state_noise"].as<float>();
+        } else {
+            problem_desc.state_noise = 0.001f;
+        }
+        if (node["shortcut_timeout"]) {
+            problem_desc.shortcut_timeout = node["shortcut_timeout"].as<float>();
+        } else {
+            problem_desc.shortcut_timeout = 5.0f;
+        }
+        return true;
+    }
+};
 }
 
 #endif //MANIPULATION_PLANNING_SUITE_ORACLEPARSING_H

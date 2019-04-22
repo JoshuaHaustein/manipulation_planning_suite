@@ -8,6 +8,8 @@
 #include <thread>
 // mps
 #include <mps/planner/ompl/control/NaiveControlSampler.h>
+#include <mps/planner/ompl/control/RampVelocityControl.h>
+#include <mps/planner/ompl/control/TimedWaypoints.h>
 #include <mps/planner/ompl/state/goal/ObjectsRelocationGoal.h>
 #include <mps/planner/pushing/Costs.h>
 #include <mps/planner/pushing/OraclePushPlanner.h>
@@ -15,8 +17,8 @@
 #include <mps/planner/pushing/algorithm/SingleExtendRRT.h>
 #include <mps/planner/pushing/oracle/HumanOracle.h>
 #include <mps/planner/pushing/oracle/LearnedOracle.h>
-#include <mps/planner/pushing/oracle/QuasiStaticSE2Oracle.h>
 #include <mps/planner/pushing/oracle/OracleControlSampler.h>
+#include <mps/planner/pushing/oracle/QuasiStaticSE2Oracle.h>
 #include <mps/planner/pushing/oracle/RampComputer.h>
 #include <mps/planner/util/Logging.h>
 #include <mps/planner/util/Playback.h>
@@ -63,7 +65,6 @@ PlanningProblem::PlanningProblem(sim_env::WorldPtr world, sim_env::RobotPtr robo
     target_bias = 0.1f;
     action_noise = 0.01f;
     state_noise = 0.001f;
-    do_slice_ball_projection = true;
     min_state_distance = 0.001;
     // create default workspace limits
     workspace_bounds.x_limits[0] = std::numeric_limits<float>::lowest();
@@ -136,9 +137,13 @@ bool OraclePushPlanner::setup(PlanningProblem& problem)
         _planning_problem.workspace_bounds,
         _planning_problem.b_semi_dynamic,
         _planning_problem.weight_map);
-    _control_space = std::make_shared<mps_control::RampVelocityControlSpace>(_state_space,
-        problem.control_limits,
-        problem.control_subspaces);
+    if (problem.oracle_type == PlanningProblem::OracleType::QuasiStaticSE2Oracle) {
+        _control_space = std::make_shared<mps_control::TimedWaypointsControlSpace>(_state_space);
+    } else {
+        _control_space = std::make_shared<mps_control::RampVelocityControlSpace>(_state_space,
+            problem.control_limits,
+            problem.control_subspaces);
+    }
     _space_information = std::make_shared<::ompl::control::SpaceInformation>(_state_space, _control_space);
     _space_information->setPropagationStepSize(1.0); // NOT USED
     _space_information->setMinMaxControlDuration(1, 1); // NOT USED
@@ -308,9 +313,11 @@ bool OraclePushPlanner::saveSolution(const PlanningSolution& solution, const std
         if (i < _state_space->getNumObjects() - 1)
             file_stream << ",";
     }
+    file_stream << "\n";
     // second line contains action space information
-    file_stream << "\n"
-                << _control_space->getNumParameters() << "\n";
+    auto serializable_control_space = std::dynamic_pointer_cast<mps_control::SerializableControlSpace>(_control_space);
+    assert(serializable_control_space);
+    serializable_control_space->serializeSpaceInformation(file_stream);
     // third line contains stats
     solution.stats.printCVS(file_stream);
     // run over path and store it
@@ -373,10 +380,10 @@ bool OraclePushPlanner::loadSolution(PlanningSolution& solution, const std::stri
             return false;
         }
     }
+    auto serialize_control_space = std::dynamic_pointer_cast<mps_control::SerializableControlSpace>(_control_space);
+    assert(serialize_control_space);
     // check action space dimension (new line)
-    std::getline(file_stream, line);
-    unsigned int control_num_params = stoul(line);
-    if (control_num_params != _control_space->getNumParameters()) {
+    if (!serialize_control_space->deserializeSpaceInformation(file_stream)) {
         mps_logging::logErr("Could not load solution. Action space is incompatible", log_prefix);
         return false;
     }
@@ -621,7 +628,7 @@ mps::planner::ompl::state::SimEnvWorldStateSpacePtr OraclePushPlanner::getStateS
     return _state_space;
 }
 
-mps::planner::ompl::control::RampVelocityControlSpacePtr OraclePushPlanner::getControlSpace()
+::ompl::control::ControlSpacePtr OraclePushPlanner::getControlSpace()
 {
     return _control_space;
 }
@@ -686,6 +693,7 @@ void OraclePushPlanner::createAlgorithm()
             // break;
         }
         case PlanningProblem::LocalPlanner::Line: {
+            // TODO switch based on ControlSpace
             auto ramp_computer = std::make_shared<oracle::RampComputer>(robot_configuration_space, _control_space, robot_id);
             robot_oracle = ramp_computer;
             break;
