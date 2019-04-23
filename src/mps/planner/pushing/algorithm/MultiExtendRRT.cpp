@@ -290,6 +290,11 @@ bool MultiExtendRRT::isGoalPath(PathConstPtr path, const mps_state::SimEnvWorldS
     return goal_reached && valid_path;
 }
 
+mps::planner::pushing::oracle::OracleControlSamplerPtr MultiExtendRRT::getOracleSampler() const
+{
+    return _oracle_sampler;
+}
+
 void MultiExtendRRT::sample(const PushMotionPtr& sample, PlanningBlackboard& pb)
 {
     static const std::string log_prefix("mps::planner::pushing::algorithm::MultiExtendRRT::sample]");

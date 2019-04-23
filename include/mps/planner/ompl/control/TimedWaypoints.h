@@ -3,6 +3,7 @@
 #include <Eigen/Geometry>
 #include <memory>
 #include <mps/planner/ompl/control/Interfaces.h>
+#include <mps/planner/pushing/oracle/Oracle.h>
 #include <ompl/control/ControlSpace.h>
 #include <stack>
 
@@ -86,6 +87,54 @@ namespace planner {
 
             private:
                 mutable std::stack<TimedWaypoints*> _control_cache;
+            };
+            typedef std::shared_ptr<TimedWaypointsControlSpace> TimedWaypointsControlSpacePtr;
+            typedef std::shared_ptr<const TimedWaypointsControlSpace> TimedWaypointsControlSpaceConstPtr;
+            typedef std::weak_ptr<TimedWaypointsControlSpace> TimedWaypointsControlSpaceWeakPtr;
+            typedef std::weak_ptr<const TimedWaypointsControlSpace> TimedWaypointsControlSpaceWeakConstPtr;
+
+            class TimedWaypointsControlSampler : public ::ompl::control::ControlSampler {
+            public:
+                explicit TimedWaypointsControlSampler(const TimedWaypointsControlSpaceConstPtr cspace);
+                ~TimedWaypointsControlSampler();
+                void sample(::ompl::control::Control* control) override;
+            };
+
+            class TimedWaypointsRobotOracle : public pushing::oracle::RobotOracle {
+            public:
+                TimedWaypointsRobotOracle(ompl::state::SimEnvObjectStateSpacePtr robot_space,
+                    unsigned int robot_id, TimedWaypointsControlSpacePtr control_space, float max_vel);
+                ~TimedWaypointsRobotOracle();
+                void steer(const ompl::state::SimEnvObjectState* current_robot_state,
+                    const ompl::state::SimEnvObjectState* desired_robot_state,
+                    std::vector<::ompl::control::Control*>& controls) const override;
+                void steer(const ompl::state::SimEnvWorldState* current_state,
+                    const ompl::state::SimEnvObjectState* desired_robot_state,
+                    std::vector<::ompl::control::Control*>& controls) const override;
+                /**
+                 *  Compute a single control steering the robot from current_robot_state 
+                 * to target_robot_state (as far as possible within one control).
+                 */
+                void steer(const Eigen::VectorXf& current_robot_state,
+                    const Eigen::VectorXf& target_robot_state,
+                    ::ompl::control::Control* control) const override;
+                /**
+                 *  Compute a sequence of controls steering the robot from current_robot_state 
+                 *  to target_robot_state.
+                 */
+                void steer(const Eigen::VectorXf& current_robot_state,
+                    const Eigen::VectorXf& target_robot_state,
+                    std::vector<::ompl::control::Control*>& controls) const override;
+
+            private:
+                ompl::state::SimEnvObjectStateSpacePtr _state_space;
+                TimedWaypointsControlSpacePtr _control_space;
+                mutable Eigen::VectorXf _eigen_config_a;
+                mutable Eigen::VectorXf _eigen_config_b;
+                mutable ompl::state::SimEnvObjectState* _dummy_state_a;
+                mutable ompl::state::SimEnvObjectState* _dummy_state_b;
+                unsigned int _robot_id;
+                float _max_vel;
             };
         }
     }

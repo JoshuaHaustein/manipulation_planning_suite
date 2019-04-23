@@ -40,15 +40,26 @@ namespace planner {
                 unsigned int getNumNumbers() const override;
             };
 
+            // A timed control is a function T -> U where T is time, and U some target control space.
+            // T is an interval [0, d] where d can be obtained calling getDuration(). getTarget(t, target)
+            // allows to retrieve the target value at time t.
+            class TimedControl {
+            public:
+                virtual ~TimedControl() = 0;
+                virtual float getDuration() const = 0;
+                virtual void getTarget(float t, Eigen::VectorXf& target) const = 0;
+            };
+
             /**
              *  A position control is a function [0, T] -> C that maps time to desired robot state.
              */
-            class PositionControl : public ::ompl::control::Control {
+            class PositionControl : public TimedControl,
+                                    public ::ompl::control::Control {
             public:
                 ~PositionControl() override = 0;
                 virtual Eigen::VectorXf getPosition(float t) const = 0;
                 virtual void getPosition(float t, Eigen::VectorXf& pos) const = 0;
-                virtual float getDuration() const = 0;
+                void getTarget(float t, Eigen::VectorXf& target) const override;
             };
 
             /**
@@ -72,7 +83,7 @@ namespace planner {
                  * T is the maximum duration of the velocity profile (which may be infinite). For each time t in [0, T]
                  * ([0, infinity)) the velocity profile defines a desired velocity v(t) in V.
                  */
-            class VelocityControl : public ::ompl::control::Control {
+            class VelocityControl : public TimedControl, public ::ompl::control::Control {
             public:
                 // TODO what about copy constructor etc
                 ~VelocityControl() override = 0;
@@ -89,11 +100,8 @@ namespace planner {
                      * @param vel - output vector in which the velocity is written. The vector is scaled to the proper dimension
                      */
                 virtual void getVelocity(float dt, Eigen::VectorXf& vel) const = 0;
-                /**
-                     * Returns the maximal duration of this action in seconds.
-                     * @return [0, infinity), where infinity = std::numeric_limits<float>::infinity()
-                     */
-                virtual float getMaxDuration() const = 0;
+
+                void getTarget(float t, Eigen::VectorXf& target) const override;
             };
 
             /**

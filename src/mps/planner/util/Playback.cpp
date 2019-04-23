@@ -18,7 +18,7 @@ namespace ob = ompl::base;
 namespace oc = ompl::control;
 
 void mps::planner::util::playback::playPath(sim_env::WorldPtr world,
-    sim_env::RobotVelocityControllerPtr controller,
+    sim_env::RobotControllerPtr controller,
     mps::planner::ompl::state::SimEnvWorldStateSpaceConstPtr state_space,
     const mps::planner::ompl::planning::essentials::PathConstPtr& path,
     const std::function<bool()>& interrupt_callback,
@@ -50,7 +50,7 @@ void mps::planner::util::playback::playPath(sim_env::WorldPtr world,
 }
 
 bool mps::planner::util::playback::playMotion(sim_env::WorldPtr world,
-    sim_env::RobotVelocityControllerPtr controller,
+    sim_env::RobotControllerPtr controller,
     mps::planner::ompl::state::SimEnvWorldStateSpaceConstPtr state_space,
     const std::function<bool()>& interrupt_callback,
     const mps::planner::ompl::planning::essentials::MotionConstPtr& motion,
@@ -71,12 +71,14 @@ bool mps::planner::util::playback::playMotion(sim_env::WorldPtr world,
     } else {
         // simulate pushing action
         const ::ompl::control::Control* control = motion->getConstControl();
-        auto* current_control = dynamic_cast<const mps_control::VelocityControl*>(control);
+        auto* timed_control = dynamic_cast<const mps_control::TimedControl*>(control);
         float t = 0.0f;
-        while (t < current_control->getMaxDuration()) {
+        Eigen::VectorXf target;
+        while (t < timed_control->getDuration()) {
             if (interrupt_callback())
                 return false;
-            controller->setTargetVelocity(current_control->getVelocity(t));
+            timed_control->getTarget(t, target);
+            controller->setTarget(target);
             world->stepPhysics(1);
             std::this_thread::sleep_for(std::chrono::milliseconds(time_step_ms));
             t += world->getPhysicsTimeStep();

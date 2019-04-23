@@ -26,7 +26,7 @@ namespace planner {
             public:
                 SimEnvStatePropagator(::ompl::control::SpaceInformationPtr si,
                     sim_env::WorldPtr world,
-                    sim_env::RobotVelocityControllerPtr controller,
+                    sim_env::RobotControllerPtr controller,
                     bool semi_dynamic = true,
                     float t_max = 8.0f);
                 ~SimEnvStatePropagator();
@@ -49,7 +49,7 @@ namespace planner {
 
             private:
                 mutable sim_env::WorldPtr _world;
-                mutable sim_env::RobotVelocityControllerPtr _controller;
+                mutable sim_env::RobotControllerPtr _controller;
                 mps::planner::ompl::state::SimEnvValidityCheckerPtr _validity_checker;
                 bool _semi_dynamic;
                 float _t_max;

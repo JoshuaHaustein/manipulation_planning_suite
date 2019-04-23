@@ -231,6 +231,7 @@ namespace planner {
 
         private:
             bool _is_initialized;
+            sim_env::RobotControllerPtr _robot_controller;
             mps::planner::ompl::state::SimEnvWorldStateSpacePtr _state_space;
             ::ompl::control::ControlSpacePtr _control_space;
             ::ompl::control::SpaceInformationPtr _space_information;

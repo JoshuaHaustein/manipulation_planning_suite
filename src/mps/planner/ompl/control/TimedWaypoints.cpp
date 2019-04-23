@@ -7,7 +7,10 @@ using namespace mps::planner::ompl::control;
 
 // }
 
-TimedWaypoints::TimedWaypoints() = default;
+TimedWaypoints::TimedWaypoints()
+    : _resting_time(0.0f)
+{
+}
 
 TimedWaypoints::TimedWaypoints(const TimedWaypoints& other)
 {
@@ -131,8 +134,8 @@ TimedWaypointsControlSpace::~TimedWaypointsControlSpace() = default;
 
 unsigned int TimedWaypointsControlSpace::getDimension() const
 {
-    // return 0; // TODO or return infinity?
-    throw std::logic_error("TimedWaypointsControlSpace::getDimension() has been called. What should be returned here?");
+    // TODO what to return?
+    return stateSpace_->getDimension();
 }
 
 ::ompl::control::Control* TimedWaypointsControlSpace::allocControl() const
@@ -204,8 +207,7 @@ bool TimedWaypointsControlSpace::deserializeSpaceInformation(std::istream& istre
 
 ::ompl::control::ControlSamplerPtr TimedWaypointsControlSpace::allocDefaultControlSampler() const
 {
-    throw std::logic_error("TimedWaypointsControlSpace::allocDefaultControlSampler is not implemented");
-    // return nullptr;
+    return std::make_shared<TimedWaypointsControlSampler>(shared_from_this());
 }
 
 void TimedWaypointsControlSpace::printSettings(std::ostream& out) const
@@ -236,4 +238,75 @@ void TimedWaypointsControlSpace::deserialize(::ompl::control::Control* ctrl, con
 double* TimedWaypointsControlSpace::getValueAddressAtIndex(::ompl::control::Control* control, unsigned int index) const
 {
     throw std::logic_error("TimedWaypointsControlSpace::getValueAddressAtIndex() is not implemented");
+}
+
+TimedWaypointsControlSampler::TimedWaypointsControlSampler(const TimedWaypointsControlSpaceConstPtr cspace)
+    : ::ompl::control::ControlSampler(cspace.get())
+{
+}
+
+TimedWaypointsControlSampler::~TimedWaypointsControlSampler()
+{
+}
+
+void TimedWaypointsControlSampler::sample(::ompl::control::Control* control)
+{
+    throw std::logic_error("TimedWaypointsControlSampler::sample not implemented yet");
+}
+
+TimedWaypointsRobotOracle::TimedWaypointsRobotOracle(ompl::state::SimEnvObjectStateSpacePtr state_space,
+    unsigned int robot_id, TimedWaypointsControlSpacePtr control_space, float max_vel)
+    : _state_space(state_space)
+    , _control_space(control_space)
+    , _robot_id(robot_id)
+    , _max_vel(max_vel)
+{
+    _dummy_state_a = dynamic_cast<ompl::state::SimEnvObjectState*>(_state_space->allocState());
+    _dummy_state_b = dynamic_cast<ompl::state::SimEnvObjectState*>(_state_space->allocState());
+}
+
+TimedWaypointsRobotOracle::~TimedWaypointsRobotOracle()
+{
+    _state_space->freeState(_dummy_state_a);
+    _state_space->freeState(_dummy_state_b);
+}
+
+void TimedWaypointsRobotOracle::steer(const ompl::state::SimEnvObjectState* current_robot_state,
+    const ompl::state::SimEnvObjectState* desired_robot_state,
+    std::vector<::ompl::control::Control*>& controls) const
+{
+    current_robot_state->getConfiguration(_eigen_config_a);
+    desired_robot_state->getConfiguration(_eigen_config_b);
+    steer(_eigen_config_a, _eigen_config_b, controls);
+}
+
+void TimedWaypointsRobotOracle::steer(const ompl::state::SimEnvWorldState* current_state,
+    const ompl::state::SimEnvObjectState* desired_robot_state,
+    std::vector<::ompl::control::Control*>& controls) const
+{
+    steer(current_state->getObjectState(_robot_id), desired_robot_state, controls);
+}
+
+void TimedWaypointsRobotOracle::steer(const Eigen::VectorXf& current_robot_state,
+    const Eigen::VectorXf& target_robot_state,
+    ::ompl::control::Control* control) const
+{
+    auto wp_control = dynamic_cast<TimedWaypoints*>(control);
+    // add first state
+    wp_control->addWaypoint(0.0, current_robot_state);
+    // compute distance
+    _dummy_state_a->setConfiguration(current_robot_state);
+    _dummy_state_b->setConfiguration(target_robot_state);
+    float distance = _state_space->distance(_dummy_state_a, _dummy_state_b);
+    // add destination
+    wp_control->addWaypoint(distance / _max_vel, target_robot_state);
+}
+
+void TimedWaypointsRobotOracle::steer(const Eigen::VectorXf& current_robot_state,
+    const Eigen::VectorXf& target_robot_state,
+    std::vector<::ompl::control::Control*>& controls) const
+{
+    auto control = static_cast<TimedWaypoints*>(_control_space->allocControl());
+    steer(current_robot_state, target_robot_state, control);
+    controls.push_back(control);
 }

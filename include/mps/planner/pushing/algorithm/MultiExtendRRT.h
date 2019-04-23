@@ -86,6 +86,9 @@ namespace planner {
                     mps::planner::ompl::planning::essentials::PathPtr updated_path)
                     override;
 
+                // Return oracle sampler for debugging purposes
+                mps::planner::pushing::oracle::OracleControlSamplerPtr getOracleSampler() const;
+
             protected:
                 friend class MERRTExecutionMonitor;
                 // high-level algorithm stubs

@@ -13,7 +13,7 @@ namespace mps_logging = mps::planner::util::logging;
 
 SimEnvStatePropagator::SimEnvStatePropagator(::ompl::control::SpaceInformationPtr si,
     sim_env::WorldPtr world,
-    sim_env::RobotVelocityControllerPtr controller,
+    sim_env::RobotControllerPtr controller,
     bool semi_dynamic,
     float t_max)
     : ::ompl::control::StatePropagator(si)
@@ -52,7 +52,8 @@ bool SimEnvStatePropagator::propagate(const ::ompl::base::State* state, ::ompl::
     }
     auto* world_state = state->as<state::SimEnvWorldState>();
     auto* result_world_state = result->as<state::SimEnvWorldState>();
-    auto* velocity_control = control->as<control::VelocityControl>();
+    auto* timed_control = dynamic_cast<control::TimedControl*>(control);
+    assert(timed_control);
     // lock the world for the whole propagation
     std::lock_guard<std::recursive_mutex> world_lock(_world->getMutex());
     // save current world state
@@ -61,7 +62,7 @@ bool SimEnvStatePropagator::propagate(const ::ompl::base::State* state, ::ompl::
     state_space->setToState(_world, world_state);
     // reset resting time in case we have a semi-dynamic action
     if (_semi_dynamic) {
-        auto* semi_dyn_control = dynamic_cast<control::SemiDynamicControl*>(velocity_control);
+        auto* semi_dyn_control = dynamic_cast<control::SemiDynamicControl*>(control);
         assert(semi_dyn_control);
         semi_dyn_control->setRestDuration(0.0f);
     }
@@ -69,11 +70,11 @@ bool SimEnvStatePropagator::propagate(const ::ompl::base::State* state, ::ompl::
     float time = 0.0f;
     bool propagation_success = true;
     assert(_world->getPhysicsTimeStep() > 0.0f);
-    Eigen::VectorXf vel(_controller->getTargetDimension());
+    Eigen::VectorXf target(_controller->getTargetDimension());
     std::vector<sim_env::Contact> contacts;
-    while (time < velocity_control->getMaxDuration() and propagation_success) {
-        velocity_control->getVelocity(time, vel);
-        _controller->setTargetVelocity(vel);
+    while (time < timed_control->getDuration() and propagation_success) {
+        timed_control->getTarget(time, target);
+        _controller->setTarget(target);
         _world->stepPhysics(contacts);
         time += _world->getPhysicsTimeStep();
         propagation_success = _validity_checker->isValidIntermediate(contacts);
@@ -83,11 +84,15 @@ bool SimEnvStatePropagator::propagate(const ::ompl::base::State* state, ::ompl::
     // in case we have a semi dynamic propagation, continue propagating until rest
     if (_semi_dynamic and propagation_success) {
         //        auto* semi_dyn_control = velocity_control->as<control::SemiDynamicVelocityControl>();
-        auto* semi_dyn_control = dynamic_cast<control::SemiDynamicControl*>(velocity_control);
+        auto* semi_dyn_control = dynamic_cast<control::SemiDynamicControl*>(control);
         assert(semi_dyn_control);
         float resting_time = 0.0f;
-        vel.setZero();
-        _controller->setTargetVelocity(vel); // constant zero target velocity
+        // in case we have a velocity control, set target velocity to zero
+        auto* velocity_control = dynamic_cast<control::VelocityControl*>(control);
+        if (velocity_control) {
+            target.setZero();
+            _controller->setTarget(target); // constant zero target velocity
+        }
         // propagate until either t_max is reached, or the world is at rest
         while (resting_time <= _t_max and not _world->atRest() and propagation_success) {
             _world->stepPhysics(contacts);

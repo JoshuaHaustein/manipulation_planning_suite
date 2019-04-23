@@ -26,7 +26,7 @@ namespace planner {
                  * @param bool  force_synch - if true, synchronizes the world state with the state in the path after each action
                  */
             void playPath(sim_env::WorldPtr world,
-                sim_env::RobotVelocityControllerPtr controller,
+                sim_env::RobotControllerPtr controller,
                 mps::planner::ompl::state::SimEnvWorldStateSpaceConstPtr state_space,
                 const mps::planner::ompl::planning::essentials::PathConstPtr& path,
                 const std::function<bool()>& interrupt_callback,
@@ -45,7 +45,7 @@ namespace planner {
                  * @return false, if any error occurred, else true
                  */
             bool playMotion(sim_env::WorldPtr world,
-                sim_env::RobotVelocityControllerPtr controller,
+                sim_env::RobotControllerPtr controller,
                 mps::planner::ompl::state::SimEnvWorldStateSpaceConstPtr state_space,
                 const std::function<bool()>& interrupt_callback,
                 const mps::planner::ompl::planning::essentials::MotionConstPtr& motion,

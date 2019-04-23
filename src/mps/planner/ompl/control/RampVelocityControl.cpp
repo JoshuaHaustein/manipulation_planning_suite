@@ -118,7 +118,7 @@ void RampVelocityControl::getVelocity(float dt, Eigen::VectorXf& vel) const
     }
 }
 
-float RampVelocityControl::getMaxDuration() const
+float RampVelocityControl::getDuration() const
 {
     return 2.0f * _acceleration_duration + _plateau_duration + _rest_time;
 }
@@ -130,7 +130,7 @@ float RampVelocityControl::getAccelerationTime() const
 
 float RampVelocityControl::getPreRestDuration() const
 {
-    return getMaxDuration();
+    return 2.0f * _acceleration_duration + _plateau_duration;
 }
 
 float RampVelocityControl::getRestDuration() const

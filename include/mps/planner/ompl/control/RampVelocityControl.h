@@ -79,7 +79,7 @@ namespace planner {
                 /** VelocityProfile interface **/
                 Eigen::VectorXf getVelocity(float dt) const override;
                 void getVelocity(float dt, Eigen::VectorXf& vel) const override;
-                float getMaxDuration() const override;
+                float getDuration() const override;
 
                 float getAccelerationTime() const;
 

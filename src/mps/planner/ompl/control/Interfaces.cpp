@@ -35,6 +35,17 @@ unsigned int RealValueParameterizedControl::getNumNumbers() const
     return getNumParameters();
 }
 
+TimedControl::~TimedControl() = default;
+
 PositionControl::~PositionControl() = default;
+void PositionControl::getTarget(float dt, Eigen::VectorXf& vel) const
+{
+    getPosition(dt, vel);
+}
+
 VelocityControl::~VelocityControl() = default;
+void VelocityControl::getTarget(float dt, Eigen::VectorXf& vel) const
+{
+    getVelocity(dt, vel);
+}
 SemiDynamicControl::~SemiDynamicControl() = default;

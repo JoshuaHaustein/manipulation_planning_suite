@@ -139,11 +139,17 @@ bool OraclePushPlanner::setup(PlanningProblem& problem)
         _planning_problem.weight_map);
     if (problem.oracle_type == PlanningProblem::OracleType::QuasiStaticSE2Oracle) {
         _control_space = std::make_shared<mps_control::TimedWaypointsControlSpace>(_state_space);
+        _robot_controller = std::make_shared<sim_env::RobotPositionController>(_planning_problem.robot, _planning_problem.robot_controller);
     } else {
         _control_space = std::make_shared<mps_control::RampVelocityControlSpace>(_state_space,
             problem.control_limits,
             problem.control_subspaces);
+        _robot_controller = _planning_problem.robot_controller;
     }
+    using std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, std::placeholders::_4, std::placeholders::_5;
+    sim_env::Robot::ControlCallback callback = std::bind(&sim_env::RobotController::control,
+        _robot_controller, _1, _2, _3, _4, _5);
+    _planning_problem.robot->setController(callback);
     _space_information = std::make_shared<::ompl::control::SpaceInformation>(_state_space, _control_space);
     _space_information->setPropagationStepSize(1.0); // NOT USED
     _space_information->setMinMaxControlDuration(1, 1); // NOT USED
@@ -153,16 +159,14 @@ bool OraclePushPlanner::setup(PlanningProblem& problem)
     _space_information->setStateValidityChecker(_validity_checker);
     _state_propagator = std::make_shared<mps::planner::ompl::control::SimEnvStatePropagator>(_space_information,
         _planning_problem.world,
-        _planning_problem.robot_controller,
+        _robot_controller,
         _planning_problem.b_semi_dynamic,
         _planning_problem.t_max);
     prepareDistanceWeights();
     _space_information->setStatePropagator(_state_propagator);
     _space_information->setup();
     createAlgorithm(); // sets _algorithm and _shortcutter
-    _data_generator = std::make_shared<oracle::DataGenerator>(_space_information, _state_propagator,
-        _planning_problem.world, _planning_problem.robot->getName(),
-        _planning_problem.relocation_goals.at(0).object_name);
+    _data_generator = nullptr;
     // TODO this is only for debug
     if (_planning_problem.debug) {
         std::vector<unsigned int> target_object_ids;
@@ -264,7 +268,7 @@ void OraclePushPlanner::playback(const PlanningSolution& solution,
     if (solution.solved) {
         clearVisualizations();
         mps::planner::util::playback::playPath(_planning_problem.world,
-            _planning_problem.robot_controller,
+            _robot_controller,
             _state_space,
             solution.path,
             interrupt_callback,
@@ -282,7 +286,7 @@ bool OraclePushPlanner::execute(const PlanningSolution& solution,
         if (exec) {
             callback = exec;
         } else {
-            callback = std::bind(mps::planner::util::playback::playMotion, _planning_problem.world, _planning_problem.robot_controller,
+            callback = std::bind(mps::planner::util::playback::playMotion, _planning_problem.world, _robot_controller,
                 _state_space, interrupt_callback, std::placeholders::_1, std::placeholders::_2);
         }
         _exec_monitor->setExecutionCallback(callback);
@@ -452,6 +456,12 @@ void OraclePushPlanner::generateData(const std::string& file_name,
     const std::string& annotation,
     bool deterministic)
 {
+    // TODO what about other algorithms?
+    if (!_data_generator) {
+        _data_generator = std::make_shared<oracle::DataGenerator>(_space_information, _state_propagator,
+            _planning_problem.world, _planning_problem.robot->getName(),
+            _planning_problem.relocation_goals.at(0).object_name);
+    }
     _data_generator->generateData(file_name, num_samples, annotation, deterministic);
 }
 
@@ -460,8 +470,14 @@ void OraclePushPlanner::evaluateOracle(mps::planner::ompl::state::goal::Relocati
     unsigned int num_samples,
     const std::string& annotation)
 {
+    // TODO what about other algorithms?
     auto oracle_rrt = std::dynamic_pointer_cast<algorithm::OracleRearrangementRRT>(_algorithm);
     auto oracle_sampler = oracle_rrt->getOracleSampler();
+    if (!_data_generator) {
+        _data_generator = std::make_shared<oracle::DataGenerator>(_space_information, _state_propagator,
+            _planning_problem.world, _planning_problem.robot->getName(),
+            _planning_problem.relocation_goals.at(0).object_name);
+    }
     _data_generator->evaluateOracle(goal, oracle_sampler, _state_space, file_name, num_samples, annotation);
 }
 
@@ -565,12 +581,6 @@ mps::planner::ompl::planning::essentials::PathPtr OraclePushPlanner::testOracle(
         return nullptr;
     }
     auto logger = _planning_problem.world->getLogger();
-    auto oracle_rrt = std::dynamic_pointer_cast<algorithm::OracleRearrangementRRT>(_algorithm);
-    if (!oracle_rrt) {
-        logger->logErr("Could not test oracle. The selected algorithm is not of type OracleRearrangementRRT.",
-            log_prefix);
-        return nullptr;
-    }
     int target_id = _state_space->getObjectIndex(goal.object_name);
     int robot_id = _state_space->getObjectIndex(_planning_problem.robot->getName());
     assert(robot_id >= 0); // the robot is a sim_env object, so it should always be a valid id here
@@ -578,8 +588,20 @@ mps::planner::ompl::planning::essentials::PathPtr OraclePushPlanner::testOracle(
         logger->logErr("Could not test oracle - invalid target name " + goal.object_name, log_prefix);
         return nullptr;
     }
+    // get oracle sampled
+    oracle::OracleControlSamplerPtr oracle_sampler = nullptr;
+    auto oracle_rrt = std::dynamic_pointer_cast<algorithm::OracleRearrangementRRT>(_algorithm);
+    if (oracle_rrt) {
+        oracle_sampler = oracle_rrt->getOracleSampler();
+    } else {
+        auto mextrrt = std::dynamic_pointer_cast<algorithm::MultiExtendRRT>(_algorithm);
+        if (!mextrrt) {
+            logger->logErr("Could not test oracle. The selected algorithm does not use an oracle.", log_prefix);
+            return nullptr;
+        }
+        oracle_sampler = mextrrt->getOracleSampler();
+    }
     ///////////////////////////////////// Now we can ask the oracle /////////////////////////////
-    auto oracle_sampler = oracle_rrt->getOracleSampler();
     auto* target_state = dynamic_cast<mps::planner::ompl::state::SimEnvWorldState*>(_state_space->allocState());
     auto start_motion = std::make_shared<ompl::planning::essentials::Motion>(_space_information);
     _state_space->extractState(_planning_problem.world,
@@ -693,9 +715,18 @@ void OraclePushPlanner::createAlgorithm()
             // break;
         }
         case PlanningProblem::LocalPlanner::Line: {
-            // TODO switch based on ControlSpace
-            auto ramp_computer = std::make_shared<oracle::RampComputer>(robot_configuration_space, _control_space, robot_id);
-            robot_oracle = ramp_computer;
+            if (_planning_problem.oracle_type == PlanningProblem::OracleType::QuasiStaticSE2Oracle) {
+                auto twp_control_space = std::dynamic_pointer_cast<ompl::control::TimedWaypointsControlSpace>(_control_space);
+                assert(twp_control_space);
+                // TODO minimal velocity should be treated differently for cartesian and rotational
+                robot_oracle = std::make_shared<ompl::control::TimedWaypointsRobotOracle>(robot_state_space,
+                    robot_id, twp_control_space, _planning_problem.control_limits.velocity_limits.minCoeff());
+            } else {
+                auto ramp_control_space = std::dynamic_pointer_cast<ompl::control::RampVelocityControlSpace>(_control_space);
+                assert(ramp_control_space);
+                auto ramp_computer = std::make_shared<oracle::RampComputer>(robot_configuration_space, ramp_control_space, robot_id);
+                robot_oracle = ramp_computer;
+            }
             break;
         }
         }
