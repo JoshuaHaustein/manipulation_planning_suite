@@ -103,7 +103,8 @@ namespace planner {
             class TimedWaypointsRobotOracle : public pushing::oracle::RobotOracle {
             public:
                 TimedWaypointsRobotOracle(ompl::state::SimEnvObjectStateSpacePtr robot_space,
-                    unsigned int robot_id, TimedWaypointsControlSpacePtr control_space, float max_vel);
+                    unsigned int robot_id, TimedWaypointsControlSpacePtr control_space,
+                    const std::vector<float>& vel_limits);
                 ~TimedWaypointsRobotOracle();
                 void steer(const ompl::state::SimEnvObjectState* current_robot_state,
                     const ompl::state::SimEnvObjectState* desired_robot_state,
@@ -127,14 +128,14 @@ namespace planner {
                     std::vector<::ompl::control::Control*>& controls) const override;
 
             private:
-                ompl::state::SimEnvObjectStateSpacePtr _state_space;
+                ompl::state::SimEnvObjectConfigurationSpacePtr _config_space;
                 TimedWaypointsControlSpacePtr _control_space;
                 mutable Eigen::VectorXf _eigen_config_a;
                 mutable Eigen::VectorXf _eigen_config_b;
-                mutable ompl::state::SimEnvObjectState* _dummy_state_a;
-                mutable ompl::state::SimEnvObjectState* _dummy_state_b;
+                mutable ompl::state::SimEnvObjectConfiguration* _dummy_state_a;
+                mutable ompl::state::SimEnvObjectConfiguration* _dummy_state_b;
                 unsigned int _robot_id;
-                float _max_vel;
+                std::vector<float> _max_vel;
             };
         }
     }

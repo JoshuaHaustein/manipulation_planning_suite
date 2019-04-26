@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <mps/planner/ompl/control/TimedWaypoints.h>
 
 using namespace mps::planner::ompl::control;
@@ -255,20 +256,23 @@ void TimedWaypointsControlSampler::sample(::ompl::control::Control* control)
 }
 
 TimedWaypointsRobotOracle::TimedWaypointsRobotOracle(ompl::state::SimEnvObjectStateSpacePtr state_space,
-    unsigned int robot_id, TimedWaypointsControlSpacePtr control_space, float max_vel)
-    : _state_space(state_space)
+    unsigned int robot_id, TimedWaypointsControlSpacePtr control_space, const std::vector<float>& vel_limits)
+    : _config_space(state_space->getConfigurationSpace())
     , _control_space(control_space)
     , _robot_id(robot_id)
-    , _max_vel(max_vel)
+    , _max_vel(vel_limits)
 {
-    _dummy_state_a = dynamic_cast<ompl::state::SimEnvObjectState*>(_state_space->allocState());
-    _dummy_state_b = dynamic_cast<ompl::state::SimEnvObjectState*>(_state_space->allocState());
+    auto num_subspaces = _config_space->getSubspaceCount();
+    assert(_max_vel.size() == num_subspaces);
+    // assert(_max_vel.size() == _state_space->getSubspaceCount());
+    _dummy_state_a = dynamic_cast<ompl::state::SimEnvObjectConfiguration*>(_config_space->allocState());
+    _dummy_state_b = dynamic_cast<ompl::state::SimEnvObjectConfiguration*>(_config_space->allocState());
 }
 
 TimedWaypointsRobotOracle::~TimedWaypointsRobotOracle()
 {
-    _state_space->freeState(_dummy_state_a);
-    _state_space->freeState(_dummy_state_b);
+    _config_space->freeState(_dummy_state_a);
+    _config_space->freeState(_dummy_state_b);
 }
 
 void TimedWaypointsRobotOracle::steer(const ompl::state::SimEnvObjectState* current_robot_state,
@@ -294,12 +298,17 @@ void TimedWaypointsRobotOracle::steer(const Eigen::VectorXf& current_robot_state
     auto wp_control = dynamic_cast<TimedWaypoints*>(control);
     // add first state
     wp_control->addWaypoint(0.0, current_robot_state);
-    // compute distance
+    // compute distance for each sub-state sapce
     _dummy_state_a->setConfiguration(current_robot_state);
     _dummy_state_b->setConfiguration(target_robot_state);
-    float distance = _state_space->distance(_dummy_state_a, _dummy_state_b);
+    float duration = 0.0;
+    for (unsigned int i = 0; i < _config_space->getSubspaceCount(); ++i) {
+        auto sub_space = _config_space->getSubspace(i);
+        float dist = sub_space->distance(_dummy_state_a->components[i], _dummy_state_b->components[i]);
+        duration = std::max(dist / _max_vel.at(i), duration);
+    }
     // add destination
-    wp_control->addWaypoint(distance / _max_vel, target_robot_state);
+    wp_control->addWaypoint(duration, target_robot_state);
 }
 
 void TimedWaypointsRobotOracle::steer(const Eigen::VectorXf& current_robot_state,

@@ -20,6 +20,12 @@ namespace planner {
                     float eps_dist; // distance between pusher and object from which on to consider both to be in contact
                 };
 
+                /**
+                 * Create a new quasi static pushing oracle.
+                 * @param objects - a list of all objects (including the robot) in the same order as in the
+                 *  SimEnvWorldStateSpace used when querying this oracle.
+                 * @param robot_id - index of the robot in objects
+                 */
                 QuasiStaticSE2Oracle(const std::vector<sim_env::ObjectPtr>& objects, unsigned int robot_id);
                 ~QuasiStaticSE2Oracle();
 
@@ -48,8 +54,33 @@ namespace planner {
                     const unsigned int& obj_id,
                     mps::planner::ompl::state::SimEnvObjectState* new_robot_state) override;
 
+            protected:
+                struct RobotPushingEdge {
+                    Eigen::Vector2f normal; // in robot frame
+                    Eigen::Vector2f from; // in robot frame
+                    Eigen::Vector2f to; // in robot frame
+                    Eigen::Vector2f dir; // dir = to - from
+                    float edge_length; // norm of dir
+                };
+
+                struct ObjectPushingEdge {
+                    Eigen::Vector2f normal; // in object frame
+                    Eigen::Vector2f from; // in object frame
+                    Eigen::Vector2f to; // in object frame
+                    Eigen::Vector2f dir; // dir = to - from
+                    Eigen::Vector2f pcom; // projection of center of mass on the line x = from + t * dir with t in [0, 1]
+                    float edge_length;
+                };
+
             private:
                 unsigned int _robot_id;
+                std::vector<sim_env::ObjectPtr> _objects;
+                std::vector<RobotPushingEdge> _robot_edges;
+                std::vector<std::vector<ObjectPushingEdge>> _obj_edges;
+                std::vector<std::vector<std::pair<RobotPushingEdge*, ObjectPushingEdge*>>> _contact_pairs;
+
+                void compute_robot_pushing_edges();
+                void compute_object_pushing_edges(sim_env::ObjectPtr obj);
             };
         }
     }

@@ -719,8 +719,9 @@ void OraclePushPlanner::createAlgorithm()
                 auto twp_control_space = std::dynamic_pointer_cast<ompl::control::TimedWaypointsControlSpace>(_control_space);
                 assert(twp_control_space);
                 // TODO minimal velocity should be treated differently for cartesian and rotational
+                std::vector<float> vels = { 0.1f, 0.2f };
                 robot_oracle = std::make_shared<ompl::control::TimedWaypointsRobotOracle>(robot_state_space,
-                    robot_id, twp_control_space, _planning_problem.control_limits.velocity_limits.minCoeff());
+                    robot_id, twp_control_space, vels);
             } else {
                 auto ramp_control_space = std::dynamic_pointer_cast<ompl::control::RampVelocityControlSpace>(_control_space);
                 assert(ramp_control_space);
