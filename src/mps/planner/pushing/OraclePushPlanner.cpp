@@ -735,7 +735,7 @@ void OraclePushPlanner::createAlgorithm()
         std::vector<sim_env::ObjectPtr> objects;
         for (unsigned int i = 0; i < _state_space->getNumObjects(); ++i) {
             // TODO Change state space to be able to return non-const object pointers?
-            objects.push_back(_planning_problem.world->getObject(_state_space->getObjectName(i)));
+            objects.push_back(_planning_problem.world->getObject(_state_space->getObjectName(i), false));
         }
         switch (_planning_problem.oracle_type) {
         case PlanningProblem::OracleType::Human: {

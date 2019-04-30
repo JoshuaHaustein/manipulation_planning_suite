@@ -1,6 +1,7 @@
 #pragma once
 
 #include <mps/planner/pushing/oracle/Oracle.h>
+#include <mps/planner/util/Random.h>
 
 namespace mps {
 namespace planner {
@@ -59,28 +60,49 @@ namespace planner {
                     Eigen::Vector2f normal; // in robot frame
                     Eigen::Vector2f from; // in robot frame
                     Eigen::Vector2f to; // in robot frame
+                    Eigen::Vector2f center; // from + to / 2.0
                     Eigen::Vector2f dir; // dir = to - from
                     float edge_length; // norm of dir
                 };
+
+                typedef std::shared_ptr<RobotPushingEdge> RobotPushingEdgePtr;
 
                 struct ObjectPushingEdge {
                     Eigen::Vector2f normal; // in object frame
                     Eigen::Vector2f from; // in object frame
                     Eigen::Vector2f to; // in object frame
-                    Eigen::Vector2f dir; // dir = to - from
+                    Eigen::Vector2f dir; // dir = to - from / ||to - from||
                     Eigen::Vector2f pcom; // projection of center of mass on the line x = from + t * dir with t in [0, 1]
                     float edge_length;
+                    // angle at which a pusher should be placed in object frame (atan2(-normal[1], -normal[0]))
+                    float pushing_angle;
                 };
 
+                typedef std::shared_ptr<ObjectPushingEdge> ObjectPushingEdgePtr;
+
+                struct PushingEdgePair {
+                    RobotPushingEdgePtr robot_edge;
+                    ObjectPushingEdgePtr object_edge;
+                    float max_translation; // max translational offset (>0) from object_edge->pcom along object_edge->dir
+                    float min_translation; // min translational offset (<0) from object_edge->pcom along object_edge->dir
+                };
             private:
                 unsigned int _robot_id;
                 std::vector<sim_env::ObjectPtr> _objects;
-                std::vector<RobotPushingEdge> _robot_edges;
-                std::vector<std::vector<ObjectPushingEdge>> _obj_edges;
-                std::vector<std::vector<std::pair<RobotPushingEdge*, ObjectPushingEdge*>>> _contact_pairs;
+                ::ompl::RNGPtr _random_gen;
+                std::vector<RobotPushingEdgePtr> _robot_edges;
+                std::vector<std::vector<ObjectPushingEdgePtr>> _obj_edges;
+                std::vector<std::vector<PushingEdgePair>> _contact_pairs;
+                Parameters _params;
 
-                void compute_robot_pushing_edges();
-                void compute_object_pushing_edges(sim_env::ObjectPtr obj);
+                mutable Eigen::VectorXf _eigen_config;
+                mutable Eigen::VectorXf _eigen_config2;
+
+                void computeRobotPushingEdges();
+                void computeObjectPushingEdges();
+                float computeSamplingWeights(const ompl::state::SimEnvWorldState* current_state, 
+                                        const ompl::state::SimEnvWorldState* next_state, unsigned int obj_id,
+                                        std::vector<float>& sampling_weights) const;
             };
         }
     }

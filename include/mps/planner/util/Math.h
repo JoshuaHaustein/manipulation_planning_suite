@@ -6,6 +6,7 @@
 #define MANIPULATION_PLANNING_SUITE_MATH_H
 
 #include <algorithm>
+#include <Eigen/Core>
 
 namespace mps {
     namespace planner {
@@ -22,6 +23,8 @@ namespace mps {
                 T clamp(const T& val, const T& min_val, const T& max_val) {
                     return std::max(std::min(val, max_val), min_val);
                 }
+
+                Eigen::Vector2f normal(const Eigen::Vector2f& vec);
             }
         }
     }

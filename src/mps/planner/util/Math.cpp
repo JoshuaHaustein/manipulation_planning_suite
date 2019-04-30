@@ -42,3 +42,20 @@ float mps::planner::util::math::shortest_direction_so2(float val_1, float val_2)
     }
     return value;
 }
+
+Eigen::Vector2f mps::planner::util::math::normal(const Eigen::Vector2f& vec) {
+    static float epsilon = 1e-5f;
+    Eigen::Vector2f normal(0.0f, 0.0f);
+    if (std::abs(vec[0]) <= epsilon and std::abs(vec[1]) <= epsilon) {
+        return normal;
+    } else if (std::abs(vec[0]) <= epsilon) {
+        normal[0] = 1.0f;
+        normal[1] = -vec[0] / vec[1];
+        normal.normalize();
+        return normal;
+    } 
+    normal[0] = -vec[1] / vec[0];
+    normal[1] = 1.0f;
+    normal.normalize();
+    return normal;
+}
