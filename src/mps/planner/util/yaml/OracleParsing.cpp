@@ -12,7 +12,7 @@ std::string mps::planner::util::yaml::oracleTypeToString(mps::planner::pushing::
     case mps::planner::pushing::PlanningProblem::OracleType::Learned:
         return "Learned";
     case mps::planner::pushing::PlanningProblem::OracleType::QuasiStaticSE2Oracle:
-        return "QuasiStaticSE2Oracle";
+        return "QuasiStaticSE2";
     }
     return "UNDEFINED";
 }
@@ -68,7 +68,7 @@ mps::planner::pushing::PlanningProblem::OracleType mps::planner::util::yaml::str
         return mps::planner::pushing::PlanningProblem::OracleType::Human;
     } else if (str.compare("Learned") == 0) {
         return mps::planner::pushing::PlanningProblem::OracleType::Learned;
-    } else if (str.compare("QuasiStaticSE2Oracle") == 0) {
+    } else if (str.compare("QuasiStaticSE2") == 0) {
         return mps::planner::pushing::PlanningProblem::OracleType::QuasiStaticSE2Oracle;
     } else {
         throw std::runtime_error("Unknown oracle type encountered: " + str);
