@@ -143,6 +143,7 @@ namespace planner {
             ~OraclePushPlanner();
 
             bool setup(PlanningProblem& problem);
+            bool isSetup() const;
             bool solve(PlanningSolution& solution);
             /**
              * Execute the given solution in simulation without execution monitoring.
@@ -218,11 +219,13 @@ namespace planner {
                  *              If the object name is an object, the oracle will be asked to
                  *              provide a control to either move to a pushing state or to push this object to the desired state.
                  * @param approach - if true and the target is an object, the returned control will move the robot
-                 *                  to a pushing state, else if the target is an object, it will push the object, else
-                 *                  the parameter has no effect
+                 *                  to a pushing state, else if the target is an object, the robot will attempt to push the
+                 *                  object from its current state, else if the target is the robot, the parameter has no effect
+                 * @param teleport - if true and approach is true, the robot will be teleported to its pushing state
                  * @return a path containing the sequence of controls provided by the oracle. Nullptr in case of failure
                  */
-            ompl::planning::essentials::PathPtr testOracle(const ompl::state::goal::RelocationGoalSpecification& goal, bool approach) const;
+            ompl::planning::essentials::PathPtr testOracle(const ompl::state::goal::RelocationGoalSpecification& goal,
+                             bool approach, bool teleport=false) const;
 
             mps::planner::ompl::state::SimEnvWorldStateSpacePtr getStateSpace();
             ::ompl::control::ControlSpacePtr getControlSpace();

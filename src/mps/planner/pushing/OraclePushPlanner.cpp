@@ -190,6 +190,10 @@ bool OraclePushPlanner::setup(PlanningProblem& problem)
     return _is_initialized;
 }
 
+bool OraclePushPlanner::isSetup() const {
+    return _is_initialized;
+}
+
 bool OraclePushPlanner::solve(PlanningSolution& solution)
 {
     if (!_is_initialized)
@@ -571,7 +575,7 @@ bool OraclePushPlanner::verifySolution(PlanningSolution& solution)
     return _goal_region->isSatisfied(my_motion->getState());
 }
 
-mps::planner::ompl::planning::essentials::PathPtr OraclePushPlanner::testOracle(const ompl::state::goal::RelocationGoalSpecification& goal, bool approach) const
+mps::planner::ompl::planning::essentials::PathPtr OraclePushPlanner::testOracle(const ompl::state::goal::RelocationGoalSpecification& goal, bool approach, bool teleport) const
 {
     ///////////////////////////////////// First make sure everything is set up properly /////////////////////////////
     const static std::string log_prefix("[mps::planner::pushing::OraclePushPlanner]");
@@ -601,47 +605,62 @@ mps::planner::ompl::planning::essentials::PathPtr OraclePushPlanner::testOracle(
         }
         oracle_sampler = mextrrt->getOracleSampler();
     }
-    ///////////////////////////////////// Now we can ask the oracle /////////////////////////////
-    auto* target_state = dynamic_cast<mps::planner::ompl::state::SimEnvWorldState*>(_state_space->allocState());
-    auto start_motion = std::make_shared<ompl::planning::essentials::Motion>(_space_information);
+    // Now we can query the oracle
+    // First, create Path for output
+    auto path = std::make_shared<ompl::planning::essentials::Path>(_space_information);
+    // add start state to this path
+    auto start_motion = std::make_shared<algorithm::PushMotion>(_space_information);
     _state_space->extractState(_planning_problem.world,
         dynamic_cast<mps::planner::ompl::state::SimEnvWorldState*>(start_motion->getState()));
+    path->append(start_motion);
+    // compute world target state
+    auto* target_state = dynamic_cast<mps::planner::ompl::state::SimEnvWorldState*>(_state_space->allocState());
     _state_space->copyState(target_state, start_motion->getState());
     auto* object_state = target_state->getObjectState(target_id);
     Eigen::VectorXf target_config(3);
     target_config.head(3) = goal.goal_position.head(3);
     object_state->setConfiguration(target_config);
+    // now compute motions depending on query
     std::vector<::ompl::control::Control*> oracle_controls;
-    if (target_id == robot_id) {
-        oracle_sampler->steerRobot(oracle_controls, start_motion->getState(), target_state);
-    } else {
-        // check whether we want to move to a pushing state or
-        if (approach) {
-            auto pushing_state = dynamic_cast<mps::planner::ompl::state::SimEnvWorldState*>(_state_space->allocState());
-            _state_space->copyState(pushing_state, start_motion->getState());
-            oracle_sampler->samplePushingState(pushing_state, target_state, target_id);
-            oracle_sampler->steerRobot(oracle_controls, start_motion->getState(), pushing_state);
-            _state_space->freeState(pushing_state);
+    if (approach and target_id != robot_id) { 
+        // in case of approach, sample a pushing state
+        auto pushing_state = dynamic_cast<mps::planner::ompl::state::SimEnvWorldState*>(_state_space->allocState());
+        _state_space->copyState(pushing_state, start_motion->getState());
+        oracle_sampler->samplePushingState(pushing_state, target_state, target_id);
+        if (teleport) {
+            // add a teleportation motion to the path
+            auto teleport_motion = std::make_shared<algorithm::PushMotion>(_space_information);
+            teleport_motion->setTeleportTransit(true);
+            teleport_motion->setTargetId(robot_id);
+            _state_space->copyState(teleport_motion->getState(), pushing_state);
+            teleport_motion->setParent(path->last());
+            path->append(teleport_motion);
         } else {
+            // steer robot to pushing state and store controls in oracle_controls (which will later be added to the path)
+            oracle_sampler->steerRobot(oracle_controls, start_motion->getState(), pushing_state);
+        }
+        _state_space->freeState(pushing_state);
+    } else {
+        if (target_id == robot_id) { // compute a robot motion
+            oracle_sampler->steerRobot(oracle_controls, start_motion->getState(), target_state);
+        } else {
+            // query pushing policy
             auto* push_control = _control_space->allocControl();
             oracle_sampler->queryPolicy(push_control, dynamic_cast<ompl::state::SimEnvWorldState*>(start_motion->getState()), target_state, target_id);
             oracle_controls.push_back(push_control);
         }
-    }
-    // Done, cleanup
-    _state_space->freeState(target_state);
-    // Create Path
-    auto path = std::make_shared<ompl::planning::essentials::Path>(_space_information);
-    _control_space->copyControl(start_motion->getControl(), oracle_controls.at(0));
-    _control_space->freeControl(oracle_controls.at(0));
-    path->append(start_motion);
-    for (size_t i = 1; i < oracle_controls.size(); ++i) {
-        auto new_motion = std::make_shared<ompl::planning::essentials::Motion>(_space_information);
+    } 
+    // above controls were only added to oracle_controls, so add these controls into motions to the path
+    for (size_t i = 0; i < oracle_controls.size(); ++i) {
+        auto new_motion = std::make_shared<algorithm::PushMotion>(_space_information);
+        new_motion->setTargetId(target_id);
         _control_space->copyControl(new_motion->getControl(), oracle_controls.at(i));
-        new_motion->setParent(path->getMotion(i - 1));
+        new_motion->setParent(path->last());
         _control_space->freeControl(oracle_controls.at(i));
         path->append(new_motion);
     }
+    // Done, cleanup
+    _state_space->freeState(target_state);
     return path;
 }
 

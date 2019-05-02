@@ -19,6 +19,7 @@ namespace planner {
                     Parameters(); // creates default values
                     float eps_min; // minimal half width of a pushing edge
                     float eps_dist; // distance between pusher and object from which on to consider both to be in contact
+                    float col_sample_step; // sample step size for collision checking
                 };
 
                 /**
@@ -97,12 +98,17 @@ namespace planner {
 
                 mutable Eigen::VectorXf _eigen_config;
                 mutable Eigen::VectorXf _eigen_config2;
+                unsigned int _tmp_edge_counter;
+                bool _min_max_toggle;
 
                 void computeRobotPushingEdges();
                 void computeObjectPushingEdges();
                 float computeSamplingWeights(const ompl::state::SimEnvWorldState* current_state, 
                                         const ompl::state::SimEnvWorldState* next_state, unsigned int obj_id,
                                         std::vector<float>& sampling_weights) const;
+                void computeRobotState(Eigen::VectorXf& rob_state, const QuasiStaticSE2Oracle::PushingEdgePair& pair,
+                                       const Eigen::VectorXf& obj_state, float translation) const;
+                bool computeCollisionFreeRange(QuasiStaticSE2Oracle::PushingEdgePair& pair, unsigned int oid);
             };
         }
     }

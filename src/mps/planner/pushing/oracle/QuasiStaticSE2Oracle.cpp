@@ -13,7 +13,8 @@ namespace bg = boost::geometry;
 
 using namespace mps::planner::pushing::oracle;
 
-QuasiStaticSE2Oracle::Parameters::Parameters(): eps_min(0.005f), eps_dist(0.005f) {
+
+QuasiStaticSE2Oracle::Parameters::Parameters(): eps_min(0.005f), eps_dist(0.005f), col_sample_step(0.0025f) {
 }
 
 QuasiStaticSE2Oracle::QuasiStaticSE2Oracle(const std::vector<sim_env::ObjectPtr>& objects, unsigned int robot_id)
@@ -23,6 +24,8 @@ QuasiStaticSE2Oracle::QuasiStaticSE2Oracle(const std::vector<sim_env::ObjectPtr>
 {
     computeRobotPushingEdges();
     computeObjectPushingEdges();
+    _tmp_edge_counter = 0;
+    _min_max_toggle = false;
 }
 
 QuasiStaticSE2Oracle::~QuasiStaticSE2Oracle()
@@ -49,35 +52,31 @@ void QuasiStaticSE2Oracle::samplePushingState(const mps_state::SimEnvWorldState*
     float normalizer = computeSamplingWeights(current_state, next_state, obj_id, sampling_weights);
     auto& pushing_edge_pairs = _contact_pairs.at(obj_id);
     // sample pair
-    float min_translation = 0.0f, max_translation = 0.0f;
-    RobotPushingEdgePtr robot_edge;
-    ObjectPushingEdgePtr obj_edge;
-    float die = _random_gen->uniform01();
-    float acc = 0.0f;
-    for (unsigned int pair_id = 0; pair_id < pushing_edge_pairs.size(); ++pair_id) {
-        acc += sampling_weights.at(pair_id) / normalizer;
-        if (die <= acc || pair_id == pushing_edge_pairs.size() - 1) {
-            robot_edge = pushing_edge_pairs.at(pair_id).robot_edge;
-            obj_edge = pushing_edge_pairs.at(pair_id).object_edge;
-            min_translation = pushing_edge_pairs.at(pair_id).min_translation;
-            max_translation = pushing_edge_pairs.at(pair_id).max_translation;
-            break;
-        }
-    }
+    unsigned int pair_id = 0;
+    // float die = _random_gen->uniform01();
+    // float acc = 0.0f;
+    // for (unsigned int id = 0; id < pushing_edge_pairs.size(); ++id) {
+    //     acc += sampling_weights.at(pair_id) / normalizer;
+    //     if (die <= acc || pair_id == pushing_edge_pairs.size() - 1) {
+    //         pair_id = id;
+    //         break;
+    //     }
+    // }
+    // TODO remove
+    _tmp_edge_counter = _tmp_edge_counter % pushing_edge_pairs.size();
+    pair_id = _tmp_edge_counter;
+    _tmp_edge_counter += _min_max_toggle;
+    _min_max_toggle = !_min_max_toggle;
+    // TODO until here
     // place the robot such that its pushing edge faces the object's pushing edge
-    float rel_trans = _random_gen->uniformReal(min_translation, max_translation);
-    Eigen::Vector2f pusher_pos = obj_edge->pcom + obj_edge->normal * _params.eps_dist + rel_trans * obj_edge->dir;
-    Eigen::Affine2f oTp = Eigen::Translation2f(pusher_pos) * Eigen::Rotation2D(obj_edge->pushing_angle);
+    auto& edge_pair = pushing_edge_pairs.at(pair_id);
+    // float rel_trans = _random_gen->uniformReal(edge_pair.min_translation, edge_pair.max_translation);
+    float rel_trans = _min_max_toggle ? edge_pair.max_translation : edge_pair.min_translation;
     current_state->getObjectState(obj_id)->getConfiguration(_eigen_config);
-    Eigen::Affine2f wTo = Eigen::Translation2f(_eigen_config.head(2)) * Eigen::Rotation2Df(_eigen_config[2]);
-    Eigen::Affine2f rTp = Eigen::Translation2f(robot_edge->center) * Eigen::Rotation2Df(std::atan2(robot_edge->normal[1], robot_edge->normal[0]));
-    Eigen::Affine2f pTr = rTp.inverse();
-    Eigen::Affine2f wTr = wTo * oTp * pTr;
-    _eigen_config.head(2) = wTr.translation();
-    _eigen_config[2] = std::atan2(wTr.rotation()(1, 0), wTr.rotation()(0, 0));
-    new_robot_state->setConfiguration(_eigen_config);
+    computeRobotState(_eigen_config2, edge_pair, _eigen_config, rel_trans);
+    new_robot_state->setConfiguration(_eigen_config2);
     auto logger = mps_logging::getLogger();
-    logger->logDebug(boost::format("Sampled pushing state %1%, %2%, %3%") % _eigen_config[0] % _eigen_config[1] % _eigen_config[2], log_prefix);
+    logger->logDebug(boost::format("Sampled pushing state %1%, %2%, %3%") % _eigen_config2[0] % _eigen_config2[1] % _eigen_config2[2], log_prefix);
     _eigen_config.setZero();
     new_robot_state->setVelocity(_eigen_config);
 }
@@ -223,11 +222,19 @@ void QuasiStaticSE2Oracle::computeObjectPushingEdges()
                 if (robot_edge->edge_length > min_edge_length) {
                     PushingEdgePair pepair;
                     pepair.robot_edge = robot_edge;
-                    pepair.object_edge =pedge;
-                    // TODO do collision check to compue min and max translation
+                    pepair.object_edge = pedge;
                     pepair.max_translation = 0.0f;
                     pepair.min_translation = 0.0f;
-                    _contact_pairs.at(oid).push_back(pepair);
+                    if (std::get<2>(edge)) {
+                        pepair.min_translation = (pedge->to - pedge->pcom).norm() - robot_edge->edge_length / 2.0f;
+                        pepair.max_translation = (pedge->from - pedge->pcom).norm() - robot_edge->edge_length / 2.0f;
+                    } else {
+                        pepair.min_translation = -std::max(robot_edge->edge_length / 2.0f - _params.eps_min, 0.0f);
+                        pepair.max_translation = std::max(robot_edge->edge_length / 2.0f - _params.eps_min, 0.0f);
+                    }
+                    bool valid = true;
+                    // bool valid = computeCollisionFreeRange(pepair, oid);
+                    if (valid) _contact_pairs.at(oid).push_back(pepair);
                 }
             }
         }
@@ -256,4 +263,74 @@ float QuasiStaticSE2Oracle::computeSamplingWeights(const ompl::state::SimEnvWorl
         normalizer += sampling_weights.back();
     }
     return normalizer;
+}
+
+void QuasiStaticSE2Oracle::computeRobotState(Eigen::VectorXf& rob_state, const QuasiStaticSE2Oracle::PushingEdgePair& pair,
+        const Eigen::VectorXf& obj_state, float translation) const 
+{
+    Eigen::Vector2f pusher_pos = pair.object_edge->pcom + pair.object_edge->normal * _params.eps_dist + translation * pair.object_edge->dir;
+    Eigen::Affine2f oTp = Eigen::Translation2f(pusher_pos) * Eigen::Rotation2D(pair.object_edge->pushing_angle);
+    Eigen::Affine2f wTo = Eigen::Translation2f(obj_state.head(2)) * Eigen::Rotation2Df(obj_state[2]);
+    Eigen::Affine2f rTp = Eigen::Translation2f(pair.robot_edge->center) * Eigen::Rotation2Df(std::atan2(pair.robot_edge->normal[1], pair.robot_edge->normal[0]));
+    Eigen::Affine2f pTr = rTp.inverse();
+    Eigen::Affine2f wTr = wTo * oTp * pTr;
+    rob_state.head(2) = wTr.translation();
+    rob_state[2] = std::atan2(wTr.rotation()(1, 0), wTr.rotation()(0, 0));
+}
+
+bool QuasiStaticSE2Oracle::computeCollisionFreeRange(QuasiStaticSE2Oracle::PushingEdgePair& pair, unsigned int oid) {
+    assert(_objects.at(oid)->getNumActiveDOFs() == 3); // this only works for planar rigid bodies
+    auto robot = _objects.at(_robot_id);
+    _eigen_config.resize(3);
+    assert(robot->getNumActiveDOFs() == 3); // this only works for planar robots
+    auto obj_state(_objects.at(oid)->getDOFPositions());
+    // init variables for algorithm
+    bool col_free_exists = false; // whether there is any collision-free state
+    auto best_interval = std::make_pair(pair.min_translation, pair.min_translation); // best interval of translations
+    float best_interval_length = 0.0f; // length of that interval
+    auto current_interval = std::make_pair(pair.min_translation, pair.min_translation); // current interval under investigation
+    bool current_interval_valid = false;  // whether we currently have a valid interval growing
+
+    // sample range [pair.min_translation, pair.max_translation] to find the largest collision-free subinterval
+    float current_t = pair.min_translation;
+    while (current_t <= pair.max_translation) {
+        // check collision for current_t
+        computeRobotState(_eigen_config, pair, obj_state, current_t);
+        robot->setDOFPositions(_eigen_config);
+        if (robot->checkCollision(_objects.at(oid))) { // does it collide?
+            // if the current interval is valid, close it
+            if (current_interval_valid) {
+                float interval_length = current_interval.second - current_interval.first;
+                // save it if it's longer than the best one so far
+                if (interval_length >= best_interval_length) {
+                    best_interval_length = interval_length;
+                    best_interval = current_interval;
+                }
+                current_interval_valid = false;
+            }
+        } else {
+            col_free_exists = true;
+            if (current_interval_valid) {
+                // grow interval
+                current_interval.second = current_t;
+            } else { // start new interval
+                current_interval.first = current_t;
+                current_interval_valid = true;
+            }
+        }
+        current_t += _params.col_sample_step;
+    }
+    // close the last current_interval in case it is valid
+    if (current_interval_valid) {
+        float interval_length = current_interval.second - current_interval.first;
+        if (interval_length >= best_interval_length) {
+            best_interval_length = interval_length;
+            best_interval = current_interval;
+        }
+    }
+    // save the best interval
+    pair.min_translation = best_interval.first;
+    pair.max_translation = best_interval.second;
+    assert(pair.min_translation <= pair.max_translation);
+    return col_free_exists;
 }
