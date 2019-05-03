@@ -1,10 +1,10 @@
-#include <mps/planner/pushing/oracle/QuasiStaticSE2Oracle.h>
-#include <mps/planner/util/Logging.h>
 #include <boost/geometry.hpp>
 #include <boost/geometry/geometries/box.hpp>
 #include <boost/geometry/geometries/point_xy.hpp>
 #include <boost/geometry/geometries/polygon.hpp>
 #include <boost/geometry/index/rtree.hpp>
+#include <mps/planner/pushing/oracle/QuasiStaticSE2Oracle.h>
+#include <mps/planner/util/Logging.h>
 
 namespace mps_state = mps::planner::ompl::state;
 namespace mps_logging = mps::planner::util::logging;
@@ -13,8 +13,11 @@ namespace bg = boost::geometry;
 
 using namespace mps::planner::pushing::oracle;
 
-
-QuasiStaticSE2Oracle::Parameters::Parameters(): eps_min(0.005f), eps_dist(0.005f), col_sample_step(0.0025f) {
+QuasiStaticSE2Oracle::Parameters::Parameters()
+    : eps_min(0.005f)
+    , eps_dist(0.005f)
+    , col_sample_step(0.0025f)
+{
 }
 
 QuasiStaticSE2Oracle::QuasiStaticSE2Oracle(const std::vector<sim_env::ObjectPtr>& objects, unsigned int robot_id)
@@ -118,15 +121,16 @@ typedef bg::model::d2::point_xy<float> BoostPoint;
 typedef bg::model::polygon<BoostPoint, false> BoostPolygon;
 typedef bg::model::segment<BoostPoint> BoostSegment;
 
-void extractEdges(BoostPolygon& geom, std::vector<Edge>& edges) {
+void extractEdges(BoostPolygon& geom, std::vector<Edge>& edges)
+{
     // first add all edges of the original geometry and also store it in an rtree
     bg::index::rtree<BoostSegment, bg::index::linear<16>> tree;
     {
         auto& outer = geom.outer();
-        for (unsigned int vid = 1; vid < outer.size(); ++ vid) {
-            tree.insert(BoostSegment(outer[vid-1], outer[vid]));
-            edges.emplace_back(std::make_tuple(Eigen::Vector2f(outer[vid - 1].get<0>(), outer[vid-1].get<1>()),
-                                                Eigen::Vector2f(outer[vid].get<0>(), outer[vid].get<1>()), false));
+        for (unsigned int vid = 1; vid < outer.size(); ++vid) {
+            tree.insert(BoostSegment(outer[vid - 1], outer[vid]));
+            edges.emplace_back(std::make_tuple(Eigen::Vector2f(outer[vid - 1].get<0>(), outer[vid - 1].get<1>()),
+                Eigen::Vector2f(outer[vid].get<0>(), outer[vid].get<1>()), false));
         }
     }
     // now run over the convex hull of the object and add the edges that aren't in rtree yet
@@ -151,16 +155,17 @@ void extractEdges(BoostPolygon& geom, std::vector<Edge>& edges) {
             }
             // bool normal_edge = edge_distance == 0.0;
             if (!normal_edge) {
-                edges.emplace_back(std::make_tuple(Eigen::Vector2f(outer[vid - 1].get<0>(), outer[vid-1].get<1>()),
-                                                Eigen::Vector2f(outer[vid].get<0>(), outer[vid].get<1>()), true));
+                edges.emplace_back(std::make_tuple(Eigen::Vector2f(outer[vid - 1].get<0>(), outer[vid - 1].get<1>()),
+                    Eigen::Vector2f(outer[vid].get<0>(), outer[vid].get<1>()), true));
             }
         }
     }
 }
 
-void QuasiStaticSE2Oracle::computeObjectPushingEdges() 
+void QuasiStaticSE2Oracle::computeObjectPushingEdges()
 {
-    if (!_obj_edges.empty()) return;
+    if (!_obj_edges.empty())
+        return;
     _obj_edges.resize(_objects.size());
     _contact_pairs.resize(_objects.size());
     // run over all objects
@@ -227,14 +232,15 @@ void QuasiStaticSE2Oracle::computeObjectPushingEdges()
                     pepair.min_translation = 0.0f;
                     if (std::get<2>(edge)) {
                         pepair.min_translation = (pedge->to - pedge->pcom).norm() - robot_edge->edge_length / 2.0f;
-                        pepair.max_translation = (pedge->from - pedge->pcom).norm() - robot_edge->edge_length / 2.0f;
+                        pepair.max_translation = robot_edge->edge_length / 2.0f - (pedge->from - pedge->pcom).norm();
                     } else {
                         pepair.min_translation = -std::max(robot_edge->edge_length / 2.0f - _params.eps_min, 0.0f);
                         pepair.max_translation = std::max(robot_edge->edge_length / 2.0f - _params.eps_min, 0.0f);
                     }
-                    bool valid = true;
-                    // bool valid = computeCollisionFreeRange(pepair, oid);
-                    if (valid) _contact_pairs.at(oid).push_back(pepair);
+                    // bool valid = true;
+                    bool valid = computeCollisionFreeRange(pepair, oid);
+                    if (valid)
+                        _contact_pairs.at(oid).push_back(pepair);
                 }
             }
         }
@@ -244,9 +250,9 @@ void QuasiStaticSE2Oracle::computeObjectPushingEdges()
     }
 }
 
-float QuasiStaticSE2Oracle::computeSamplingWeights(const ompl::state::SimEnvWorldState* current_state, 
-                                        const ompl::state::SimEnvWorldState* next_state, unsigned int obj_id,
-                                        std::vector<float>& sampling_weights) const 
+float QuasiStaticSE2Oracle::computeSamplingWeights(const ompl::state::SimEnvWorldState* current_state,
+    const ompl::state::SimEnvWorldState* next_state, unsigned int obj_id,
+    std::vector<float>& sampling_weights) const
 {
     // compute pushing dir
     current_state->getObjectState(obj_id)->getConfiguration(_eigen_config);
@@ -266,7 +272,7 @@ float QuasiStaticSE2Oracle::computeSamplingWeights(const ompl::state::SimEnvWorl
 }
 
 void QuasiStaticSE2Oracle::computeRobotState(Eigen::VectorXf& rob_state, const QuasiStaticSE2Oracle::PushingEdgePair& pair,
-        const Eigen::VectorXf& obj_state, float translation) const 
+    const Eigen::VectorXf& obj_state, float translation) const
 {
     Eigen::Vector2f pusher_pos = pair.object_edge->pcom + pair.object_edge->normal * _params.eps_dist + translation * pair.object_edge->dir;
     Eigen::Affine2f oTp = Eigen::Translation2f(pusher_pos) * Eigen::Rotation2D(pair.object_edge->pushing_angle);
@@ -278,7 +284,8 @@ void QuasiStaticSE2Oracle::computeRobotState(Eigen::VectorXf& rob_state, const Q
     rob_state[2] = std::atan2(wTr.rotation()(1, 0), wTr.rotation()(0, 0));
 }
 
-bool QuasiStaticSE2Oracle::computeCollisionFreeRange(QuasiStaticSE2Oracle::PushingEdgePair& pair, unsigned int oid) {
+bool QuasiStaticSE2Oracle::computeCollisionFreeRange(QuasiStaticSE2Oracle::PushingEdgePair& pair, unsigned int oid)
+{
     assert(_objects.at(oid)->getNumActiveDOFs() == 3); // this only works for planar rigid bodies
     auto robot = _objects.at(_robot_id);
     _eigen_config.resize(3);
@@ -289,7 +296,7 @@ bool QuasiStaticSE2Oracle::computeCollisionFreeRange(QuasiStaticSE2Oracle::Pushi
     auto best_interval = std::make_pair(pair.min_translation, pair.min_translation); // best interval of translations
     float best_interval_length = 0.0f; // length of that interval
     auto current_interval = std::make_pair(pair.min_translation, pair.min_translation); // current interval under investigation
-    bool current_interval_valid = false;  // whether we currently have a valid interval growing
+    bool current_interval_valid = false; // whether we currently have a valid interval growing
 
     // sample range [pair.min_translation, pair.max_translation] to find the largest collision-free subinterval
     float current_t = pair.min_translation;
