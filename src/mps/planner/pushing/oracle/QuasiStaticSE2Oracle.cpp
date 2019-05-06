@@ -317,13 +317,13 @@ bool QuasiStaticSE2Oracle::computeCollisionFreeRange(QuasiStaticSE2Oracle::Pushi
             }
         } else {
             col_free_exists = true;
-            if (current_interval_valid) {
-                // grow interval
-                current_interval.second = current_t;
-            } else { // start new interval
+            if (!current_interval_valid) {
+                // start new interval
                 current_interval.first = current_t;
                 current_interval_valid = true;
             }
+            // grow interval
+            current_interval.second = current_t;
         }
         current_t += _params.col_sample_step;
     }
