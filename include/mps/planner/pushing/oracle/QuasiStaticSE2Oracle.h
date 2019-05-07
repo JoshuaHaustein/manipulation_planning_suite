@@ -20,6 +20,8 @@ namespace planner {
                     float eps_min; // minimal half width of a pushing edge
                     float eps_dist; // distance between pusher and object from which on to consider both to be in contact
                     float col_sample_step; // sample step size for collision checking
+                    float exp_weight; // weighting factor in exponential to compute sampling weights for pushing edge pairs
+                    float orientation_weight; // weighting factor when computing distance to pushing states
                 };
 
                 /**
@@ -28,7 +30,8 @@ namespace planner {
                  *  SimEnvWorldStateSpace used when querying this oracle.
                  * @param robot_id - index of the robot in objects
                  */
-                QuasiStaticSE2Oracle(const std::vector<sim_env::ObjectPtr>& objects, unsigned int robot_id);
+                QuasiStaticSE2Oracle(RobotOraclePtr robot_oracle,
+                    const std::vector<sim_env::ObjectPtr>& objects, unsigned int robot_id);
                 ~QuasiStaticSE2Oracle();
 
                 /**
@@ -87,6 +90,9 @@ namespace planner {
                     float max_translation; // max translational offset (>0) from object_edge->pcom along object_edge->dir
                     float min_translation; // min translational offset (<0) from object_edge->pcom along object_edge->dir
                 };
+
+                RobotOraclePtr _robot_oracle;
+
             private:
                 unsigned int _robot_id;
                 std::vector<sim_env::ObjectPtr> _objects;
@@ -96,19 +102,29 @@ namespace planner {
                 std::vector<std::vector<PushingEdgePair>> _contact_pairs;
                 Parameters _params;
 
+                // cache last contact pair sampled / used by policy
+                mutable std::pair<unsigned int, unsigned int> _last_contact_pair;
                 mutable Eigen::VectorXf _eigen_config;
                 mutable Eigen::VectorXf _eigen_config2;
-                unsigned int _tmp_edge_counter;
-                bool _min_max_toggle;
+                // for debugging
+                // unsigned int _tmp_edge_counter;
+                // bool _min_max_toggle;
 
+                // pre-processing helper
                 void computeRobotPushingEdges();
                 void computeObjectPushingEdges();
-                float computeSamplingWeights(const ompl::state::SimEnvWorldState* current_state, 
-                                        const ompl::state::SimEnvWorldState* next_state, unsigned int obj_id,
-                                        std::vector<float>& sampling_weights) const;
-                void computeRobotState(Eigen::VectorXf& rob_state, const QuasiStaticSE2Oracle::PushingEdgePair& pair,
-                                       const Eigen::VectorXf& obj_state, float translation) const;
                 bool computeCollisionFreeRange(QuasiStaticSE2Oracle::PushingEdgePair& pair, unsigned int oid);
+                // policy helper
+                std::tuple<unsigned int, float, Eigen::Vector3f> selectEdgePair(unsigned int obj_id, const ompl::state::SimEnvWorldState* current_state);
+                float computePushingStateDistance(unsigned int obj_id, unsigned int pair_id,
+                    const ompl::state::SimEnvWorldState* current_state,
+                    Eigen::Vector3f& closest_state) const;
+                // state generator helper
+                float computeSamplingWeights(const ompl::state::SimEnvWorldState* current_state,
+                    const ompl::state::SimEnvWorldState* next_state, unsigned int obj_id,
+                    std::vector<float>& sampling_weights) const;
+                void computeRobotState(Eigen::VectorXf& rob_state, const QuasiStaticSE2Oracle::PushingEdgePair& pair,
+                    const Eigen::VectorXf& obj_state, float translation) const;
             };
         }
     }

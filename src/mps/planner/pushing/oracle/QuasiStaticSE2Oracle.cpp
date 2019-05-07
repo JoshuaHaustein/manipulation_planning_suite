@@ -3,13 +3,14 @@
 #include <boost/geometry/geometries/point_xy.hpp>
 #include <boost/geometry/geometries/polygon.hpp>
 #include <boost/geometry/index/rtree.hpp>
+#include <mps/planner/ompl/control/TimedWaypoints.h>
 #include <mps/planner/pushing/oracle/QuasiStaticSE2Oracle.h>
 #include <mps/planner/util/Logging.h>
 
 namespace mps_state = mps::planner::ompl::state;
 namespace mps_logging = mps::planner::util::logging;
 namespace bg = boost::geometry;
-// namespace mps_control = mps::planner::ompl::control;
+namespace mps_control = mps::planner::ompl::control;
 
 using namespace mps::planner::pushing::oracle;
 
@@ -17,18 +18,23 @@ QuasiStaticSE2Oracle::Parameters::Parameters()
     : eps_min(0.005f)
     , eps_dist(0.005f)
     , col_sample_step(0.0025f)
+    , exp_weight(2.0f)
+    , orientation_weight(0.1f)
 {
 }
 
-QuasiStaticSE2Oracle::QuasiStaticSE2Oracle(const std::vector<sim_env::ObjectPtr>& objects, unsigned int robot_id)
-    : _robot_id(robot_id)
+QuasiStaticSE2Oracle::QuasiStaticSE2Oracle(RobotOraclePtr robot_oracle,
+    const std::vector<sim_env::ObjectPtr>& objects, unsigned int robot_id)
+    : _robot_oracle(robot_oracle)
+    , _robot_id(robot_id)
     , _objects(objects)
     , _random_gen(mps::planner::util::random::getDefaultRandomGenerator())
 {
     computeRobotPushingEdges();
     computeObjectPushingEdges();
-    _tmp_edge_counter = 0;
-    _min_max_toggle = false;
+    _last_contact_pair.first = robot_id;
+    // _tmp_edge_counter = 0;
+    // _min_max_toggle = false;
 }
 
 QuasiStaticSE2Oracle::~QuasiStaticSE2Oracle()
@@ -39,7 +45,25 @@ void QuasiStaticSE2Oracle::predictAction(const mps_state::SimEnvWorldState* curr
     const mps_state::SimEnvWorldState* target_state,
     const unsigned int& obj_id, ::ompl::control::Control* control)
 {
-    mps_logging::logWarn("Not implemented yet", "[QuasiStaticSE2Oracle::predictAction]");
+    // initialize control
+    auto* pos_control = dynamic_cast<mps_control::TimedWaypoints*>(control);
+    assert(pos_control);
+    pos_control->reset();
+    // get pushing edge pair
+    auto [pair_id, state_dist, closest_state] = selectEdgePair(obj_id, current_state);
+    if (state_dist > _params.eps_min) {
+        // need to move to closest pushing state first
+        current_state->getObjectState(_robot_id)->getConfiguration(_eigen_config);
+        _eigen_config2.head(3) = closest_state;
+        _robot_oracle->steer(_eigen_config, _eigen_config2, pos_control);
+        return;
+    } else {
+        // TODO compute contact points, etc
+        mps_logging::logDebug("At pushing state. Behavior not implemented yet", "[QuasiStaticSE2Oracle::predictAction]");
+    }
+    // save contact pair that we used
+    _last_contact_pair.first = obj_id;
+    _last_contact_pair.second = pair_id;
 }
 
 void QuasiStaticSE2Oracle::samplePushingState(const mps_state::SimEnvWorldState* current_state,
@@ -50,31 +74,31 @@ void QuasiStaticSE2Oracle::samplePushingState(const mps_state::SimEnvWorldState*
     static const std::string log_prefix("[QuasiStaticSE2Oracle::samplePushingState]");
     mps_logging::logDebug("samplePushingState", log_prefix);
     assert(obj_id < _contact_pairs.size());
+    assert(obj_id != _robot_id);
     // compute sampling weights for each pair base on pushing direction
     std::vector<float> sampling_weights;
     float normalizer = computeSamplingWeights(current_state, next_state, obj_id, sampling_weights);
     auto& pushing_edge_pairs = _contact_pairs.at(obj_id);
     // sample pair
     unsigned int pair_id = 0;
-    // float die = _random_gen->uniform01();
-    // float acc = 0.0f;
-    // for (unsigned int id = 0; id < pushing_edge_pairs.size(); ++id) {
-    //     acc += sampling_weights.at(pair_id) / normalizer;
-    //     if (die <= acc || pair_id == pushing_edge_pairs.size() - 1) {
-    //         pair_id = id;
-    //         break;
-    //     }
-    // }
-    // TODO remove
-    _tmp_edge_counter = _tmp_edge_counter % pushing_edge_pairs.size();
-    pair_id = _tmp_edge_counter;
-    _tmp_edge_counter += _min_max_toggle;
-    _min_max_toggle = !_min_max_toggle;
-    // TODO until here
+    float die = _random_gen->uniform01();
+    float acc = 0.0f;
+    for (unsigned int id = 0; id < pushing_edge_pairs.size(); ++id) {
+        acc += sampling_weights.at(pair_id) / normalizer;
+        if (die <= acc || pair_id == pushing_edge_pairs.size() - 1) {
+            pair_id = id;
+            break;
+        }
+    }
+    // Helper variables for debugging
+    // _tmp_edge_counter = _tmp_edge_counter % pushing_edge_pairs.size();
+    // pair_id = _tmp_edge_counter;
+    // _tmp_edge_counter += _min_max_toggle;
+    // _min_max_toggle = !_min_max_toggle;
     // place the robot such that its pushing edge faces the object's pushing edge
     auto& edge_pair = pushing_edge_pairs.at(pair_id);
-    // float rel_trans = _random_gen->uniformReal(edge_pair.min_translation, edge_pair.max_translation);
-    float rel_trans = _min_max_toggle ? edge_pair.max_translation : edge_pair.min_translation;
+    float rel_trans = _random_gen->uniformReal(edge_pair.min_translation, edge_pair.max_translation);
+    // float rel_trans = _min_max_toggle ? edge_pair.max_translation : edge_pair.min_translation;
     current_state->getObjectState(obj_id)->getConfiguration(_eigen_config);
     computeRobotState(_eigen_config2, edge_pair, _eigen_config, rel_trans);
     new_robot_state->setConfiguration(_eigen_config2);
@@ -82,6 +106,9 @@ void QuasiStaticSE2Oracle::samplePushingState(const mps_state::SimEnvWorldState*
     logger->logDebug(boost::format("Sampled pushing state %1%, %2%, %3%") % _eigen_config2[0] % _eigen_config2[1] % _eigen_config2[2], log_prefix);
     _eigen_config.setZero();
     new_robot_state->setVelocity(_eigen_config);
+    // save contact pair that we used
+    _last_contact_pair.first = obj_id;
+    _last_contact_pair.second = pair_id;
 }
 
 void QuasiStaticSE2Oracle::computeRobotPushingEdges()
@@ -250,6 +277,80 @@ void QuasiStaticSE2Oracle::computeObjectPushingEdges()
     }
 }
 
+std::tuple<unsigned int, float, Eigen::Vector3f> QuasiStaticSE2Oracle::selectEdgePair(unsigned int obj_id, const ompl::state::SimEnvWorldState* current_state)
+{
+    unsigned int pair_id = _contact_pairs.at(obj_id).size();
+    float best_pair_distance = std::numeric_limits<float>::max();
+    Eigen::Vector3f best_closest_state;
+    // do we already have a contact edge?
+    if (_last_contact_pair.first == obj_id) {
+        // check how close the two edges are in the current state
+        best_pair_distance = computePushingStateDistance(obj_id, _last_contact_pair.second, current_state, best_closest_state);
+        // if this distance is already smaller than _params.eps_dist, just return this pair
+        if (best_pair_distance <= _params.eps_dist) {
+            return { _last_contact_pair.second, best_pair_distance, best_closest_state };
+        }
+        // else we will search for the closest pair
+        pair_id = _last_contact_pair.second;
+    }
+    // search for the closest pair and select that, TODO this could be done more efficiently with a GNAT tree
+    for (unsigned int id = 0; id < _contact_pairs.at(obj_id).size(); ++id) {
+        Eigen::Vector3f closest_state;
+        float dist = computePushingStateDistance(obj_id, id, current_state, closest_state);
+        if (dist < best_pair_distance) {
+            best_pair_distance = dist;
+            pair_id = id;
+            best_closest_state = closest_state;
+        }
+    }
+    return { pair_id, best_pair_distance, best_closest_state };
+}
+
+float QuasiStaticSE2Oracle::computePushingStateDistance(unsigned int obj_id, unsigned int pair_id, const ompl::state::SimEnvWorldState* current_state,
+    Eigen::Vector3f& closest_state) const
+{
+    auto& edge_pair = _contact_pairs.at(obj_id).at(pair_id);
+    float translation_range = edge_pair.max_translation - edge_pair.min_translation;
+    // get robot state
+    current_state->getObjectState(_robot_id)->getConfiguration(_eigen_config);
+    Eigen::Vector3f current_robot_state(_eigen_config.head(3));
+    // get object state
+    current_state->getObjectState(obj_id)->getConfiguration(_eigen_config);
+    // compute distance to closest pushing state
+    if (translation_range == 0.0f) { // there is just a single pushing state
+        computeRobotState(_eigen_config, edge_pair, _eigen_config, 0.0f);
+        closest_state.head(2) = _eigen_config.head(2);
+        closest_state[2] = _eigen_config[2];
+    } else { // pushing states are forming a line
+        // compute this line
+        computeRobotState(_eigen_config2, edge_pair, _eigen_config, edge_pair.min_translation);
+        Eigen::Vector2f start_pos(_eigen_config2[0], _eigen_config2[1]);
+        computeRobotState(_eigen_config2, edge_pair, _eigen_config, edge_pair.max_translation);
+        Eigen::Vector2f end_pos(_eigen_config2[0], _eigen_config2[1]);
+        closest_state[2] = _eigen_config2[2];
+        Eigen::Vector2f dir = (end_pos - start_pos).normalized();
+        // compute normal
+        Eigen::Vector2f normal(-dir[1], dir[0]);
+        // project current position on line
+        Eigen::Vector2f rel_pos(current_robot_state.head(2) - start_pos);
+        Eigen::Vector2f on_line_pos = rel_pos - rel_pos.dot(normal) * normal;
+        float sdist = on_line_pos.dot(dir);
+        // check whether the projected point falls onto the line
+        if (sdist < 0.0f) {
+            closest_state.head(2) = start_pos.head(2);
+        } else if (sdist > translation_range)
+            closest_state.head(2) = end_pos.head(2);
+        else {
+            closest_state.head(2) = on_line_pos + start_pos;
+        }
+    }
+    // compute distance to closest state
+    // target state
+    float angle_distance = std::abs(closest_state[2] - current_robot_state[2]);
+    float cart_distance = (current_robot_state.head(2) - closest_state.head(2)).norm();
+    return cart_distance + _params.orientation_weight * angle_distance;
+}
+
 float QuasiStaticSE2Oracle::computeSamplingWeights(const ompl::state::SimEnvWorldState* current_state,
     const ompl::state::SimEnvWorldState* next_state, unsigned int obj_id,
     std::vector<float>& sampling_weights) const
@@ -265,7 +366,7 @@ float QuasiStaticSE2Oracle::computeSamplingWeights(const ompl::state::SimEnvWorl
     auto& contact_pairs = _contact_pairs.at(obj_id);
     for (unsigned int pid = 0; pid < _contact_pairs.at(obj_id).size(); ++pid) {
         Eigen::Vector2f edge_normal = rot * contact_pairs.at(pid).object_edge->normal;
-        sampling_weights.emplace_back(std::exp(-(1.0f + dir.dot(edge_normal))));
+        sampling_weights.emplace_back(std::exp(-_params.exp_weight * (1.0f + dir.dot(edge_normal))));
         normalizer += sampling_weights.back();
     }
     return normalizer;

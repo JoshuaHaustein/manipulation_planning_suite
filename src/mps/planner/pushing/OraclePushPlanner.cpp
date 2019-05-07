@@ -190,7 +190,8 @@ bool OraclePushPlanner::setup(PlanningProblem& problem)
     return _is_initialized;
 }
 
-bool OraclePushPlanner::isSetup() const {
+bool OraclePushPlanner::isSetup() const
+{
     return _is_initialized;
 }
 
@@ -622,7 +623,7 @@ mps::planner::ompl::planning::essentials::PathPtr OraclePushPlanner::testOracle(
     object_state->setConfiguration(target_config);
     // now compute motions depending on query
     std::vector<::ompl::control::Control*> oracle_controls;
-    if (approach and target_id != robot_id) { 
+    if (approach and target_id != robot_id) {
         // in case of approach, sample a pushing state
         auto pushing_state = dynamic_cast<mps::planner::ompl::state::SimEnvWorldState*>(_state_space->allocState());
         _state_space->copyState(pushing_state, start_motion->getState());
@@ -649,7 +650,7 @@ mps::planner::ompl::planning::essentials::PathPtr OraclePushPlanner::testOracle(
             oracle_sampler->queryPolicy(push_control, dynamic_cast<ompl::state::SimEnvWorldState*>(start_motion->getState()), target_state, target_id);
             oracle_controls.push_back(push_control);
         }
-    } 
+    }
     // above controls were only added to oracle_controls, so add these controls into motions to the path
     for (size_t i = 0; i < oracle_controls.size(); ++i) {
         auto new_motion = std::make_shared<algorithm::PushMotion>(_space_information);
@@ -768,7 +769,7 @@ void OraclePushPlanner::createAlgorithm()
             break;
         }
         case PlanningProblem::OracleType::QuasiStaticSE2Oracle: {
-            pushing_oracle = std::make_shared<oracle::QuasiStaticSE2Oracle>(objects, robot_id);
+            pushing_oracle = std::make_shared<oracle::QuasiStaticSE2Oracle>(robot_oracle, objects, robot_id);
             util::logging::logInfo("Using quasistatic oracle!", log_prefix);
             break;
         }

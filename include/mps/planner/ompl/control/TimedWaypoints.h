@@ -137,6 +137,8 @@ namespace planner {
                 unsigned int _robot_id;
                 std::vector<float> _max_vel;
             };
+
+            typedef std::shared_ptr<TimedWaypointsRobotOracle> TimedWaypointsRobotOraclePtr;
         }
     }
 }
