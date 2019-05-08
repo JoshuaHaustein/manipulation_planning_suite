@@ -226,12 +226,13 @@ void DataGenerator::applyNoise(const ::ompl::base::State* mean_state, ::ompl::ba
 void DataGenerator::modifyDynamics()
 {
     _original_dynamics.mass = _object->getMass();
-    _original_dynamics.friction_coeff = _object->getGroundFriction();
+    _original_dynamics.friction_coeff = _object->getBaseLink()->getGroundFriction();
     auto rng = util::random::getDefaultRandomGenerator();
     float new_mass = std::max((float)(rng->gaussian(_original_dynamics.mass, _mass_stddev)), 0.000001f);
-    float new_friction = std::max((float)rng->gaussian(_original_dynamics.friction_coeff, _friction_stddev), 0.00000001f);
+    float new_friction = std::max((float)rng->gaussian(_original_dynamics.friction_coeff.first, _friction_stddev), 0.00000001f);
+    float new_rot_friction = new_friction * _original_dynamics.friction_coeff.second / _original_dynamics.friction_coeff.first;
     _object->getBaseLink()->setMass(new_mass);
-    _object->getBaseLink()->setGroundFriction(new_friction);
+    _object->getBaseLink()->setGroundFriction(new_friction, new_rot_friction);
 }
 
 void DataGenerator::restoreDynamics()

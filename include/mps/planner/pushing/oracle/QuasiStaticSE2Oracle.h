@@ -1,5 +1,6 @@
 #pragma once
 
+#include <mps/planner/ompl/state/QuasiStaticPushingStateSpace.h>
 #include <mps/planner/pushing/oracle/Oracle.h>
 #include <mps/planner/util/Random.h>
 
@@ -22,6 +23,8 @@ namespace planner {
                     float col_sample_step; // sample step size for collision checking
                     float exp_weight; // weighting factor in exponential to compute sampling weights for pushing edge pairs
                     float orientation_weight; // weighting factor when computing distance to pushing states
+                    float path_step_size; // distance between subsequent positions in an action
+                    float push_vel; // cartesian velocity of pusher
                 };
 
                 /**
@@ -80,6 +83,7 @@ namespace planner {
                     float edge_length;
                     // angle at which a pusher should be placed in object frame (atan2(-normal[1], -normal[0]))
                     float pushing_angle;
+                    float edge_angle; // angle of the edge (atan2(dir[1], dir[0]))
                 };
 
                 typedef std::shared_ptr<ObjectPushingEdge> ObjectPushingEdgePtr;
@@ -101,6 +105,10 @@ namespace planner {
                 std::vector<std::vector<ObjectPushingEdgePtr>> _obj_edges;
                 std::vector<std::vector<PushingEdgePair>> _contact_pairs;
                 Parameters _params;
+                ompl::state::QuasiStaticPushingStateSpace _dubins_state_space;
+                ompl::state::QuasiStaticPushingStateSpace::StateType* _se2_state_a;
+                ompl::state::QuasiStaticPushingStateSpace::StateType* _se2_state_b;
+                ompl::state::QuasiStaticPushingStateSpace::StateType* _se2_state_c;
 
                 // cache last contact pair sampled / used by policy
                 mutable std::pair<unsigned int, unsigned int> _last_contact_pair;
@@ -119,6 +127,9 @@ namespace planner {
                 float computePushingStateDistance(unsigned int obj_id, unsigned int pair_id,
                     const ompl::state::SimEnvWorldState* current_state,
                     Eigen::Vector3f& closest_state) const;
+                inline float projectToEdge(const Eigen::Vector2f& point, const ObjectPushingEdgePtr ope) const;
+                void computeAction(ompl::control::TimedWaypoints* control, const Eigen::Affine2f& wTz_c,
+                    const Eigen::Affine2f& wTz_t, const Eigen::Affine2f& zTr) const;
                 // state generator helper
                 float computeSamplingWeights(const ompl::state::SimEnvWorldState* current_state,
                     const ompl::state::SimEnvWorldState* next_state, unsigned int obj_id,
