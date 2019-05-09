@@ -35,7 +35,7 @@ mps::planner::pushing::oracle::LearnedPipeOracle::LearnedPipeOracle(const std::v
         auto object = objects.at(i);
         data.mass = object->getMass();
         data.inertia = object->getInertia();
-        data.mu = object->getBaseLink()->getGroundFriction().first;
+        data.mu = object->getBaseLink()->getGroundFrictionCoefficient();
         auto aabb = object->getLocalAABB();
         data.width = aabb.getWidth();
         data.height = aabb.getHeight();

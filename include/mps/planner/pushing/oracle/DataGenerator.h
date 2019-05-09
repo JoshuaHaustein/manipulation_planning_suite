@@ -46,7 +46,7 @@ namespace planner {
             private:
                 struct ObjectDynamics {
                     float mass;
-                    std::pair<float, float> friction_coeff;
+                    float friction_coeff;
                 };
                 sim_env::WorldPtr _world;
                 sim_env::RobotPtr _robot;

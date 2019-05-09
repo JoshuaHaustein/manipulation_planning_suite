@@ -128,6 +128,8 @@ namespace planner {
                     const ompl::state::SimEnvWorldState* current_state,
                     Eigen::Vector3f& closest_state) const;
                 inline float projectToEdge(const Eigen::Vector2f& point, const ObjectPushingEdgePtr ope) const;
+                void computeTestAction(ompl::control::TimedWaypoints* control,
+                    const Eigen::Vector3f& start, const Eigen::Vector3f& end) const;
                 void computeAction(ompl::control::TimedWaypoints* control, const Eigen::Affine2f& wTz_c,
                     const Eigen::Affine2f& wTz_t, const Eigen::Affine2f& zTr) const;
                 // state generator helper

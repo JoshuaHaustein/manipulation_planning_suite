@@ -21,7 +21,7 @@ QuasiStaticSE2Oracle::Parameters::Parameters()
     , exp_weight(2.0f)
     , orientation_weight(0.1f)
     , path_step_size(0.01f)
-    , push_vel(0.02f)
+    , push_vel(0.04f)
 {
 }
 
@@ -114,16 +114,19 @@ void QuasiStaticSE2Oracle::predictAction(const mps_state::SimEnvWorldState* curr
         p_rot_e = Eigen::Rotation2Df(-pushing_frame_angle + edge_pair.object_edge->edge_angle);
         Eigen::Vector2f fr = p_rot_e * Eigen::Vector2f(friction_coeff, 1.0f);
         Eigen::Vector2f fl = p_rot_e * Eigen::Vector2f(-friction_coeff, 1.0f);
-        // get ground friction coefficients
-        auto [a, b] = base_link->getGroundFriction();
+        // get ground maximal friction wrench
+        float max_force = base_link->getGroundFrictionLimitForce();
+        float max_torque = base_link->getGroundFrictionLimitTorque();
+        float a = 1.0f / (max_force * max_force);
+        float b = 1.0f / (max_torque * max_torque);
         // compute z_l and z_r
         Eigen::Vector2f z_l(a * fl[1] / (b * py * fl[0]), a / (-b * py));
         Eigen::Vector2f z_r(a * fr[1] / (b * py * fr[0]), a / (-b * py));
         // compute z
         Eigen::Vector2f z((z_l[0] + z_r[0]) / 2.0f, a / (-b * py));
         float turning_radius = std::abs(z_l[0] - z_r[0]) / 2.0f;
-        // _dubins_state_space.setTurningRadius(turning_radius);
-        _dubins_state_space.setTurningRadius(0.4);
+        _dubins_state_space.setTurningRadius(turning_radius);
+        // _dubins_state_space.setTurningRadius(0.4);
         // compute oTz and its inverse
         Eigen::Affine2f oTz = oTp * Eigen::Translation2f(z);
         // compute where z is in world frame given the current and target object pose
@@ -131,6 +134,8 @@ void QuasiStaticSE2Oracle::predictAction(const mps_state::SimEnvWorldState* curr
         Eigen::Affine2f wTz_t = wTo_t * oTz;
         // compute Dubins curve
         computeAction(pos_control, wTz_c, wTz_t, oTz.inverse() * oTr);
+        // _dubins_state_space.setTurningRadius(0.1f);
+        // computeTestAction(pos_control, rob_state, target_obj_state);
         mps_logging::logDebug("At pushing state. Behavior not implemented yet", "[QuasiStaticSE2Oracle::predictAction]");
     }
     // save contact pair that we used
@@ -522,9 +527,55 @@ float QuasiStaticSE2Oracle::projectToEdge(const Eigen::Vector2f& point, const Ob
     return (rel_point - rel_point.dot(ope->normal) * ope->normal).dot(ope->dir);
 }
 
+void QuasiStaticSE2Oracle::computeTestAction(ompl::control::TimedWaypoints* control, const Eigen::Vector3f& start, const Eigen::Vector3f& end) const
+{
+    const std::string log_prefix("[QuasiStaticSE2Oracle::computeTestAction]");
+    // set start and target state for z
+    _se2_state_a->setXY(start[0], start[1]);
+    _se2_state_a->setYaw(start[2]);
+    // _se2_state_b->setXY(start[0] + std::cos(start[2]), start[1] + std::sin(start[2]));
+    // _se2_state_b->setYaw(start[2]);
+    _se2_state_b->setXY(end[0], end[1]);
+    _se2_state_b->setYaw(end[2]);
+    // compute dubins path
+    bool first_time = false;
+    ::ompl::base::DubinsStateSpace::DubinsPath path = _dubins_state_space.dubins(_se2_state_a, _se2_state_b);
+    // _dubins_state_space.interpolate(_se2_state_a, _se2_state_b, 0.0f, first_time, path, _se2_state_c);
+    // sample dubins path
+    // unsigned int num_samples = path.length() / _params.path_step_size;
+    unsigned int num_samples = 100;
+    mps_logging::logDebug(boost::format("Path length is %1%: %2%, %3%, %4%") % path.length()
+            % path.length_[0] % path.length_[1] % path.length_[2],
+        log_prefix);
+    float time_stamp = 0.0f;
+    Eigen::VectorXf prev_wp(3);
+    prev_wp.head(3) = start.head(3);
+    Eigen::VectorXf wp(3);
+    wp.head(3) = start.head(3);
+    for (unsigned int i = 0; i < num_samples; ++i) {
+        float t = (float)i / (float)num_samples;
+        _dubins_state_space.interpolate(_se2_state_a, _se2_state_b, t, first_time, path, _se2_state_c);
+        // mps_logging::logDebug(boost::format("z waypoint (%1%: %2%, %3%, %4%)") % t % _se2_state_c->getX() % _se2_state_c->getY() % _se2_state_c->getYaw(), log_prefix);
+        wp[0] = _se2_state_c->getX();
+        wp[1] = _se2_state_c->getY();
+        wp[2] = _se2_state_c->getYaw();
+        if (i > 0) {
+            time_stamp += std::max((prev_wp.head(2) - wp.head(2)).norm() / _params.push_vel,
+                std::abs(prev_wp[2] - wp[2]) / 0.15f);
+        } else {
+            time_stamp = 0.0f;
+        }
+        mps_logging::logDebug(boost::format("Adding waypoint (%1%: %2%, %3%, %4%)") % time_stamp % wp[0] % wp[1] % wp[2], log_prefix);
+        control->addWaypoint(time_stamp, wp);
+        prev_wp = wp;
+        // time_stamp += _params.path_step_size / _params.push_vel;
+    }
+}
+
 void QuasiStaticSE2Oracle::computeAction(ompl::control::TimedWaypoints* control, const Eigen::Affine2f& wTz_c, const Eigen::Affine2f& wTz_t,
     const Eigen::Affine2f& zTr) const
 {
+    // TODO Dubins state space steers for x axis heading forward, pushing frame has y axis facing forward
     const std::string log_prefix("[QuasiStaticSE2Oracle::computeAction]");
     // set start and target state for z
     _se2_state_a->setXY(wTz_c.translation().x(), wTz_c.translation().y());
@@ -538,10 +589,11 @@ void QuasiStaticSE2Oracle::computeAction(ompl::control::TimedWaypoints* control,
     ::ompl::base::DubinsStateSpace::DubinsPath path = _dubins_state_space.dubins(_se2_state_a, _se2_state_b);
     // _dubins_state_space.interpolate(_se2_state_a, _se2_state_b, 0.0f, first_time, path, _se2_state_c);
     // sample dubins path
-    unsigned int num_samples = path.length() / _params.path_step_size;
+    // unsigned int num_samples = path.length() / _params.path_step_size;
+    unsigned int num_samples = 100;
     float time_stamp = 0.0f;
-    Eigen::VectorXf wp;
-    wp.resize(3);
+    Eigen::VectorXf wp(3);
+    Eigen::VectorXf prev_wp(3);
     for (unsigned int i = 0; i < num_samples; ++i) {
         float t = (float)i / (float)num_samples;
         _dubins_state_space.interpolate(_se2_state_a, _se2_state_b, t, first_time, path, _se2_state_c);
@@ -551,8 +603,15 @@ void QuasiStaticSE2Oracle::computeAction(ompl::control::TimedWaypoints* control,
         wp[0] = wTr.translation().x();
         wp[1] = wTr.translation().y();
         wp[2] = std::atan2(wTr.rotation().coeff(1, 0), wTr.rotation().coeff(0, 0));
+        if (i > 0) {
+            time_stamp += std::max((prev_wp.head(2) - wp.head(2)).norm() / _params.push_vel,
+                std::abs(prev_wp[2] - wp[2]) / 0.15f);
+        } else {
+            time_stamp = 0.0f;
+        }
         mps_logging::logDebug(boost::format("Adding waypoint (%1%: %2%, %3%, %4%)") % time_stamp % wp[0] % wp[1] % wp[2], log_prefix);
         control->addWaypoint(time_stamp, wp);
         time_stamp += _params.path_step_size / _params.push_vel;
+        prev_wp = wp;
     }
 }

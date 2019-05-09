@@ -226,19 +226,18 @@ void DataGenerator::applyNoise(const ::ompl::base::State* mean_state, ::ompl::ba
 void DataGenerator::modifyDynamics()
 {
     _original_dynamics.mass = _object->getMass();
-    _original_dynamics.friction_coeff = _object->getBaseLink()->getGroundFriction();
+    _original_dynamics.friction_coeff = _object->getBaseLink()->getGroundFrictionCoefficient();
     auto rng = util::random::getDefaultRandomGenerator();
     float new_mass = std::max((float)(rng->gaussian(_original_dynamics.mass, _mass_stddev)), 0.000001f);
-    float new_friction = std::max((float)rng->gaussian(_original_dynamics.friction_coeff.first, _friction_stddev), 0.00000001f);
-    float new_rot_friction = new_friction * _original_dynamics.friction_coeff.second / _original_dynamics.friction_coeff.first;
+    float new_friction = std::max((float)rng->gaussian(_original_dynamics.friction_coeff, _friction_stddev), 0.00000001f);
     _object->getBaseLink()->setMass(new_mass);
-    _object->getBaseLink()->setGroundFriction(new_friction, new_rot_friction);
+    _object->getBaseLink()->setGroundFrictionCoefficient(new_friction);
 }
 
 void DataGenerator::restoreDynamics()
 {
     _object->getBaseLink()->setMass(_original_dynamics.mass);
-    _object->getBaseLink()->setGroundFriction(_original_dynamics.friction_coeff);
+    _object->getBaseLink()->setGroundFrictionCoefficient(_original_dynamics.friction_coeff);
 }
 
 void DataGenerator::computeMaxDistance()
