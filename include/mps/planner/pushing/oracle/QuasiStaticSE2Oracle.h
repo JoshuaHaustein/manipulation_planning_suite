@@ -3,6 +3,7 @@
 #include <mps/planner/ompl/state/QuasiStaticPushingStateSpace.h>
 #include <mps/planner/pushing/oracle/Oracle.h>
 #include <mps/planner/util/Random.h>
+#include <tuple>
 
 namespace mps {
 namespace planner {
@@ -110,8 +111,8 @@ namespace planner {
                 ompl::state::QuasiStaticPushingStateSpace::StateType* _se2_state_b;
                 ompl::state::QuasiStaticPushingStateSpace::StateType* _se2_state_c;
 
-                // cache last contact pair sampled / used by policy
-                mutable std::pair<unsigned int, unsigned int> _last_contact_pair;
+                // cache last contact pair sampled / used by policy (obj_id, edge_pair, translation)
+                mutable std::tuple<unsigned int, unsigned int, float> _last_contact_pair;
                 mutable Eigen::VectorXf _eigen_config;
                 mutable Eigen::VectorXf _eigen_config2;
                 // for debugging
@@ -123,8 +124,8 @@ namespace planner {
                 void computeObjectPushingEdges();
                 bool computeCollisionFreeRange(QuasiStaticSE2Oracle::PushingEdgePair& pair, unsigned int oid);
                 // policy helper
-                std::tuple<unsigned int, float, Eigen::Vector3f> selectEdgePair(unsigned int obj_id, const ompl::state::SimEnvWorldState* current_state);
-                float computePushingStateDistance(unsigned int obj_id, unsigned int pair_id,
+                std::tuple<unsigned int, float, Eigen::Vector3f, float> selectEdgePair(unsigned int obj_id, const ompl::state::SimEnvWorldState* current_state);
+                std::pair<float, float> computePushingStateDistance(unsigned int obj_id, unsigned int pair_id,
                     const ompl::state::SimEnvWorldState* current_state,
                     Eigen::Vector3f& closest_state) const;
                 inline float projectToEdge(const Eigen::Vector2f& point, const ObjectPushingEdgePtr ope) const;
@@ -136,6 +137,7 @@ namespace planner {
                 float computeSamplingWeights(const ompl::state::SimEnvWorldState* current_state,
                     const ompl::state::SimEnvWorldState* next_state, unsigned int obj_id,
                     std::vector<float>& sampling_weights) const;
+                void computeObjectRobotTransform(const PushingEdgePair& pair, float translation, Eigen::Affine2f& oTr) const;
                 void computeRobotState(Eigen::VectorXf& rob_state, const QuasiStaticSE2Oracle::PushingEdgePair& pair,
                     const Eigen::VectorXf& obj_state, float translation) const;
             };

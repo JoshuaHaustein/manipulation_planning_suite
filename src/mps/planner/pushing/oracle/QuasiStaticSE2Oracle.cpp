@@ -16,7 +16,7 @@ using namespace mps::planner::pushing::oracle;
 
 QuasiStaticSE2Oracle::Parameters::Parameters()
     : eps_min(0.005f)
-    , eps_dist(0.005f)
+    , eps_dist(0.002f)
     , col_sample_step(0.0025f)
     , exp_weight(2.0f)
     , orientation_weight(0.1f)
@@ -37,7 +37,7 @@ QuasiStaticSE2Oracle::QuasiStaticSE2Oracle(RobotOraclePtr robot_oracle,
     _se2_state_c = dynamic_cast<ompl::state::QuasiStaticPushingStateSpace::StateType*>(_dubins_state_space.allocState());
     computeRobotPushingEdges();
     computeObjectPushingEdges();
-    _last_contact_pair.first = robot_id;
+    std::get<0>(_last_contact_pair) = robot_id;
     // _tmp_edge_counter = 0;
     // _min_max_toggle = false;
 }
@@ -58,8 +58,8 @@ void QuasiStaticSE2Oracle::predictAction(const mps_state::SimEnvWorldState* curr
     assert(pos_control);
     pos_control->reset();
     // get pushing edge pair
-    auto [pair_id, state_dist, closest_state] = selectEdgePair(obj_id, current_state);
-    if (state_dist > 1e-4f) {
+    auto [pair_id, state_dist, closest_state, translation] = selectEdgePair(obj_id, current_state);
+    if (state_dist > 1e-6f) {
         // need to move to closest pushing state first
         current_state->getObjectState(_robot_id)->getConfiguration(_eigen_config);
         _eigen_config2.head(3) = closest_state;
@@ -74,13 +74,16 @@ void QuasiStaticSE2Oracle::predictAction(const mps_state::SimEnvWorldState* curr
         // get robot state
         current_state->getObjectState(_robot_id)->getConfiguration(_eigen_config);
         Eigen::Vector3f rob_state(_eigen_config.head(3));
-        // compute relative transform between robot and object
-        Eigen::Affine2f wTr = Eigen::Translation2f(rob_state.head(2)) * Eigen::Rotation2Df(rob_state[2]);
-        Eigen::Affine2f wTo_c = Eigen::Translation2f(obj_state.head(2)) * Eigen::Rotation2Df(obj_state[2]);
-        Eigen::Affine2f wTo_t = Eigen::Translation2f(target_obj_state.head(2)) * Eigen::Rotation2Df(target_obj_state[2]);
-        Eigen::Affine2f oTr = wTo_c.inverse() * wTr;
         // get edge pair
         PushingEdgePair& edge_pair = _contact_pairs.at(obj_id).at(pair_id);
+        // compute transformation matrices for current and target object state and current robot state
+        Eigen::Affine2f wTo_c = Eigen::Translation2f(obj_state.head(2)) * Eigen::Rotation2Df(obj_state[2]);
+        Eigen::Affine2f wTo_t = Eigen::Translation2f(target_obj_state.head(2)) * Eigen::Rotation2Df(target_obj_state[2]);
+        // Eigen::Affine2f wTr = Eigen::Translation2f(rob_state.head(2)) * Eigen::Rotation2Df(rob_state[2]);
+        // compute relative transform between robot and object
+        Eigen::Affine2f oTr;
+        computeObjectRobotTransform(edge_pair, translation, oTr);
+        // Eigen::Affine2f oTr = wTo_c.inverse() * wTr;
         // compute contact points
         Eigen::Vector2f osr = oTr * edge_pair.robot_edge->from;
         Eigen::Vector2f oer = oTr * edge_pair.robot_edge->to;
@@ -95,8 +98,8 @@ void QuasiStaticSE2Oracle::predictAction(const mps_state::SimEnvWorldState* curr
         // the reference contact point lies in the middle of the points object_edge.from + tmin * object_edge.dir
         // and object_edge.from + tmax * object_edge.dir
         float t = (tmin + tmax) / 2.0f;
-        // Eigen::Vector2f cp(edge_pair.object_edge->from + t * edge_pair.object_edge->dir);
-        Eigen::Vector2f cp(edge_pair.object_edge->pcom);
+        Eigen::Vector2f cp(edge_pair.object_edge->from + t * edge_pair.object_edge->dir);
+        // Eigen::Vector2f cp(edge_pair.object_edge->pcom);
         // define transform from pushing frame into object frame
         auto base_link = _objects.at(obj_id)->getBaseLink();
         Eigen::Vector3f com;
@@ -132,6 +135,31 @@ void QuasiStaticSE2Oracle::predictAction(const mps_state::SimEnvWorldState* curr
         // compute where z is in world frame given the current and target object pose
         Eigen::Affine2f wTz_c = wTo_c * oTz;
         Eigen::Affine2f wTz_t = wTo_t * oTz;
+        // TODO remove
+        auto world = _objects.at(0)->getWorld();
+        auto viewer = world->getViewer();
+        viewer->setColor(_objects.at(obj_id)->getName(), Eigen::Vector4f(0.8f, 0.8f, 0.8f, 0.1f));
+        Eigen::Vector3f z_w;
+        z_w[2] = 0.0f;
+        z_w.head(2) = wTo_c * oTp * z_l;
+        viewer->drawSphere(z_w, 0.001f, Eigen::Vector4f(1.0f, 0.0f, 0.0f, 1.0f), 0.0001f);
+        z_w.head(2) = wTo_c * oTp * z_r;
+        viewer->drawSphere(z_w, 0.001f, Eigen::Vector4f(1.0f, 0.0f, 0.0f, 1.0f), 0.0001f);
+        // // draw pushing dir
+        // Eigen::Vector3f contact;
+        // contact[2] = 0.0f;
+        // contact.head(2) = wTo_c * cp;
+        // Eigen::Vector3f gpydir;
+        // gpydir[2] = 0.0f;
+        // gpydir.head(2) = wTo_c.rotation() * pydir;
+        // auto handle = viewer->drawLine(contact, contact + 0.2 * gpydir, Eigen::Vector4f(1.0f, 0.0f, 0.0f, 1.0f), 0.01f);
+        // Eigen::Vector3f robot_normal;
+        // robot_normal[2] = 0.0f;
+        // robot_normal.head(2) = wTr.rotation() * edge_pair.robot_edge->normal;
+        // auto handle2 = viewer->drawLine(contact, contact + 0.2 * robot_normal, Eigen::Vector4f(0.0f, 1.0f, 0.0f, 1.0f), 0.001f);
+        // mps_logging::logDebug(boost::format("Robot normal %1%") % robot_normal, "[b;a]");
+        // draw normal of robot pushing edge
+        // TODO until here
         // compute Dubins curve
         computeAction(pos_control, wTz_c, wTz_t, oTz.inverse() * oTr);
         // _dubins_state_space.setTurningRadius(0.1f);
@@ -139,8 +167,7 @@ void QuasiStaticSE2Oracle::predictAction(const mps_state::SimEnvWorldState* curr
         mps_logging::logDebug("At pushing state. Behavior not implemented yet", "[QuasiStaticSE2Oracle::predictAction]");
     }
     // save contact pair that we used
-    _last_contact_pair.first = obj_id;
-    _last_contact_pair.second = pair_id;
+    _last_contact_pair = { obj_id, pair_id, translation };
 }
 
 void QuasiStaticSE2Oracle::samplePushingState(const mps_state::SimEnvWorldState* current_state,
@@ -184,8 +211,8 @@ void QuasiStaticSE2Oracle::samplePushingState(const mps_state::SimEnvWorldState*
     _eigen_config.setZero();
     new_robot_state->setVelocity(_eigen_config);
     // save contact pair that we used
-    _last_contact_pair.first = obj_id;
-    _last_contact_pair.second = pair_id;
+    std::get<0>(_last_contact_pair) = obj_id;
+    std::get<1>(_last_contact_pair) = pair_id;
 }
 
 void QuasiStaticSE2Oracle::computeRobotPushingEdges()
@@ -355,40 +382,45 @@ void QuasiStaticSE2Oracle::computeObjectPushingEdges()
     }
 }
 
-std::tuple<unsigned int, float, Eigen::Vector3f> QuasiStaticSE2Oracle::selectEdgePair(unsigned int obj_id, const ompl::state::SimEnvWorldState* current_state)
+std::tuple<unsigned int, float, Eigen::Vector3f, float> QuasiStaticSE2Oracle::selectEdgePair(unsigned int obj_id, const ompl::state::SimEnvWorldState* current_state)
 {
     unsigned int pair_id = _contact_pairs.at(obj_id).size();
     float best_pair_distance = std::numeric_limits<float>::max();
+    float translation = 0.0f;
     Eigen::Vector3f best_closest_state;
     // do we already have a contact edge?
-    if (_last_contact_pair.first == obj_id) {
+    if (std::get<0>(_last_contact_pair) == obj_id) {
         // check how close the two edges are in the current state
-        best_pair_distance = computePushingStateDistance(obj_id, _last_contact_pair.second, current_state, best_closest_state);
+        auto [dist, ttrans] = computePushingStateDistance(obj_id, std::get<1>(_last_contact_pair), current_state, best_closest_state);
         // if this distance is already smaller than _params.eps_dist, just return this pair
-        if (best_pair_distance <= _params.eps_dist) {
-            return { _last_contact_pair.second, best_pair_distance, best_closest_state };
+        if (dist <= _params.eps_dist) {
+            return { std::get<1>(_last_contact_pair), dist, best_closest_state, ttrans };
         }
         // else we will search for the closest pair
-        pair_id = _last_contact_pair.second;
+        pair_id = std::get<1>(_last_contact_pair);
+        best_pair_distance = dist;
+        translation = ttrans;
     }
     // search for the closest pair and select that, TODO this could be done more efficiently with a GNAT tree
     for (unsigned int id = 0; id < _contact_pairs.at(obj_id).size(); ++id) {
         Eigen::Vector3f closest_state;
-        float dist = computePushingStateDistance(obj_id, id, current_state, closest_state);
+        auto [dist, ttrans] = computePushingStateDistance(obj_id, id, current_state, closest_state);
         if (dist < best_pair_distance) {
             best_pair_distance = dist;
+            translation = ttrans;
             pair_id = id;
             best_closest_state = closest_state;
         }
     }
-    return { pair_id, best_pair_distance, best_closest_state };
+    return { pair_id, best_pair_distance, best_closest_state, translation };
 }
 
-float QuasiStaticSE2Oracle::computePushingStateDistance(unsigned int obj_id, unsigned int pair_id, const ompl::state::SimEnvWorldState* current_state,
+std::pair<float, float> QuasiStaticSE2Oracle::computePushingStateDistance(unsigned int obj_id, unsigned int pair_id, const ompl::state::SimEnvWorldState* current_state,
     Eigen::Vector3f& closest_state) const
 {
     auto& edge_pair = _contact_pairs.at(obj_id).at(pair_id);
     float translation_range = edge_pair.max_translation - edge_pair.min_translation;
+    float translation = 0.0f;
     // get robot state
     current_state->getObjectState(_robot_id)->getConfiguration(_eigen_config);
     Eigen::Vector3f current_robot_state(_eigen_config.head(3));
@@ -396,7 +428,7 @@ float QuasiStaticSE2Oracle::computePushingStateDistance(unsigned int obj_id, uns
     current_state->getObjectState(obj_id)->getConfiguration(_eigen_config);
     // compute distance to closest pushing state
     if (translation_range == 0.0f) { // there is just a single pushing state
-        computeRobotState(_eigen_config, edge_pair, _eigen_config, 0.0f);
+        computeRobotState(_eigen_config, edge_pair, _eigen_config, edge_pair.max_translation);
         closest_state.head(2) = _eigen_config.head(2);
         closest_state[2] = _eigen_config[2];
     } else { // pushing states are forming a line
@@ -416,17 +448,20 @@ float QuasiStaticSE2Oracle::computePushingStateDistance(unsigned int obj_id, uns
         // check whether the projected point falls onto the line
         if (sdist < 0.0f) {
             closest_state.head(2) = start_pos.head(2);
-        } else if (sdist > translation_range)
+            translation = edge_pair.min_translation;
+        } else if (sdist > translation_range) {
             closest_state.head(2) = end_pos.head(2);
-        else {
+            translation = edge_pair.max_translation;
+        } else {
             closest_state.head(2) = on_line_pos + start_pos;
+            translation = edge_pair.min_translation + sdist;
         }
     }
     // compute distance to closest state
     // target state
     float angle_distance = std::abs(closest_state[2] - current_robot_state[2]);
     float cart_distance = (current_robot_state.head(2) - closest_state.head(2)).norm();
-    return cart_distance + _params.orientation_weight * angle_distance;
+    return { cart_distance + _params.orientation_weight * angle_distance, translation };
 }
 
 float QuasiStaticSE2Oracle::computeSamplingWeights(const ompl::state::SimEnvWorldState* current_state,
@@ -450,15 +485,22 @@ float QuasiStaticSE2Oracle::computeSamplingWeights(const ompl::state::SimEnvWorl
     return normalizer;
 }
 
-void QuasiStaticSE2Oracle::computeRobotState(Eigen::VectorXf& rob_state, const QuasiStaticSE2Oracle::PushingEdgePair& pair,
-    const Eigen::VectorXf& obj_state, float translation) const
+void QuasiStaticSE2Oracle::computeObjectRobotTransform(const PushingEdgePair& pair, float translation, Eigen::Affine2f& oTr) const
 {
     Eigen::Vector2f pusher_pos = pair.object_edge->pcom + pair.object_edge->normal * _params.eps_dist + translation * pair.object_edge->dir;
     Eigen::Affine2f oTp = Eigen::Translation2f(pusher_pos) * Eigen::Rotation2D(pair.object_edge->pushing_angle);
-    Eigen::Affine2f wTo = Eigen::Translation2f(obj_state.head(2)) * Eigen::Rotation2Df(obj_state[2]);
     Eigen::Affine2f rTp = Eigen::Translation2f(pair.robot_edge->center) * Eigen::Rotation2Df(std::atan2(pair.robot_edge->normal[1], pair.robot_edge->normal[0]));
     Eigen::Affine2f pTr = rTp.inverse();
-    Eigen::Affine2f wTr = wTo * oTp * pTr;
+    oTr = oTp * pTr;
+}
+
+void QuasiStaticSE2Oracle::computeRobotState(Eigen::VectorXf& rob_state, const QuasiStaticSE2Oracle::PushingEdgePair& pair,
+    const Eigen::VectorXf& obj_state, float translation) const
+{
+    Eigen::Affine2f wTo = Eigen::Translation2f(obj_state.head(2)) * Eigen::Rotation2Df(obj_state[2]);
+    Eigen::Affine2f oTr;
+    computeObjectRobotTransform(pair, translation, oTr);
+    Eigen::Affine2f wTr = wTo * oTr;
     rob_state.head(2) = wTr.translation();
     rob_state[2] = std::atan2(wTr.rotation()(1, 0), wTr.rotation()(0, 0));
 }
@@ -532,11 +574,11 @@ void QuasiStaticSE2Oracle::computeTestAction(ompl::control::TimedWaypoints* cont
     const std::string log_prefix("[QuasiStaticSE2Oracle::computeTestAction]");
     // set start and target state for z
     _se2_state_a->setXY(start[0], start[1]);
-    _se2_state_a->setYaw(start[2]);
+    _se2_state_a->setYaw(start[2] + 1.57);
     // _se2_state_b->setXY(start[0] + std::cos(start[2]), start[1] + std::sin(start[2]));
     // _se2_state_b->setYaw(start[2]);
     _se2_state_b->setXY(end[0], end[1]);
-    _se2_state_b->setYaw(end[2]);
+    _se2_state_b->setYaw(end[2] + 1.57);
     // compute dubins path
     bool first_time = false;
     ::ompl::base::DubinsStateSpace::DubinsPath path = _dubins_state_space.dubins(_se2_state_a, _se2_state_b);
@@ -552,13 +594,13 @@ void QuasiStaticSE2Oracle::computeTestAction(ompl::control::TimedWaypoints* cont
     prev_wp.head(3) = start.head(3);
     Eigen::VectorXf wp(3);
     wp.head(3) = start.head(3);
-    for (unsigned int i = 0; i < num_samples; ++i) {
+    for (unsigned int i = 0; i <= num_samples; ++i) {
         float t = (float)i / (float)num_samples;
         _dubins_state_space.interpolate(_se2_state_a, _se2_state_b, t, first_time, path, _se2_state_c);
         // mps_logging::logDebug(boost::format("z waypoint (%1%: %2%, %3%, %4%)") % t % _se2_state_c->getX() % _se2_state_c->getY() % _se2_state_c->getYaw(), log_prefix);
         wp[0] = _se2_state_c->getX();
         wp[1] = _se2_state_c->getY();
-        wp[2] = _se2_state_c->getYaw();
+        wp[2] = _se2_state_c->getYaw() - 1.57;
         if (i > 0) {
             time_stamp += std::max((prev_wp.head(2) - wp.head(2)).norm() / _params.push_vel,
                 std::abs(prev_wp[2] - wp[2]) / 0.15f);
@@ -570,6 +612,7 @@ void QuasiStaticSE2Oracle::computeTestAction(ompl::control::TimedWaypoints* cont
         prev_wp = wp;
         // time_stamp += _params.path_step_size / _params.push_vel;
     }
+    control->addWaypoint(time_stamp + 1.0f, end);
 }
 
 void QuasiStaticSE2Oracle::computeAction(ompl::control::TimedWaypoints* control, const Eigen::Affine2f& wTz_c, const Eigen::Affine2f& wTz_t,
@@ -580,25 +623,27 @@ void QuasiStaticSE2Oracle::computeAction(ompl::control::TimedWaypoints* control,
     // set start and target state for z
     _se2_state_a->setXY(wTz_c.translation().x(), wTz_c.translation().y());
     float yaw = std::atan2(wTz_c.rotation().coeff(1, 0), wTz_c.rotation().coeff(0, 0));
-    _se2_state_a->setYaw(yaw);
+    // the Dubins steering function steers a car with its x-axis heading forward, so add pi/2
+    _se2_state_a->setYaw(yaw + M_PI / 2.0f);
     _se2_state_b->setXY(wTz_t.translation().x(), wTz_t.translation().y());
     yaw = std::atan2(wTz_t.rotation().coeff(1, 0), wTz_t.rotation().coeff(0, 0));
-    _se2_state_b->setYaw(yaw);
+    // the Dubins steering function steers a car with its x-axis heading forward, so add pi/2
+    _se2_state_b->setYaw(yaw + M_PI / 2.0f);
     // compute dubins path
     bool first_time = false;
     ::ompl::base::DubinsStateSpace::DubinsPath path = _dubins_state_space.dubins(_se2_state_a, _se2_state_b);
     // _dubins_state_space.interpolate(_se2_state_a, _se2_state_b, 0.0f, first_time, path, _se2_state_c);
     // sample dubins path
-    // unsigned int num_samples = path.length() / _params.path_step_size;
-    unsigned int num_samples = 100;
+    // TODO the robot path might be much longer -> need to compute #samples differently
+    unsigned int num_samples = path.length() * _dubins_state_space.getTurningRadius() / _params.path_step_size;
     float time_stamp = 0.0f;
     Eigen::VectorXf wp(3);
     Eigen::VectorXf prev_wp(3);
-    for (unsigned int i = 0; i < num_samples; ++i) {
+    for (unsigned int i = 0; i <= num_samples; ++i) {
         float t = (float)i / (float)num_samples;
         _dubins_state_space.interpolate(_se2_state_a, _se2_state_b, t, first_time, path, _se2_state_c);
         mps_logging::logDebug(boost::format("z waypoint (%1%: %2%, %3%, %4%)") % t % _se2_state_c->getX() % _se2_state_c->getY() % _se2_state_c->getYaw(), log_prefix);
-        Eigen::Affine2f wTz = Eigen::Translation2f(_se2_state_c->getX(), _se2_state_c->getY()) * Eigen::Rotation2Df(_se2_state_c->getYaw());
+        Eigen::Affine2f wTz = Eigen::Translation2f(_se2_state_c->getX(), _se2_state_c->getY()) * Eigen::Rotation2Df(_se2_state_c->getYaw() - M_PI / 2.0f);
         Eigen::Affine2f wTr = wTz * zTr;
         wp[0] = wTr.translation().x();
         wp[1] = wTr.translation().y();
