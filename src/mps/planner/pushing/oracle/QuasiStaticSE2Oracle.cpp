@@ -16,7 +16,7 @@ using namespace mps::planner::pushing::oracle;
 
 QuasiStaticSE2Oracle::Parameters::Parameters()
     : eps_min(0.005f)
-    , eps_dist(0.002f)
+    , eps_dist(0.003f)
     , col_sample_step(0.0025f)
     , exp_weight(2.0f)
     , orientation_weight(0.1f)
@@ -98,8 +98,8 @@ void QuasiStaticSE2Oracle::predictAction(const mps_state::SimEnvWorldState* curr
         // the reference contact point lies in the middle of the points object_edge.from + tmin * object_edge.dir
         // and object_edge.from + tmax * object_edge.dir
         float t = (tmin + tmax) / 2.0f;
-        Eigen::Vector2f cp(edge_pair.object_edge->from + t * edge_pair.object_edge->dir);
-        // Eigen::Vector2f cp(edge_pair.object_edge->pcom);
+        // Eigen::Vector2f cp(edge_pair.object_edge->from + t * edge_pair.object_edge->dir);
+        Eigen::Vector2f cp(edge_pair.object_edge->pcom);
         // define transform from pushing frame into object frame
         auto base_link = _objects.at(obj_id)->getBaseLink();
         Eigen::Vector3f com;
@@ -120,8 +120,10 @@ void QuasiStaticSE2Oracle::predictAction(const mps_state::SimEnvWorldState* curr
         // get ground maximal friction wrench
         float max_force = base_link->getGroundFrictionLimitForce();
         float max_torque = base_link->getGroundFrictionLimitTorque();
-        float a = 1.0f / (max_force * max_force);
-        float b = 1.0f / (max_torque * max_torque);
+        float a = 1.0f / max_force;
+        float b = 1.0f / max_torque;
+        // float a = 1.0f / (max_force * max_force);
+        // float b = 1.0f / (max_torque * max_torque);
         // compute z_l and z_r
         Eigen::Vector2f z_l(a * fl[1] / (b * py * fl[0]), a / (-b * py));
         Eigen::Vector2f z_r(a * fr[1] / (b * py * fr[0]), a / (-b * py));
@@ -138,21 +140,28 @@ void QuasiStaticSE2Oracle::predictAction(const mps_state::SimEnvWorldState* curr
         // TODO remove
         auto world = _objects.at(0)->getWorld();
         auto viewer = world->getViewer();
-        viewer->setColor(_objects.at(obj_id)->getName(), Eigen::Vector4f(0.8f, 0.8f, 0.8f, 0.1f));
+        // viewer->setColor(_objects.at(obj_id)->getName(), Eigen::Vector4f(0.8f, 0.8f, 0.8f, 0.1f));
         Eigen::Vector3f z_w;
         z_w[2] = 0.0f;
         z_w.head(2) = wTo_c * oTp * z_l;
-        viewer->drawSphere(z_w, 0.001f, Eigen::Vector4f(1.0f, 0.0f, 0.0f, 1.0f), 0.0001f);
+        viewer->drawSphere(z_w, 0.01f, Eigen::Vector4f(1.0f, 0.0f, 0.0f, 1.0f), 0.001f);
         z_w.head(2) = wTo_c * oTp * z_r;
-        viewer->drawSphere(z_w, 0.001f, Eigen::Vector4f(1.0f, 0.0f, 0.0f, 1.0f), 0.0001f);
-        // // draw pushing dir
-        // Eigen::Vector3f contact;
-        // contact[2] = 0.0f;
-        // contact.head(2) = wTo_c * cp;
-        // Eigen::Vector3f gpydir;
-        // gpydir[2] = 0.0f;
-        // gpydir.head(2) = wTo_c.rotation() * pydir;
-        // auto handle = viewer->drawLine(contact, contact + 0.2 * gpydir, Eigen::Vector4f(1.0f, 0.0f, 0.0f, 1.0f), 0.01f);
+        viewer->drawSphere(z_w, 0.01f, Eigen::Vector4f(1.0f, 0.0f, 0.0f, 1.0f), 0.001f);
+        // draw pushing dir
+        Eigen::Vector3f contact;
+        contact[2] = 0.0f;
+        contact.head(2) = wTo_c * cp;
+        Eigen::Vector3f gpydir;
+        gpydir[2] = 0.0f;
+        gpydir.head(2) = wTo_c.rotation() * pydir;
+        auto handle = viewer->drawLine(contact, contact + 0.2 * gpydir, Eigen::Vector4f(1.0f, 0.0f, 0.0f, 1.0f), 0.01f);
+        // draw force left
+        Eigen::Vector3f fg;
+        fg.head(2) = wTo_c.rotation() * oTp.rotation() * fr;
+        viewer->drawLine(contact, contact + 0.2 * fg, Eigen::Vector4f(0.0f, 1.0f, 0.0f, 1.0f), 0.01f);
+        fg.head(2) = wTo_c.rotation() * oTp.rotation() * fl;
+        viewer->drawLine(contact, contact + 0.2 * fg, Eigen::Vector4f(0.0f, 0.0f, 1.0f, 1.0f), 0.01f);
+        // draw force left
         // Eigen::Vector3f robot_normal;
         // robot_normal[2] = 0.0f;
         // robot_normal.head(2) = wTr.rotation() * edge_pair.robot_edge->normal;
@@ -164,7 +173,6 @@ void QuasiStaticSE2Oracle::predictAction(const mps_state::SimEnvWorldState* curr
         computeAction(pos_control, wTz_c, wTz_t, oTz.inverse() * oTr);
         // _dubins_state_space.setTurningRadius(0.1f);
         // computeTestAction(pos_control, rob_state, target_obj_state);
-        mps_logging::logDebug("At pushing state. Behavior not implemented yet", "[QuasiStaticSE2Oracle::predictAction]");
     }
     // save contact pair that we used
     _last_contact_pair = { obj_id, pair_id, translation };
