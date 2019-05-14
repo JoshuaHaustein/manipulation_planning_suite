@@ -8,6 +8,7 @@
 #include <Eigen/Core>
 #include <mps/planner/util/Serialize.h>
 #include <ompl/control/Control.h>
+#include <sim_env/Controller.h>
 
 namespace mps {
 namespace planner {
@@ -40,14 +41,19 @@ namespace planner {
                 unsigned int getNumNumbers() const override;
             };
 
-            // A timed control is a function T -> U where T is time, and U some target control space.
+            // A timed control is a function T -> U where T is time, and U some target control space (Positions or Velocities).
             // T is an interval [0, d] where d can be obtained calling getDuration(). getTarget(t, target)
-            // allows to retrieve the target value at time t.
+            // allows to retrieve the target value at time t. In addition, a TimedControl may provide a PositionConstraint
+            // or VelocityConstraint to the controller. These constraints are implemented through projection functions.
+            // The default implementation of the respective getters return empty projection functions, meaning there are no
+            // constraints for the controller and the controller may do anything to follow its target.
             class TimedControl {
             public:
                 virtual ~TimedControl() = 0;
                 virtual float getDuration() const = 0;
                 virtual void getTarget(float t, Eigen::VectorXf& target) const = 0;
+                virtual sim_env::RobotController::PositionProjectionFn getPositionConstraintProjection() const;
+                virtual sim_env::RobotController::VelocityProjectionFn getVelocityConstraintProjection() const;
             };
 
             /**

@@ -51,6 +51,7 @@ void TimedWaypoints::reset()
 
 bool TimedWaypoints::operator==(const TimedWaypoints& other) const
 {
+    // TODO how to compare equality between projection functions?
     return _waypoints == other._waypoints and _resting_time == other._resting_time;
 }
 
@@ -58,6 +59,7 @@ TimedWaypoints& TimedWaypoints::operator=(const TimedWaypoints& other)
 {
     _waypoints = other._waypoints;
     _resting_time = other._resting_time;
+    _vel_proj_fn = other._vel_proj_fn;
     return *this;
 }
 
@@ -67,6 +69,16 @@ void TimedWaypoints::print(std::ostream& out) const
         out << "[" << wp.first << ": " << wp.second << "], ";
     }
     out << std::endl;
+}
+
+sim_env::RobotController::VelocityProjectionFn TimedWaypoints::getVelocityConstraintProjection() const
+{
+    return _vel_proj_fn;
+}
+
+void TimedWaypoints::setVelocityProjectionFunction(sim_env::RobotController::VelocityProjectionFn fn)
+{
+    _vel_proj_fn = fn;
 }
 
 Eigen::VectorXf TimedWaypoints::getPosition(float t) const

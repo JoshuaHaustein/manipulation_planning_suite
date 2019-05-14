@@ -37,6 +37,16 @@ unsigned int RealValueParameterizedControl::getNumNumbers() const
 
 TimedControl::~TimedControl() = default;
 
+sim_env::RobotController::PositionProjectionFn TimedControl::getPositionConstraintProjection() const
+{
+    return sim_env::RobotController::PositionProjectionFn();
+}
+
+sim_env::RobotController::VelocityProjectionFn TimedControl::getVelocityConstraintProjection() const
+{
+    return sim_env::RobotController::VelocityProjectionFn();
+}
+
 PositionControl::~PositionControl() = default;
 void PositionControl::getTarget(float dt, Eigen::VectorXf& vel) const
 {

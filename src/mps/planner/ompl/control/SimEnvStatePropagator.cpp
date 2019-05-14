@@ -72,6 +72,10 @@ bool SimEnvStatePropagator::propagate(const ::ompl::base::State* state, ::ompl::
     assert(_world->getPhysicsTimeStep() > 0.0f);
     Eigen::VectorXf target(_controller->getTargetDimension());
     std::vector<sim_env::Contact> contacts;
+    // set up constraints for the controller in case the control specifies any
+    _controller->setPositionProjectionFn(timed_control->getPositionConstraintProjection());
+    _controller->setVelocityProjectionFn(timed_control->getVelocityConstraintProjection());
+    // run over the controls duration and simulate physics
     while (time < timed_control->getDuration() and propagation_success) {
         timed_control->getTarget(time, target);
         _controller->setTarget(target);

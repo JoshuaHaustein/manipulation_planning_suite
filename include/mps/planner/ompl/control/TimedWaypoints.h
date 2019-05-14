@@ -27,8 +27,10 @@ namespace planner {
                 bool operator==(const TimedWaypoints& other) const;
                 TimedWaypoints& operator=(const TimedWaypoints& other);
                 void print(std::ostream& out) const;
-
-                //PositionControl
+                // TimedControl (constraints)
+                sim_env::RobotController::VelocityProjectionFn getVelocityConstraintProjection() const override;
+                void setVelocityProjectionFunction(sim_env::RobotController::VelocityProjectionFn fn);
+                // PositionControl
                 Eigen::VectorXf getPosition(float t) const override;
                 void getPosition(float t, Eigen::VectorXf& pos) const override;
                 float getDuration() const override;
@@ -43,6 +45,7 @@ namespace planner {
                 float _resting_time;
                 // TODO if we want to use tf, need to use Eigen::Vector3f
                 std::vector<std::pair<float, Eigen::VectorXf>> _waypoints;
+                sim_env::RobotController::VelocityProjectionFn _vel_proj_fn;
             };
 
             class TimedWaypointsControlSpace : public ::ompl::control::ControlSpace,

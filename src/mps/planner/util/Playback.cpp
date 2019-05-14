@@ -72,6 +72,9 @@ bool mps::planner::util::playback::playMotion(sim_env::WorldPtr world,
         // simulate pushing action
         const ::ompl::control::Control* control = motion->getConstControl();
         auto* timed_control = dynamic_cast<const mps_control::TimedControl*>(control);
+        // set up constraints for the controller in case the control specifies any
+        controller->setPositionProjectionFn(timed_control->getPositionConstraintProjection());
+        controller->setVelocityProjectionFn(timed_control->getVelocityConstraintProjection());
         float t = 0.0f;
         Eigen::VectorXf target;
         while (t < timed_control->getDuration()) {

@@ -26,6 +26,7 @@ namespace planner {
                     float orientation_weight; // weighting factor when computing distance to pushing states
                     float path_step_size; // distance between subsequent positions in an action
                     float push_vel; // cartesian velocity of pusher
+                    float push_penetration; // translational offset along the normal of the object's edge (negative = penetration)
                 };
 
                 /**
@@ -133,11 +134,14 @@ namespace planner {
                     const Eigen::Vector3f& start, const Eigen::Vector3f& end) const;
                 void computeAction(ompl::control::TimedWaypoints* control, const Eigen::Affine2f& wTz_c,
                     const Eigen::Affine2f& wTz_t, const Eigen::Affine2f& zTr) const;
+                void sampleDubinsState(::ompl::base::DubinsStateSpace::DubinsPath& path, float t, bool& first_time,
+                    Eigen::VectorXf& out) const;
                 // state generator helper
                 float computeSamplingWeights(const ompl::state::SimEnvWorldState* current_state,
                     const ompl::state::SimEnvWorldState* next_state, unsigned int obj_id,
                     std::vector<float>& sampling_weights) const;
-                void computeObjectRobotTransform(const PushingEdgePair& pair, float translation, Eigen::Affine2f& oTr) const;
+                void computeObjectRobotTransform(const PushingEdgePair& pair, float parallel_translation,
+                    float orthogonal_translation, Eigen::Affine2f& oTr) const;
                 void computeRobotState(Eigen::VectorXf& rob_state, const QuasiStaticSE2Oracle::PushingEdgePair& pair,
                     const Eigen::VectorXf& obj_state, float translation) const;
             };
