@@ -33,12 +33,13 @@ struct PushingVelocityConstraint {
         auto world = robot->getConstWorld();
         auto target_obj = world->getObjectConst(obj_name);
         assert(target_obj);
-        auto pose = target_obj->getDOFPositions();
+        auto obj_pose = target_obj->getDOFPositions();
+        auto rob_pose = robot->getDOFPositions().head(3);
         // transform velocity constraint to world frame
-        float min_heading_w = min_heading + pose[2];
-        float max_heading_w = max_heading + pose[2];
+        float min_heading_w = min_heading + obj_pose[2];
+        float max_heading_w = max_heading + obj_pose[2];
         // compute velocity of pushing point (in world frame) given the commanded velocity
-        Eigen::Vector2f tangential_vel = r * robot_vel[2] * Eigen::Vector2f(-std::sin(pose[2] + r_angle), std::cos(pose[2] + r_angle));
+        Eigen::Vector2f tangential_vel = r * robot_vel[2] * Eigen::Vector2f(-std::sin(rob_pose[2] + r_angle), std::cos(rob_pose[2] + r_angle));
         Eigen::Vector2f vp(robot_vel[0], robot_vel[1]);
         vp += tangential_vel;
         // compute angle and magnitude of vp
@@ -53,8 +54,16 @@ struct PushingVelocityConstraint {
         vp[1] = vp_norm * std::sin(vp_angle);
         // overwrite cartesian robot velocity
         Eigen::Vector2f updated_vel = vp - tangential_vel;
+        float delta_angle = 0.0f;
+        float new_vel = updated_vel.norm();
+        float old_vel = robot_vel.head(2).norm();
+        if (new_vel * old_vel > 0.0f) {
+            delta_angle = updated_vel.dot(robot_vel.head(2)) / (new_vel * old_vel);
+            delta_angle = std::acos(delta_angle);
+        }
+        float delta_norm = new_vel - old_vel;
         auto logger = world->getConstLogger();
-        logger->logDebug(boost::format("Change in velocity due to projection: %1%") % (robot_vel.head(2) - updated_vel));
+        logger->logDebug(boost::format("Change in velocity due to projection: Delta angle %1%, delta norm %2%") % delta_angle % delta_norm, "Projection");
         robot_vel.head(2) = updated_vel;
     }
 };
@@ -225,9 +234,20 @@ void QuasiStaticSE2Oracle::predictAction(const mps_state::SimEnvWorldState* curr
         vel_constraint->max_heading = std::max(heading_l, heading_r);
         vel_constraint->min_heading = std::min(heading_l, heading_r);
         // distance to contact point is py
-        vel_constraint->r = std::abs(py);
+        Eigen::Vector2f cpr = oTr.inverse() * cp;
+        vel_constraint->r = cpr.norm();
         // angle to contact point
-        vel_constraint->r_angle = std::atan2(-pydir[1], -pydir[0]);
+        // vel_constraint->r_angle = std::atan2(cpr[1],cpr[0]);
+        vel_constraint->r_angle = std::acos(cpr[0] / vel_constraint->r);
+        // draw contact point w.r.t to robot
+        Eigen::Vector3f robot_center;
+        _objects.at(_robot_id)->getBaseLink()->getCenterOfMass(robot_center);
+        Eigen::Vector3f rdir(std::cos(vel_constraint->r_angle), std::sin(vel_constraint->r_angle), 0.0f);
+        rdir = vel_constraint->r * rdir;
+        Eigen::Vector2f bla = rdir.head(2);
+        rdir.head(2) = (wTo_c * oTr) * bla;
+        viewer->drawLine(robot_center, rdir, Eigen::Vector4f(0.0f, 0.0f, 1.0f, 1.0f), 0.01f);
+        // viewer->drawLine(robot_center, robot_center + vel_constraint->r * rdir, Eigen::Vector4f(0.0f, 0.0f, 1.0f, 1.0f), 0.01f);
         vel_constraint->max_vel = _params.push_vel;
         vel_constraint->obj_name = _objects.at(obj_id)->getName();
         using namespace std::placeholders;
