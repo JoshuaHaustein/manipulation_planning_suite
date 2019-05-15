@@ -20,12 +20,10 @@ using namespace mps::planner::pushing::oracle;
 struct PushingVelocityConstraint {
     std::string obj_name;
     float max_vel;
-    float min_heading; // angle of ur in object frame
-    float max_heading; // angle of ul
-    float r; // distance of contact point from object origin
-    float r_angle; // angle of r (r and r_angle are polar coordinates of the contact point)
-    // Eigen::Vector3f u_l; // x, y of ul, z = 0.Vj0f (in object frame)
-    // Eigen::Vector3f u_r; // x, y of ur, z = 0.0f
+    float heading_r; // angle of ur in object frame (in range [-pi, pi))
+    float heading_l; // angle of ul (in range [-pi, pi))
+    float r; // distance of contact point from robot origin
+    float r_angle; // angle of r (r and r_angle are polar coordinates of the contact point in robot frame)
 
     void projectToCone(Eigen::VectorXf& robot_vel, sim_env::RobotConstPtr robot) const
     {
@@ -36,34 +34,48 @@ struct PushingVelocityConstraint {
         auto obj_pose = target_obj->getDOFPositions();
         auto rob_pose = robot->getDOFPositions().head(3);
         // transform velocity constraint to world frame
-        float min_heading_w = min_heading + obj_pose[2];
-        float max_heading_w = max_heading + obj_pose[2];
+        float heading_l_w = mps_math::normalize_orientation(heading_l + obj_pose[2]); // max angle
+        float heading_r_w = mps_math::normalize_orientation(heading_r + obj_pose[2]); // min angle
         // compute velocity of pushing point (in world frame) given the commanded velocity
         Eigen::Vector2f tangential_vel = r * robot_vel[2] * Eigen::Vector2f(-std::sin(rob_pose[2] + r_angle), std::cos(rob_pose[2] + r_angle));
         Eigen::Vector2f vp(robot_vel[0], robot_vel[1]);
         vp += tangential_vel;
-        // compute angle and magnitude of vp
+        // compute angle of vp
+        // float vp_norm = vp.norm();
         float vp_angle = std::atan2(vp[1], vp[0]);
-        float vp_norm = vp.norm();
-        // clamp angle into [min_heading_w, max_heading_w]
-        mps_math::clampInplace(vp_angle, min_heading_w, max_heading_w);
+        // project angle into SO2 range [min_heading_w, max_heading_w)
+        float vp_angle_prime = mps_math::projectToSO2Range(heading_r_w, heading_l_w, vp_angle);
+        // mps_math::clampInplace(vp_angle, min_heading_w, max_heading_w);
+        // proejct vp to direction of new vp
+        Eigen::Vector2f new_vp(std::cos(vp_angle_prime), std::sin(vp_angle_prime));
+        vp = vp.dot(new_vp) * new_vp;
         // clamp magnitude of velocity
-        mps_math::clampInplace(vp_norm, 0.0f, max_vel);
+        // mps_math::clampInplace(vp_norm, 0.0f, max_vel);
         // overwrite vp to what it is allowed to be
-        vp[0] = vp_norm * std::cos(vp_angle);
-        vp[1] = vp_norm * std::sin(vp_angle);
+        // vp[0]
+        //     = 1.5f * vp_norm * std::cos(vp_angle_prime);
+        // vp[1] = 1.5f * vp_norm * std::sin(vp_angle_prime);
         // overwrite cartesian robot velocity
+        // clamp magnitude of velocity
         Eigen::Vector2f updated_vel = vp - tangential_vel;
-        float delta_angle = 0.0f;
         float new_vel = updated_vel.norm();
+        mps_math::clampInplace(new_vel, 0.0f, 1.5f * max_vel);
+        updated_vel = new_vel * updated_vel.normalized();
+        float delta_angle = 0.0f;
         float old_vel = robot_vel.head(2).norm();
         if (new_vel * old_vel > 0.0f) {
             delta_angle = updated_vel.dot(robot_vel.head(2)) / (new_vel * old_vel);
-            delta_angle = std::acos(delta_angle);
+            delta_angle = std::acos(std::max(std::min(delta_angle, 1.0f), -1.0f));
         }
-        float delta_norm = new_vel - old_vel;
+        float delta_norm = new_vel / old_vel;
         auto logger = world->getConstLogger();
-        logger->logDebug(boost::format("Change in velocity due to projection: Delta angle %1%, delta norm %2%") % delta_angle % delta_norm, "Projection");
+        std::string log_prefix("[VelocityConstraint::projectToCone]");
+        // logger->logDebug(boost::format("Change in velocity due to projection: Delta angle %1%, delta norm %2%") % delta_angle % delta_norm, "Projection");
+        // logger->logDebug(boost::format("Tangential velocity: %1%, %2%") % tangential_vel[0] % tangential_vel[1], log_prefix);
+        // logger->logDebug(boost::format("Heading bounds: %1%, %2%, Actual heading: %3%, Projected heading: %4%") % heading_l_w % heading_r_w % vp_angle % vp_angle_prime, log_prefix);
+        if (vp_angle_prime != vp_angle) {
+            logger->logWarn("Slippage predicted", log_prefix);
+        }
         robot_vel.head(2) = updated_vel;
     }
 };
@@ -74,7 +86,7 @@ QuasiStaticSE2Oracle::Parameters::Parameters()
     , col_sample_step(0.0025f)
     , exp_weight(2.0f)
     , orientation_weight(0.1f)
-    , path_step_size(0.005f)
+    , path_step_size(0.0005f)
     , push_vel(0.04f)
     , push_penetration(0.0f)
 {
@@ -229,24 +241,23 @@ void QuasiStaticSE2Oracle::predictAction(const mps_state::SimEnvWorldState* curr
         // add velocity constraint to action
         std::shared_ptr<PushingVelocityConstraint> vel_constraint = std::make_shared<PushingVelocityConstraint>();
         // first compute motion cone
-        float heading_l = std::atan2(a * fl[1], (a + py * py * b * fl[0])) + pushing_frame_angle;
-        float heading_r = std::atan2(a * fr[1], (a + py * py * b * fr[0])) + pushing_frame_angle;
-        vel_constraint->max_heading = std::max(heading_l, heading_r);
-        vel_constraint->min_heading = std::min(heading_l, heading_r);
+        vel_constraint->heading_l = mps_math::normalize_orientation(std::atan2(a * fl[1], (a + py * py * b * fl[0])) + pushing_frame_angle);
+        vel_constraint->heading_r = mps_math::normalize_orientation(std::atan2(a * fr[1], (a + py * py * b * fr[0])) + pushing_frame_angle);
         // distance to contact point is py
         Eigen::Vector2f cpr = oTr.inverse() * cp;
         vel_constraint->r = cpr.norm();
         // angle to contact point
-        // vel_constraint->r_angle = std::atan2(cpr[1],cpr[0]);
-        vel_constraint->r_angle = std::acos(cpr[0] / vel_constraint->r);
+        vel_constraint->r_angle = std::atan2(cpr[1], cpr[0]); // already in range [-pi, pi]
         // draw contact point w.r.t to robot
-        Eigen::Vector3f robot_center;
-        _objects.at(_robot_id)->getBaseLink()->getCenterOfMass(robot_center);
-        Eigen::Vector3f rdir(std::cos(vel_constraint->r_angle), std::sin(vel_constraint->r_angle), 0.0f);
-        rdir = vel_constraint->r * rdir;
-        Eigen::Vector2f bla = rdir.head(2);
-        rdir.head(2) = (wTo_c * oTr) * bla;
-        viewer->drawLine(robot_center, rdir, Eigen::Vector4f(0.0f, 0.0f, 1.0f, 1.0f), 0.01f);
+        // Eigen::Vector3f robot_center;
+        // _objects.at(_robot_id)->getBaseLink()->getCenterOfMass(robot_center);
+        // robot_center.head(2) = (wTo_c * oTr).translation();
+        // Eigen::Vector3f rdir(std::cos(vel_constraint->r_angle), std::sin(vel_constraint->r_angle), 0.0f);
+        // rdir = vel_constraint->r * rdir;
+        // Eigen::Vector2f bla = rdir.head(2);
+        // Eigen::Vector2f bla(1.0f, 0.0f);
+        // rdir.head(2) = (wTo_c * oTr) * bla;
+        // viewer->drawLine(robot_center, rdir, Eigen::Vector4f(0.0f, 0.0f, 1.0f, 1.0f), 0.01f);
         // viewer->drawLine(robot_center, robot_center + vel_constraint->r * rdir, Eigen::Vector4f(0.0f, 0.0f, 1.0f, 1.0f), 0.01f);
         vel_constraint->max_vel = _params.push_vel;
         vel_constraint->obj_name = _objects.at(obj_id)->getName();
@@ -273,12 +284,12 @@ void QuasiStaticSE2Oracle::samplePushingState(const mps_state::SimEnvWorldState*
     float normalizer = computeSamplingWeights(current_state, next_state, obj_id, sampling_weights);
     auto& pushing_edge_pairs = _contact_pairs.at(obj_id);
     // sample pair
-    unsigned int pair_id = 0;
+    unsigned int pair_id = pushing_edge_pairs.size() - 1;
     float die = _random_gen->uniform01();
     float acc = 0.0f;
     for (unsigned int id = 0; id < pushing_edge_pairs.size(); ++id) {
-        acc += sampling_weights.at(pair_id) / normalizer;
-        if (die <= acc || pair_id == pushing_edge_pairs.size() - 1) {
+        acc += sampling_weights.at(id) / normalizer;
+        if (die <= acc) {
             pair_id = id;
             break;
         }
@@ -302,6 +313,7 @@ void QuasiStaticSE2Oracle::samplePushingState(const mps_state::SimEnvWorldState*
     // save contact pair that we used
     std::get<0>(_last_contact_pair) = obj_id;
     std::get<1>(_last_contact_pair) = pair_id;
+    std::get<2>(_last_contact_pair) = rel_trans;
 }
 
 void QuasiStaticSE2Oracle::computeRobotPushingEdges()
@@ -548,7 +560,7 @@ std::pair<float, float> QuasiStaticSE2Oracle::computePushingStateDistance(unsign
     }
     // compute distance to closest state
     // target state
-    float angle_distance = std::abs(closest_state[2] - current_robot_state[2]);
+    float angle_distance = std::abs(mps_math::shortest_direction_so2(closest_state[2], current_robot_state[2]));
     float cart_distance = (current_robot_state.head(2) - closest_state.head(2)).norm();
     return { cart_distance + _params.orientation_weight * angle_distance, translation };
 }
@@ -592,7 +604,8 @@ void QuasiStaticSE2Oracle::computeRobotState(Eigen::VectorXf& rob_state, const Q
     computeObjectRobotTransform(pair, translation, _params.eps_dist, oTr);
     Eigen::Affine2f wTr = wTo * oTr;
     rob_state.head(2) = wTr.translation();
-    rob_state[2] = std::atan2(wTr.rotation()(1, 0), wTr.rotation()(0, 0));
+    auto& rob_rot = wTr.rotation();
+    rob_state[2] = std::atan2(rob_rot.coeff(1, 0), rob_rot.coeff(0, 0));
 }
 
 bool QuasiStaticSE2Oracle::computeCollisionFreeRange(QuasiStaticSE2Oracle::PushingEdgePair& pair, unsigned int oid)
@@ -802,5 +815,5 @@ void QuasiStaticSE2Oracle::sampleDubinsState(::ompl::base::DubinsStateSpace::Dub
     mps_logging::logDebug(boost::format("z waypoint (%1%: %2%, %3%, %4%)") % t % _se2_state_c->getX() % _se2_state_c->getY() % _se2_state_c->getYaw(), log_prefix);
     out[0] = _se2_state_c->getX();
     out[1] = _se2_state_c->getY();
-    out[2] = _se2_state_c->getYaw();
+    out[2] = mps_math::normalize_orientation(_se2_state_c->getYaw());
 }
