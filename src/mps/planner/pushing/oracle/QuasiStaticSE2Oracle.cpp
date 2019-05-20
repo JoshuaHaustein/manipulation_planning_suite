@@ -88,6 +88,7 @@ QuasiStaticSE2Oracle::Parameters::Parameters()
     , orientation_weight(0.1f)
     , path_step_size(0.0005f)
     , push_vel(0.04f)
+    , rot_push_vel(0.15f)
     , push_penetration(0.0f)
 {
 }
@@ -798,7 +799,7 @@ void QuasiStaticSE2Oracle::computeAction(ompl::control::TimedWaypoints* control,
             wp[1] = wTr.translation().y();
             wp[2] = std::atan2(wTr.rotation().coeff(1, 0), wTr.rotation().coeff(0, 0));
             time_stamp += std::max((prev_wp.head(2) - wp.head(2)).norm() / _params.push_vel,
-                std::abs(prev_wp[2] - wp[2]) / 0.15f); // TODO set as parameter
+                std::abs(mps_math::shortest_direction_so2(prev_wp[2], wp[2])) / _params.rot_push_vel);
             mps_logging::logDebug(boost::format("Adding waypoint (%1%: %2%, %3%, %4%)") % time_stamp % wp[0] % wp[1] % wp[2], log_prefix);
             control->addWaypoint(time_stamp, wp);
             // time_stamp += _params.path_step_size / _params.push_vel;

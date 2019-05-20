@@ -11,10 +11,13 @@ namespace mps {
 namespace planner {
     namespace ompl {
         namespace control {
+            class TimedWaypointsControlSpace;
+
             class TimedWaypoints : public PositionControl, public SemiDynamicControl {
+                // TODO change from Eigen::VectorXf to ::ompl::base::State?
             public:
                 // TimedWaypoints(const Eigen::Affine3f& tf = Eigen::Affine3f());
-                TimedWaypoints();
+                TimedWaypoints(std::shared_ptr<const TimedWaypointsControlSpace> space);
                 TimedWaypoints(const TimedWaypoints& other);
                 TimedWaypoints(const std::vector<std::pair<float, Eigen::VectorXf>>& waypoints);
                 // const Eigen::Affine3f& tf = Eigen::Affine3f());
@@ -46,6 +49,7 @@ namespace planner {
                 // TODO if we want to use tf, need to use Eigen::Vector3f
                 std::vector<std::pair<float, Eigen::VectorXf>> _waypoints;
                 sim_env::RobotController::VelocityProjectionFn _vel_proj_fn;
+                const std::weak_ptr<const TimedWaypointsControlSpace> _space;
             };
 
             class TimedWaypointsControlSpace : public ::ompl::control::ControlSpace,
@@ -54,7 +58,8 @@ namespace planner {
 
             public:
                 /**
-                     * Creates a new timed waypoints control space.
+                     * Creates a new timed waypoints control space. 
+                     * TODO Supports currently only SimEnvObjectStateSpace
                      */
                 TimedWaypointsControlSpace(const ::ompl::base::StateSpacePtr& stateSpace);
                 ~TimedWaypointsControlSpace() override;
@@ -76,6 +81,7 @@ namespace planner {
                 bool isCompound() const override;
                 void serializeSpaceInformation(std::ostream& ostream) const override;
                 bool deserializeSpaceInformation(std::istream& istream) override;
+                void interpolateState(const Eigen::VectorXf& state_a, const Eigen::VectorXf& state_b, Eigen::VectorXf& out, float t) const;
 
                 /**
                  * TODO: None of the functions below is implemented. All throw logic_error when called.
@@ -90,6 +96,8 @@ namespace planner {
 
             private:
                 mutable std::stack<TimedWaypoints*> _control_cache;
+                mutable mps::planner::ompl::state::SimEnvObjectState* _state_a;
+                mutable mps::planner::ompl::state::SimEnvObjectState* _state_b;
             };
             typedef std::shared_ptr<TimedWaypointsControlSpace> TimedWaypointsControlSpacePtr;
             typedef std::shared_ptr<const TimedWaypointsControlSpace> TimedWaypointsControlSpaceConstPtr;

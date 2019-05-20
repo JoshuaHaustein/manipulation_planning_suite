@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <mps/planner/ompl/control/TimedWaypoints.h>
+#include <ompl/base/spaces/SE2StateSpace.h>
 
 using namespace mps::planner::ompl::control;
 
@@ -8,8 +9,9 @@ using namespace mps::planner::ompl::control;
 
 // }
 
-TimedWaypoints::TimedWaypoints()
+TimedWaypoints::TimedWaypoints(std::shared_ptr<const TimedWaypointsControlSpace> space)
     : _resting_time(0.0f)
+    , _space(space)
 {
 }
 
@@ -107,7 +109,9 @@ void TimedWaypoints::getPosition(float t, Eigen::VectorXf& position) const
     float delta_t = second_wp->first - first_wp->first;
     assert(delta_t > 0.0);
     float rel_t = (t - first_wp->first) / delta_t;
-    position = rel_t * second_wp->second + (1.0 - rel_t) * first_wp->second;
+    auto control_space = _space.lock();
+    control_space->interpolateState(first_wp->second, second_wp->second, position, rel_t);
+    // position = rel_t * second_wp->second + (1.0 - rel_t) * first_wp->second;
 }
 
 float TimedWaypoints::getDuration() const
@@ -141,9 +145,17 @@ void TimedWaypoints::setRestDuration(float dur)
 TimedWaypointsControlSpace::TimedWaypointsControlSpace(const ::ompl::base::StateSpacePtr& state_space)
     : ControlSpace(state_space)
 {
+    _state_a = dynamic_cast<mps::planner::ompl::state::SimEnvObjectState*>(state_space->allocState());
+    _state_b = dynamic_cast<mps::planner::ompl::state::SimEnvObjectState*>(state_space->allocState());
+    assert(_state_a);
+    assert(_state_b);
 }
 
-TimedWaypointsControlSpace::~TimedWaypointsControlSpace() = default;
+TimedWaypointsControlSpace::~TimedWaypointsControlSpace()
+{
+    stateSpace_->freeState(_state_a);
+    stateSpace_->freeState(_state_b);
+}
 
 unsigned int TimedWaypointsControlSpace::getDimension() const
 {
@@ -158,7 +170,7 @@ unsigned int TimedWaypointsControlSpace::getDimension() const
         new_control = _control_cache.top();
         _control_cache.pop();
     } else {
-        new_control = new TimedWaypoints();
+        new_control = new TimedWaypoints(shared_from_this());
     }
     return new_control;
 }
@@ -216,6 +228,16 @@ void TimedWaypointsControlSpace::serializeSpaceInformation(std::ostream& ostream
 bool TimedWaypointsControlSpace::deserializeSpaceInformation(std::istream& istream)
 {
     return true;
+}
+
+void TimedWaypointsControlSpace::interpolateState(const Eigen::VectorXf& state_a,
+    const Eigen::VectorXf& state_b,
+    Eigen::VectorXf& out, float t) const
+{
+    _state_a->setConfiguration(state_a);
+    _state_b->setConfiguration(state_b);
+    stateSpace_->interpolate(_state_a, _state_b, t, _state_a);
+    _state_a->getConfiguration(out);
 }
 
 ::ompl::control::ControlSamplerPtr TimedWaypointsControlSpace::allocDefaultControlSampler() const

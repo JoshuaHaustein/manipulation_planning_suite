@@ -137,11 +137,12 @@ bool OraclePushPlanner::setup(PlanningProblem& problem)
         _planning_problem.workspace_bounds,
         _planning_problem.b_semi_dynamic,
         _planning_problem.weight_map);
+    auto robot_state_space = _state_space->getObjectStateSpace(_planning_problem.robot->getName());
     if (problem.oracle_type == PlanningProblem::OracleType::QuasiStaticSE2Oracle) {
-        _control_space = std::make_shared<mps_control::TimedWaypointsControlSpace>(_state_space);
-        _robot_controller = std::make_shared<sim_env::RobotPositionController>(_planning_problem.robot, _planning_problem.robot_controller);
+        _control_space = std::make_shared<mps_control::TimedWaypointsControlSpace>(robot_state_space);
+        _robot_controller = std::make_shared<sim_env::SE2RobotPositionController>(_planning_problem.robot, _planning_problem.robot_controller);
     } else {
-        _control_space = std::make_shared<mps_control::RampVelocityControlSpace>(_state_space,
+        _control_space = std::make_shared<mps_control::RampVelocityControlSpace>(robot_state_space,
             problem.control_limits,
             problem.control_subspaces);
         _robot_controller = _planning_problem.robot_controller;

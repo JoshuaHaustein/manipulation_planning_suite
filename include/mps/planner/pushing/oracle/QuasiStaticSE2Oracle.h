@@ -26,6 +26,7 @@ namespace planner {
                     float orientation_weight; // weighting factor when computing distance to pushing states
                     float path_step_size; // distance between subsequent positions in an action
                     float push_vel; // cartesian velocity of pusher
+                    float rot_push_vel; // angular velocity of the pusher
                     float push_penetration; // translational offset along the normal of the object's edge (negative = penetration)
                 };
 
