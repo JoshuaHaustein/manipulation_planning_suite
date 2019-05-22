@@ -1,5 +1,6 @@
 #pragma once
 
+#include <ompl/base/spaces/DubinsStateSpace.h>
 #include <mps/planner/ompl/state/QuasiStaticPushingStateSpace.h>
 #include <mps/planner/pushing/oracle/Oracle.h>
 #include <mps/planner/util/Random.h>
@@ -11,7 +12,7 @@ namespace planner {
         namespace oracle {
             /**
              * Hand designed pushing oracle for holonomic 2D robots and objects in SE(2).
-             * This oracle is based on Zhou and Mason's work 
+             * This oracle is based on Zhou and Mason's work
              * "Pushing revisited: Differential flatness, trajectory planning and stabilization".
              * It provides a policy for stable pushing of polygonal objects.
              */
@@ -20,7 +21,7 @@ namespace planner {
                 struct Parameters {
                     Parameters(); // creates default values
                     float eps_min; // minimal half width of a pushing edge
-                    float eps_dist; // distance between pusher and object from which on to consider both to be in contact
+                    float eps_dist; // distance between pusher and object in manipulation state
                     float col_sample_step; // sample step size for collision checking
                     float exp_weight; // weighting factor in exponential to compute sampling weights for pushing edge pairs
                     float orientation_weight; // weighting factor when computing distance to pushing states
@@ -28,6 +29,8 @@ namespace planner {
                     float push_vel; // cartesian velocity of pusher
                     float rot_push_vel; // angular velocity of the pusher
                     float push_penetration; // translational offset along the normal of the object's edge (negative = penetration)
+                    float max_push_state_distance; // maximal SE2 state distance from the closest pushing state from
+                        // where to start the pushing policy
                 };
 
                 /**
@@ -115,6 +118,20 @@ namespace planner {
 
                 // cache last contact pair sampled / used by policy (obj_id, edge_pair, translation)
                 mutable std::tuple<unsigned int, unsigned int, float> _last_contact_pair;
+                struct PushingPathCache {
+                    bool edge_pair_computed;
+                    unsigned int obj_id;
+                    unsigned int edge_pair_id;
+                    float edge_translation;
+                    bool path_computed;
+                    ::ompl::base::DubinsStateSpace::DubinsPath path;
+                    unsigned int num_samples[3];
+                    float t_offsets[3];
+                    Eigen::Vector3f target_state;
+                    Eigen::Vector3f last_robot_state;
+                    void reset();
+                };
+                mutable PushingPathCache _cache;
                 mutable Eigen::VectorXf _eigen_config;
                 mutable Eigen::VectorXf _eigen_config2;
                 // for debugging
@@ -131,8 +148,8 @@ namespace planner {
                     const ompl::state::SimEnvWorldState* current_state,
                     Eigen::Vector3f& closest_state) const;
                 inline float projectToEdge(const Eigen::Vector2f& point, const ObjectPushingEdgePtr ope) const;
-                void computeTestAction(ompl::control::TimedWaypoints* control,
-                    const Eigen::Vector3f& start, const Eigen::Vector3f& end) const;
+                // void computeTestAction(ompl::control::TimedWaypoints* control,
+                //     const Eigen::Vector3f& start, const Eigen::Vector3f& end) const;
                 void computeAction(ompl::control::TimedWaypoints* control, const Eigen::Affine2f& wTz_c,
                     const Eigen::Affine2f& wTz_t, const Eigen::Affine2f& zTr) const;
                 void sampleDubinsState(::ompl::base::DubinsStateSpace::DubinsPath& path, float t, bool& first_time,
