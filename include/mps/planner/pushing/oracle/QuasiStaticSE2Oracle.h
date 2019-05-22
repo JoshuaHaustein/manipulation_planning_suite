@@ -1,9 +1,9 @@
 #pragma once
 
-#include <ompl/base/spaces/DubinsStateSpace.h>
 #include <mps/planner/ompl/state/QuasiStaticPushingStateSpace.h>
 #include <mps/planner/pushing/oracle/Oracle.h>
 #include <mps/planner/util/Random.h>
+#include <ompl/base/spaces/DubinsStateSpace.h>
 #include <tuple>
 
 namespace mps {
@@ -31,6 +31,7 @@ namespace planner {
                     float push_penetration; // translational offset along the normal of the object's edge (negative = penetration)
                     float max_push_state_distance; // maximal SE2 state distance from the closest pushing state from
                         // where to start the pushing policy
+                    float action_length; // maximal distance the robot is allowed to travel within one control computed by predictAction
                 };
 
                 /**
@@ -116,20 +117,23 @@ namespace planner {
                 ompl::state::QuasiStaticPushingStateSpace::StateType* _se2_state_b;
                 ompl::state::QuasiStaticPushingStateSpace::StateType* _se2_state_c;
 
-                // cache last contact pair sampled / used by policy (obj_id, edge_pair, translation)
-                mutable std::tuple<unsigned int, unsigned int, float> _last_contact_pair;
+                // PushingPathCache allows us to reuse pushing paths and states across subsequent calls of
+                // samplePushingState(..) and/or predictAction(..) for the same object and destination.
                 struct PushingPathCache {
-                    bool edge_pair_computed;
-                    unsigned int obj_id;
-                    unsigned int edge_pair_id;
-                    float edge_translation;
-                    bool path_computed;
-                    ::ompl::base::DubinsStateSpace::DubinsPath path;
-                    unsigned int num_samples[3];
-                    float t_offsets[3];
-                    Eigen::Vector3f target_state;
-                    Eigen::Vector3f last_robot_state;
-                    void reset();
+                    bool edge_pair_computed; // stores whether edge pair has been computed
+                    unsigned int obj_id; // id of the object to push
+                    unsigned int edge_pair_id; // id of the edge pair to use
+                    float edge_translation; // parallel translation
+                    // Data below caches a path for piece-wise pushing
+                    bool path_computed; // stores whether a path has been computed
+                    Eigen::Vector3f target_state; // target state of that path
+                    Eigen::Vector3f start_state; // robot start state of remaining path (== state at sample_idx)
+                    ::ompl::base::DubinsStateSpace::DubinsPath path; // the path
+                    unsigned int num_samples[3]; // number of samples per path segment
+                    float t_offsets[3]; // interpolation offsets for each sample
+                    unsigned int sample_idx; // how many state samples have already been returned from the path
+                    Eigen::Affine2f zTr;
+                    void reset(); // resets *computed flags to false
                 };
                 mutable PushingPathCache _cache;
                 mutable Eigen::VectorXf _eigen_config;
@@ -138,20 +142,17 @@ namespace planner {
                 // unsigned int _tmp_edge_counter;
                 // bool _min_max_toggle;
 
-                // pre-processing helper
-                void computeRobotPushingEdges();
-                void computeObjectPushingEdges();
-                bool computeCollisionFreeRange(QuasiStaticSE2Oracle::PushingEdgePair& pair, unsigned int oid);
                 // policy helper
-                std::tuple<unsigned int, float, Eigen::Vector3f, float> selectEdgePair(unsigned int obj_id, const ompl::state::SimEnvWorldState* current_state);
+                void computePushingPath(const Eigen::Vector3f& obj_state, const Eigen::Vector3f& target_state,
+                    const Eigen::Vector3f& robot_state);
+                std::pair<Eigen::Vector3f, float> selectEdgePair(unsigned int obj_id, const ompl::state::SimEnvWorldState* current_state);
                 std::pair<float, float> computePushingStateDistance(unsigned int obj_id, unsigned int pair_id,
                     const ompl::state::SimEnvWorldState* current_state,
                     Eigen::Vector3f& closest_state) const;
-                inline float projectToEdge(const Eigen::Vector2f& point, const ObjectPushingEdgePtr ope) const;
-                // void computeTestAction(ompl::control::TimedWaypoints* control,
-                //     const Eigen::Vector3f& start, const Eigen::Vector3f& end) const;
-                void computeAction(ompl::control::TimedWaypoints* control, const Eigen::Affine2f& wTz_c,
-                    const Eigen::Affine2f& wTz_t, const Eigen::Affine2f& zTr) const;
+                // inline float projectToEdge(const Eigen::Vector2f& point, const ObjectPushingEdgePtr ope) const;
+                void computeAction(const Eigen::Affine2f& wTz_c, const Eigen::Affine2f& wTz_t, const Eigen::Affine2f& zTr) const;
+                // sample the path stored in _cache and append waypoints to control; increases _cache.sample_idx, overwrites _cache.start_state
+                void samplePath(ompl::control::TimedWaypoints* control) const;
                 void sampleDubinsState(::ompl::base::DubinsStateSpace::DubinsPath& path, float t, bool& first_time,
                     Eigen::VectorXf& out) const;
                 // state generator helper
@@ -162,6 +163,10 @@ namespace planner {
                     float orthogonal_translation, Eigen::Affine2f& oTr) const;
                 void computeRobotState(Eigen::VectorXf& rob_state, const QuasiStaticSE2Oracle::PushingEdgePair& pair,
                     const Eigen::VectorXf& obj_state, float translation) const;
+                // pre-processing helper
+                void computeRobotPushingEdges();
+                void computeObjectPushingEdges();
+                bool computeCollisionFreeRange(QuasiStaticSE2Oracle::PushingEdgePair& pair, unsigned int oid);
             };
         }
     }
