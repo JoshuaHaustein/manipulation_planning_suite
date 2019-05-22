@@ -30,6 +30,11 @@ namespace planner {
                 bool operator==(const TimedWaypoints& other) const;
                 TimedWaypoints& operator=(const TimedWaypoints& other);
                 void print(std::ostream& out) const;
+                typedef std::vector<std::pair<float, Eigen::VectorXf>>::const_iterator WaypointIterator;
+                // read only iterators
+                WaypointIterator beginWaypoints() const;
+                WaypointIterator endWaypoints() const;
+                unsigned int numWaypoints() const;
                 // TimedControl (constraints)
                 sim_env::RobotController::VelocityProjectionFn getVelocityConstraintProjection() const override;
                 void setVelocityProjectionFunction(sim_env::RobotController::VelocityProjectionFn fn);
@@ -58,7 +63,7 @@ namespace planner {
 
             public:
                 /**
-                     * Creates a new timed waypoints control space. 
+                     * Creates a new timed waypoints control space.
                      * TODO Supports currently only SimEnvObjectStateSpace
                      */
                 TimedWaypointsControlSpace(const ::ompl::base::StateSpacePtr& stateSpace);
@@ -124,14 +129,14 @@ namespace planner {
                     const ompl::state::SimEnvObjectState* desired_robot_state,
                     std::vector<::ompl::control::Control*>& controls) const override;
                 /**
-                 *  Compute a single control steering the robot from current_robot_state 
+                 *  Compute a single control steering the robot from current_robot_state
                  * to target_robot_state (as far as possible within one control).
                  */
                 void steer(const Eigen::VectorXf& current_robot_state,
                     const Eigen::VectorXf& target_robot_state,
                     ::ompl::control::Control* control) const override;
                 /**
-                 *  Compute a sequence of controls steering the robot from current_robot_state 
+                 *  Compute a sequence of controls steering the robot from current_robot_state
                  *  to target_robot_state.
                  */
                 void steer(const Eigen::VectorXf& current_robot_state,

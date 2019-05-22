@@ -162,7 +162,7 @@ namespace planner {
                 void computeObjectRobotTransform(const PushingEdgePair& pair, float parallel_translation,
                     float orthogonal_translation, Eigen::Affine2f& oTr) const;
                 void computeRobotState(Eigen::VectorXf& rob_state, const QuasiStaticSE2Oracle::PushingEdgePair& pair,
-                    const Eigen::VectorXf& obj_state, float translation) const;
+                    const Eigen::VectorXf& obj_state, float translation, float orth_offset) const;
                 // pre-processing helper
                 void computeRobotPushingEdges();
                 void computeObjectPushingEdges();

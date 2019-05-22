@@ -73,6 +73,18 @@ void TimedWaypoints::print(std::ostream& out) const
     out << std::endl;
 }
 
+TimedWaypoints::WaypointIterator TimedWaypoints::beginWaypoints() const {
+    return _waypoints.begin();
+}
+
+TimedWaypoints::WaypointIterator TimedWaypoints::endWaypoints() const {
+    return _waypoints.end();
+}
+
+unsigned int TimedWaypoints::numWaypoints() const {
+    return _waypoints.size();
+}
+
 sim_env::RobotController::VelocityProjectionFn TimedWaypoints::getVelocityConstraintProjection() const
 {
     return _vel_proj_fn;

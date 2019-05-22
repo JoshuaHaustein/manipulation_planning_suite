@@ -144,11 +144,14 @@ void QuasiStaticSE2Oracle::predictAction(const mps_state::SimEnvWorldState* curr
     current_state->getObjectState(_robot_id)->getConfiguration(_eigen_config);
     Eigen::Vector3f rob_state(_eigen_config.head(3));
     // check whether our cache has to be invalidated
-    if (_cache.obj_id != obj_id or _cache.target_state != target_obj_state)
+    if (_cache.obj_id != obj_id or _cache.target_state != target_obj_state) {
         _cache.reset();
+        _cache.target_state = target_obj_state;
+    }
     // get pushing edge pair
     auto [closest_state, state_dist] = selectEdgePair(obj_id, current_state);
     // check if we need to approach the pushing state first
+    // TODO the state distance is too big? is this because of epi_min?
     if (state_dist > _params.max_push_state_distance) {
         // need to move to closest pushing state first
         current_state->getObjectState(_robot_id)->getConfiguration(_eigen_config);
@@ -159,14 +162,11 @@ void QuasiStaticSE2Oracle::predictAction(const mps_state::SimEnvWorldState* curr
         }
     }
     // compute pushing policy
-    if (_cache.path_computed and _cache.target_state == target_obj_state) {
-        // check whether we can continue a previously computed path
-        // TODO should check how far we are from the start state on the path
-        samplePath(pos_control);
-    } else { // compute a new path
+    if (!_cache.path_computed) {
+        // TODO should also check how far we are from the start state on the path
         computePushingPath(obj_state, target_obj_state, rob_state);
-        samplePath(pos_control);
     }
+    samplePath(pos_control);
 }
 
 void QuasiStaticSE2Oracle::samplePushingState(const mps_state::SimEnvWorldState* current_state,
@@ -203,7 +203,7 @@ void QuasiStaticSE2Oracle::samplePushingState(const mps_state::SimEnvWorldState*
     float rel_trans = _random_gen->uniformReal(edge_pair.min_translation, edge_pair.max_translation);
     // float rel_trans = _min_max_toggle ? edge_pair.max_translation : edge_pair.min_translation;
     current_state->getObjectState(obj_id)->getConfiguration(_eigen_config);
-    computeRobotState(_eigen_config2, edge_pair, _eigen_config, rel_trans);
+    computeRobotState(_eigen_config2, edge_pair, _eigen_config, rel_trans, _params.eps_dist);
     new_robot_state->setConfiguration(_eigen_config2);
     auto logger = mps_logging::getLogger();
     // logger->logDebug(boost::format("Sampled pushing state %1%, %2%, %3%") % _eigen_config2[0] % _eigen_config2[1] % _eigen_config2[2], log_prefix);
@@ -214,6 +214,8 @@ void QuasiStaticSE2Oracle::samplePushingState(const mps_state::SimEnvWorldState*
     _cache.edge_pair_id = pair_id;
     _cache.edge_translation = rel_trans;
     _cache.edge_pair_computed = true;
+    next_state->getObjectState(obj_id)->getConfiguration(_eigen_config);
+    _cache.target_state = _eigen_config.head(3);
 }
 
 /************************************** Policy Helper ************************************/
@@ -333,14 +335,14 @@ std::pair<float, float> QuasiStaticSE2Oracle::computePushingStateDistance(unsign
     current_state->getObjectState(obj_id)->getConfiguration(_eigen_config);
     // compute distance to closest pushing state
     if (translation_range == 0.0f) { // there is just a single pushing state
-        computeRobotState(_eigen_config, edge_pair, _eigen_config, edge_pair.max_translation);
+        computeRobotState(_eigen_config, edge_pair, _eigen_config, edge_pair.max_translation, 0.0f);
         closest_state.head(2) = _eigen_config.head(2);
         closest_state[2] = _eigen_config[2];
     } else { // pushing states are forming a line
         // compute this line
-        computeRobotState(_eigen_config2, edge_pair, _eigen_config, edge_pair.min_translation);
+        computeRobotState(_eigen_config2, edge_pair, _eigen_config, edge_pair.min_translation, 0.0f);
         Eigen::Vector2f start_pos(_eigen_config2[0], _eigen_config2[1]);
-        computeRobotState(_eigen_config2, edge_pair, _eigen_config, edge_pair.max_translation);
+        computeRobotState(_eigen_config2, edge_pair, _eigen_config, edge_pair.max_translation, 0.0f);
         Eigen::Vector2f end_pos(_eigen_config2[0], _eigen_config2[1]);
         closest_state[2] = _eigen_config2[2];
         Eigen::Vector2f dir = (end_pos - start_pos).normalized();
@@ -451,10 +453,17 @@ void QuasiStaticSE2Oracle::samplePath(ompl::control::TimedWaypoints* control) co
     Eigen::VectorXf wp(3);
     Eigen::VectorXf prev_wp(3);
     float time_stamp = control->getDuration();
+    if (control->numWaypoints() > 0) {
+        prev_wp = std::get<1>(*(--control->endWaypoints()));
+    } else {
+        prev_wp.head(3) = _cache.start_state;
+    }
     // first add start state
     wp.head(3) = _cache.start_state;
-    prev_wp.head(3) = _cache.start_state;
+    time_stamp += std::max((wp.head(2) - prev_wp.head(2)).norm() / _params.push_vel,
+            std::abs(mps_math::shortest_direction_so2(prev_wp[2], wp[2])) / _params.rot_push_vel);
     control->addWaypoint(time_stamp, wp);
+    prev_wp = wp;
     // compute in what segment we should start sampling
     unsigned int seq = 0;
     unsigned int idx = _cache.sample_idx + 1;
@@ -565,11 +574,11 @@ void QuasiStaticSE2Oracle::computeObjectRobotTransform(const PushingEdgePair& pa
 }
 
 void QuasiStaticSE2Oracle::computeRobotState(Eigen::VectorXf& rob_state, const QuasiStaticSE2Oracle::PushingEdgePair& pair,
-    const Eigen::VectorXf& obj_state, float translation) const
+    const Eigen::VectorXf& obj_state, float translation, float orth_offset) const
 {
     Eigen::Affine2f wTo = Eigen::Translation2f(obj_state.head(2)) * Eigen::Rotation2Df(obj_state[2]);
     Eigen::Affine2f oTr;
-    computeObjectRobotTransform(pair, translation, _params.eps_dist, oTr);
+    computeObjectRobotTransform(pair, translation, orth_offset, oTr);
     Eigen::Affine2f wTr = wTo * oTr;
     rob_state.head(2) = wTr.translation();
     auto& rob_rot = wTr.rotation();
@@ -762,7 +771,7 @@ bool QuasiStaticSE2Oracle::computeCollisionFreeRange(QuasiStaticSE2Oracle::Pushi
     float current_t = pair.min_translation;
     while (current_t <= pair.max_translation) {
         // check collision for current_t
-        computeRobotState(_eigen_config, pair, obj_state, current_t);
+        computeRobotState(_eigen_config, pair, obj_state, current_t, _params.eps_dist);
         robot->setDOFPositions(_eigen_config);
         if (robot->checkCollision(_objects.at(oid))) { // does it collide?
             // if the current interval is valid, close it
