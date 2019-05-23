@@ -91,14 +91,50 @@ QuasiStaticSE2Oracle::Parameters::Parameters()
     , rot_push_vel(0.2f)
     , push_penetration(0.0f)
     , max_push_state_distance(1e-6)
+    , max_obj_state_deviation(0.015f)
     , action_length(0.2f)
 {
 }
 
-void QuasiStaticSE2Oracle::PushingPathCache::reset()
+QuasiStaticSE2Oracle::PushingPathCache::PushingPathCache()
+{
+    seg_idx = 0;
+    in_seg_idx = 0;
+}
+
+bool QuasiStaticSE2Oracle::PushingPathCache::nextSampleIdx()
+{
+    if (seg_idx == 3)
+        return false;
+    // forward to the next valid sample
+    do {
+        ++in_seg_idx;
+        if (in_seg_idx >= num_samples[seg_idx]) {
+            ++seg_idx;
+            in_seg_idx = 0;
+        }
+    } while (in_seg_idx >= num_samples[seg_idx] and seg_idx < 3);
+    return seg_idx < 3;
+}
+
+QuasiStaticSE2Oracle::PushingEdgeCache::PushingEdgeCache()
+{
+    edge_translation = 0.0;
+    pair_id = 0;
+}
+
+QuasiStaticSE2Oracle::PushingCache::PushingCache()
+{
+    reset();
+}
+
+void QuasiStaticSE2Oracle::PushingCache::reset()
 {
     path_computed = false;
     edge_pair_computed = false;
+    obj_id = 0;
+    ec = PushingEdgeCache();
+    pc = PushingPathCache();
 }
 
 QuasiStaticSE2Oracle::QuasiStaticSE2Oracle(RobotOraclePtr robot_oracle,
@@ -111,9 +147,10 @@ QuasiStaticSE2Oracle::QuasiStaticSE2Oracle(RobotOraclePtr robot_oracle,
     _se2_state_a = dynamic_cast<ompl::state::QuasiStaticPushingStateSpace::StateType*>(_dubins_state_space.allocState());
     _se2_state_b = dynamic_cast<ompl::state::QuasiStaticPushingStateSpace::StateType*>(_dubins_state_space.allocState());
     _se2_state_c = dynamic_cast<ompl::state::QuasiStaticPushingStateSpace::StateType*>(_dubins_state_space.allocState());
+    _eigen_config.resize(3);
+    _eigen_config2.resize(3);
     computeRobotPushingEdges();
     computeObjectPushingEdges();
-    _cache.reset();
     // _tmp_edge_counter = 0;
     // _min_max_toggle = false;
 }
@@ -148,23 +185,40 @@ void QuasiStaticSE2Oracle::predictAction(const mps_state::SimEnvWorldState* curr
         _cache.reset();
         _cache.target_state = target_obj_state;
     }
-    // get pushing edge pair
-    auto [closest_state, state_dist] = selectEdgePair(obj_id, current_state);
-    // check if we need to approach the pushing state first
-    // TODO the state distance is too big? is this because of epi_min?
-    if (state_dist > _params.max_push_state_distance) {
-        // need to move to closest pushing state first
-        current_state->getObjectState(_robot_id)->getConfiguration(_eigen_config);
-        _eigen_config2.head(3) = closest_state;
-        _robot_oracle->steer(_eigen_config, _eigen_config2, pos_control);
-        if (state_dist > _params.action_length) {
-            return;
-        }
+    // if we have a path, check whether we are on track and optionally prepend a re-approach action
+    bool need_new_path = true;
+    if (_cache.path_computed) {
+        float obj_pos_error = (obj_state.head(2) - _cache.pc.obj_start_state.head(2)).norm();
+        float obj_orientation_error = _params.orientation_weight * std::abs(mps_math::shortest_direction_so2(obj_state[2], _cache.pc.obj_start_state[2]));
+        need_new_path = obj_pos_error + obj_orientation_error > _params.max_obj_state_deviation;
     }
-    // compute pushing policy
-    if (!_cache.path_computed) {
-        // TODO should also check how far we are from the start state on the path
+    if (need_new_path) {
+        // reset path cache
+        _cache.path_computed = false;
+        _cache.pc = PushingPathCache();
+        mps_logging::logDebug("Computing new pushing path", "[QuasiStaticSE2Oracle::predictAction]");
+        // we have no path yet, compute a new one
+        // get pushing edge pair
+        auto [closest_state, state_dist] = selectEdgePair(obj_id, current_state);
+        // check if we need to approach the pushing state first
+        if (state_dist > _params.max_push_state_distance) {
+            mps_logging::logDebug("Too far away from pushing state, computing approach path", "[QuasiStaticSE2Oracle::predictAction]");
+            // need to move to closest pushing state first
+            current_state->getObjectState(_robot_id)->getConfiguration(_eigen_config);
+            _eigen_config2.head(3) = closest_state;
+            _robot_oracle->steer(_eigen_config, _eigen_config2, pos_control);
+            if (state_dist > _params.action_length) {
+                return;
+            }
+            rob_state = closest_state;
+        }
         computePushingPath(obj_state, target_obj_state, rob_state);
+    } else {
+        // float robot_pose_error = (rob_state.head(2) - _cache.start_state.head(2)).norm() + _params.orientation_weight * std::abs(rob_state[2] - _cache.start_state[2]);
+        // // if we the robot is too far off from its desired state, move it there first
+        // if (robot_pose_error > _params.max_push_state_distance) {
+        // }
+        mps_logging::logDebug("Path cached. Sampling from existing path", "[QuasiStaticSE2Oracle::predictAction]");
     }
     samplePath(pos_control);
 }
@@ -211,26 +265,24 @@ void QuasiStaticSE2Oracle::samplePushingState(const mps_state::SimEnvWorldState*
     new_robot_state->setVelocity(_eigen_config);
     // save contact pair that we used
     _cache.obj_id = obj_id;
-    _cache.edge_pair_id = pair_id;
-    _cache.edge_translation = rel_trans;
+    _cache.ec.pair_id = pair_id;
+    _cache.ec.edge_translation = rel_trans;
     _cache.edge_pair_computed = true;
     next_state->getObjectState(obj_id)->getConfiguration(_eigen_config);
     _cache.target_state = _eigen_config.head(3);
 }
 
 /************************************** Policy Helper ************************************/
-void QuasiStaticSE2Oracle::computePushingPath(const Eigen::Vector3f& obj_state, const Eigen::Vector3f& target_state,
-    const Eigen::Vector3f& robot_state)
+void QuasiStaticSE2Oracle::computePushingPath(const Eigen::Vector3f& obj_state, const Eigen::Vector3f& target_state, const Eigen::Vector3f& rob_state)
 {
     // get edge pair
-    PushingEdgePair& edge_pair = _contact_pairs.at(_cache.obj_id).at(_cache.edge_pair_id);
+    PushingEdgePair& edge_pair = _contact_pairs.at(_cache.obj_id).at(_cache.ec.pair_id);
     // compute transformation matrices for current and target object state and current robot state
     Eigen::Affine2f wTo_c = Eigen::Translation2f(obj_state.head(2)) * Eigen::Rotation2Df(obj_state[2]);
     Eigen::Affine2f wTo_t = Eigen::Translation2f(target_state.head(2)) * Eigen::Rotation2Df(target_state[2]);
     // compute relative transform between robot and object
-    Eigen::Affine2f oTr;
-    computeObjectRobotTransform(edge_pair, _cache.edge_translation, _params.push_penetration, oTr);
-    // Eigen::Affine2f oTr = wTo_c.inverse() * wTr;
+    Eigen::Affine2f wTr = Eigen::Translation2f(rob_state.head(2)) * Eigen::Rotation2Df(rob_state[2]);
+    Eigen::Affine2f oTr = wTo_c.inverse() * wTr;
     // compute contact points
     // Eigen::Vector2f osr = oTr * edge_pair.robot_edge->from;
     // Eigen::Vector2f oer = oTr * edge_pair.robot_edge->to;
@@ -282,6 +334,10 @@ void QuasiStaticSE2Oracle::computePushingPath(const Eigen::Vector3f& obj_state, 
     Eigen::Affine2f wTz_c = wTo_c * oTz;
     Eigen::Affine2f wTz_t = wTo_t * oTz;
     computeAction(wTz_c, wTz_t, oTz.inverse() * oTr);
+    // save start state
+    _cache.pc.start_state = rob_state;
+    _cache.pc.obj_start_state = obj_state;
+    _cache.pc.rTo = oTr.inverse();
 }
 
 std::pair<Eigen::Vector3f, float> QuasiStaticSE2Oracle::selectEdgePair(unsigned int obj_id, const ompl::state::SimEnvWorldState* current_state)
@@ -293,14 +349,14 @@ std::pair<Eigen::Vector3f, float> QuasiStaticSE2Oracle::selectEdgePair(unsigned 
     // do we already have a contact edge?
     if (_cache.obj_id == obj_id and _cache.edge_pair_computed) {
         // check how close the two edges are in the current state
-        auto [dist, ttrans] = computePushingStateDistance(obj_id, _cache.edge_pair_id, current_state, best_closest_state);
+        auto [dist, ttrans] = computePushingStateDistance(obj_id, _cache.ec.pair_id, current_state, best_closest_state);
         // if this distance is already smaller than _params.eps_dist, just return this pair
         if (dist <= _params.eps_dist) {
-            _cache.edge_translation = ttrans;
+            _cache.ec.edge_translation = ttrans;
             return { best_closest_state, dist };
         }
         // else we will search for the closest pair
-        pair_id = _cache.edge_pair_id;
+        pair_id = _cache.ec.pair_id;
         best_pair_distance = dist;
         translation = ttrans;
     }
@@ -317,8 +373,8 @@ std::pair<Eigen::Vector3f, float> QuasiStaticSE2Oracle::selectEdgePair(unsigned 
     }
     _cache.edge_pair_computed = true;
     _cache.obj_id = obj_id;
-    _cache.edge_pair_id = pair_id;
-    _cache.edge_translation = translation;
+    _cache.ec.pair_id = pair_id;
+    _cache.ec.edge_translation = translation;
     return { best_closest_state, best_pair_distance };
 }
 
@@ -392,35 +448,35 @@ void QuasiStaticSE2Oracle::computeAction(const Eigen::Affine2f& wTz_c, const Eig
     _se2_state_b->setYaw(yaw + M_PI / 2.0f);
     // compute dubins path
     bool first_time = false;
-    _cache.path = _dubins_state_space.dubins(_se2_state_a, _se2_state_b);
+    _cache.pc.path = _dubins_state_space.dubins(_se2_state_a, _se2_state_b);
     _cache.path_computed = true;
     // compute the number of samples we need for each path segment
     Eigen::VectorXf wp(3);
     Eigen::VectorXf prev_wp(3);
-    _cache.num_samples[0] = 0;
-    _cache.num_samples[1] = 0;
-    _cache.num_samples[2] = 0;
-    _cache.t_offsets[0] = 0.0f;
-    _cache.t_offsets[1] = 0.0f;
-    _cache.t_offsets[2] = 0.0f;
+    _cache.pc.num_samples[0] = 0;
+    _cache.pc.num_samples[1] = 0;
+    _cache.pc.num_samples[2] = 0;
+    _cache.pc.t_offsets[0] = 0.0f;
+    _cache.pc.t_offsets[1] = 0.0f;
+    _cache.pc.t_offsets[2] = 0.0f;
     {
         float t = 0.0f;
         for (unsigned int s = 0; s < 3; ++s) {
-            _cache.t_offsets[s] = t;
-            switch (_cache.path.type_[s]) {
+            _cache.pc.t_offsets[s] = t;
+            switch (_cache.pc.path.type_[s]) {
             case ::ompl::base::DubinsStateSpace::DubinsPathSegmentType::DUBINS_STRAIGHT: {
-                _cache.num_samples[s] = _cache.path.length_[s] * _dubins_state_space.getTurningRadius() / _params.path_step_size;
+                _cache.pc.num_samples[s] = std::ceil(_cache.pc.path.length_[s] * _dubins_state_space.getTurningRadius() / _params.path_step_size);
                 break;
             }
             case ::ompl::base::DubinsStateSpace::DubinsPathSegmentType::DUBINS_LEFT:
             case ::ompl::base::DubinsStateSpace::DubinsPathSegmentType::DUBINS_RIGHT: {
                 // compute the state at the beginning and end of this segment
-                sampleDubinsState(_cache.path, t, first_time, prev_wp);
-                sampleDubinsState(_cache.path, t + _cache.path.length_[s] / _cache.path.length(), first_time, wp);
+                sampleDubinsState(_cache.pc.path, t, first_time, prev_wp);
+                sampleDubinsState(_cache.pc.path, t + _cache.pc.path.length_[s] / _cache.pc.path.length(), first_time, wp);
                 // compute the center of rotation of the dubins path
-                float beta = (M_PI - _cache.path.length_[s]) / 2.0f;
+                float beta = (M_PI - _cache.pc.path.length_[s]) / 2.0f;
                 if (beta < 0.0f) {
-                    beta = (-M_PI + _cache.path.length_[s]) / 2.0f;
+                    beta = (-M_PI + _cache.pc.path.length_[s]) / 2.0f;
                 }
                 Eigen::Vector2f d = _dubins_state_space.getTurningRadius() * (wp.head(2) - prev_wp.head(2)).normalized();
                 Eigen::Vector2f c = Eigen::Rotation2Df(-beta) * d + prev_wp.head(2);
@@ -429,22 +485,15 @@ void QuasiStaticSE2Oracle::computeAction(const Eigen::Affine2f& wTz_c, const Eig
                 Eigen::Affine2f wTr = wTz * zTr;
                 // compute radius on which robot moves around c
                 float robot_r = (wTr.translation().head(2) - c).norm();
-                _cache.num_samples[s] = robot_r * _cache.path.length_[s] / _params.path_step_size;
+                _cache.pc.num_samples[s] = std::ceil(robot_r * _cache.pc.path.length_[s] / _params.path_step_size);
                 break;
             }
             }
-            t += _cache.path.length_[s] / _cache.path.length();
+            t += _cache.pc.path.length_[s] / _cache.pc.path.length();
         }
     }
-    _cache.sample_idx = 0;
-    // set start state
-    Eigen::Affine2f wTr = wTz_c * zTr;
-    // mps_logging::logDebug(boost::format("Adding waypoint (%1%: %2%, %3%, %4%)") % time_stamp % wp[0] % wp[1] % wp[2], log_prefix);
-    _cache.start_state[0] = wTr.translation().x();
-    _cache.start_state[1] = wTr.translation().y();
-    _cache.start_state[2] = std::atan2(wTr.rotation().coeff(1, 0), wTr.rotation().coeff(0, 0));
     // save transform zTr
-    _cache.zTr = zTr;
+    _cache.pc.zTr = zTr;
 }
 
 void QuasiStaticSE2Oracle::samplePath(ompl::control::TimedWaypoints* control) const
@@ -453,35 +502,27 @@ void QuasiStaticSE2Oracle::samplePath(ompl::control::TimedWaypoints* control) co
     Eigen::VectorXf wp(3);
     Eigen::VectorXf prev_wp(3);
     float time_stamp = control->getDuration();
+    // the given control is either empty, or contains an approach path to _cache.start_state
     if (control->numWaypoints() > 0) {
-        prev_wp = std::get<1>(*(--control->endWaypoints()));
+        prev_wp = std::get<1>(*(--(control->endWaypoints())));
+        assert(prev_wp.head(3) == _cache.pc.start_state);
     } else {
-        prev_wp.head(3) = _cache.start_state;
-    }
-    // first add start state
-    wp.head(3) = _cache.start_state;
-    time_stamp += std::max((wp.head(2) - prev_wp.head(2)).norm() / _params.push_vel,
-            std::abs(mps_math::shortest_direction_so2(prev_wp[2], wp[2])) / _params.rot_push_vel);
-    control->addWaypoint(time_stamp, wp);
-    prev_wp = wp;
-    // compute in what segment we should start sampling
-    unsigned int seq = 0;
-    unsigned int idx = _cache.sample_idx + 1;
-    while (idx > _cache.num_samples[seq] and seq < 3) {
-        idx -= _cache.num_samples[seq];
-        ++seq;
+        // first add start state
+        control->addWaypoint(0.0f, _cache.pc.start_state);
+        prev_wp = _cache.pc.start_state;
     }
     // run over path and sample as long as we haven't travelled more than _params.action_length
+    // and haven't reached the end
     float robot_distance = 0.0f;
-    unsigned int total_num_samples = _cache.num_samples[0] + _cache.num_samples[1] + _cache.num_samples[2];
     bool first_time = false;
-    while (_cache.sample_idx < total_num_samples) {
+    while (robot_distance < _params.action_length and _cache.pc.nextSampleIdx()) {
         // sample _cache.sample_idx's robot state
-        float t = _cache.t_offsets[seq] + (float)idx / (float)_cache.num_samples[seq] * _cache.path.length_[seq] / _cache.path.length();
-        sampleDubinsState(_cache.path, t, first_time, wp);
+        float t = _cache.pc.t_offsets[_cache.pc.seg_idx] + (float)(_cache.pc.in_seg_idx + 1) / (float)_cache.pc.num_samples[_cache.pc.seg_idx] * _cache.pc.path.length_[_cache.pc.seg_idx] / _cache.pc.path.length();
+        mps_logging::logDebug(boost::format("Sampling t=%1%") % t, "[QuasiStaticSE2Oracle::samplePath]");
+        sampleDubinsState(_cache.pc.path, t, first_time, wp);
         wp[2] -= M_PI / 2.0f;
         Eigen::Affine2f wTz = Eigen::Translation2f(wp[0], wp[1]) * Eigen::Rotation2Df(wp[2]);
-        Eigen::Affine2f wTr = wTz * _cache.zTr;
+        Eigen::Affine2f wTr = wTz * _cache.pc.zTr;
         wp[0] = wTr.translation().x();
         wp[1] = wTr.translation().y();
         wp[2] = std::atan2(wTr.rotation().coeff(1, 0), wTr.rotation().coeff(0, 0));
@@ -492,23 +533,17 @@ void QuasiStaticSE2Oracle::samplePath(ompl::control::TimedWaypoints* control) co
         // mps_logging::logDebug(boost::format("Adding waypoint (%1%: %2%, %3%, %4%)") % time_stamp % wp[0] % wp[1] % wp[2], log_prefix);
         control->addWaypoint(time_stamp, wp);
         prev_wp = wp;
-        // break if the robot has travelled as much as it is allowed within one action
-        if (robot_distance > _params.action_length) {
-            break;
-        } else {
-            // increase sample counter and indices
-            ++_cache.sample_idx;
-            ++idx;
-            if (idx == _cache.num_samples[seq]) {
-                ++seq;
-                idx = 1;
-            }
-        }
     }
     // done sampling, update _cache
-    _cache.start_state = wp; // next start state is the last state added to this action
-    if (_cache.sample_idx == total_num_samples) { // we sampled the whole path, so reset the cache
-        _cache.reset();
+    _cache.pc.start_state = wp; // next start state is the last state added to this action
+    // compute respective object state to detect failure in future iterations
+    Eigen::Affine2f wTo = Eigen::Translation2f(wp[0], wp[1]) * Eigen::Rotation2Df(wp[2]) * _cache.pc.rTo;
+    _cache.pc.obj_start_state[0] = wTo.translation().x();
+    _cache.pc.obj_start_state[1] = wTo.translation().y();
+    _cache.pc.obj_start_state[2] = std::atan2(wTo.rotation().coeff(1, 0), wTo.rotation().coeff(0, 0));
+    if (_cache.pc.seg_idx == 3) { // we sampled the whole path, so reset the cache
+        _cache.pc = PushingPathCache();
+        _cache.path_computed = false;
     }
 
     // for (unsigned int s = 0; s < 3; ++s) {

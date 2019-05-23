@@ -31,6 +31,7 @@ namespace planner {
                     float push_penetration; // translational offset along the normal of the object's edge (negative = penetration)
                     float max_push_state_distance; // maximal SE2 state distance from the closest pushing state from
                         // where to start the pushing policy
+                    float max_obj_state_deviation; // maximal SE2 state distance that the object is allowed to be off from its reference pose
                     float action_length; // maximal distance the robot is allowed to travel within one control computed by predictAction
                 };
 
@@ -119,23 +120,35 @@ namespace planner {
 
                 // PushingPathCache allows us to reuse pushing paths and states across subsequent calls of
                 // samplePushingState(..) and/or predictAction(..) for the same object and destination.
-                struct PushingPathCache {
-                    bool edge_pair_computed; // stores whether edge pair has been computed
-                    unsigned int obj_id; // id of the object to push
-                    unsigned int edge_pair_id; // id of the edge pair to use
+                struct PushingEdgeCache {
                     float edge_translation; // parallel translation
-                    // Data below caches a path for piece-wise pushing
-                    bool path_computed; // stores whether a path has been computed
-                    Eigen::Vector3f target_state; // target state of that path
+                    unsigned int pair_id; // edge pair id
+                    PushingEdgeCache();
+                };
+                struct PushingPathCache {
                     Eigen::Vector3f start_state; // robot start state of remaining path (== state at sample_idx)
+                    Eigen::Vector3f obj_start_state; // object start state of remaining path (== object state at sample_idx)
                     ::ompl::base::DubinsStateSpace::DubinsPath path; // the path
                     unsigned int num_samples[3]; // number of samples per path segment
                     float t_offsets[3]; // interpolation offsets for each sample
-                    unsigned int sample_idx; // how many state samples have already been returned from the path
+                    unsigned int seg_idx; // index of last sampled segment
+                    unsigned int in_seg_idx; // index of last sampled state within last sampled segment
                     Eigen::Affine2f zTr;
-                    void reset(); // resets *computed flags to false
+                    Eigen::Affine2f rTo;
+                    PushingPathCache();
+                    bool nextSampleIdx(); // increase seg_idx and in_seg_idx. Return True if there new indices are valid
                 };
-                mutable PushingPathCache _cache;
+                struct PushingCache {
+                    bool path_computed; // stores whether a path has been computed
+                    bool edge_pair_computed; // stores whether edge pair has been computed
+                    unsigned int obj_id; // id of the object to push
+                    Eigen::Vector3f target_state; // target state of the push
+                    PushingEdgeCache ec;
+                    PushingPathCache pc;
+                    PushingCache();
+                    void reset();
+                };
+                mutable PushingCache _cache;
                 mutable Eigen::VectorXf _eigen_config;
                 mutable Eigen::VectorXf _eigen_config2;
                 // for debugging
@@ -144,7 +157,7 @@ namespace planner {
 
                 // policy helper
                 void computePushingPath(const Eigen::Vector3f& obj_state, const Eigen::Vector3f& target_state,
-                    const Eigen::Vector3f& robot_state);
+                    const Eigen::Vector3f& rob_state);
                 std::pair<Eigen::Vector3f, float> selectEdgePair(unsigned int obj_id, const ompl::state::SimEnvWorldState* current_state);
                 std::pair<float, float> computePushingStateDistance(unsigned int obj_id, unsigned int pair_id,
                     const ompl::state::SimEnvWorldState* current_state,
