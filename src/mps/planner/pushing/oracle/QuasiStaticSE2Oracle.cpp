@@ -210,9 +210,8 @@ void QuasiStaticSE2Oracle::predictAction(const mps_state::SimEnvWorldState* curr
             if (state_dist > _params.action_length) {
                 return;
             }
-            rob_state = closest_state;
         }
-        computePushingPath(obj_state, target_obj_state, rob_state);
+        computePushingPath(obj_state, target_obj_state, closest_state);
     } else {
         // float robot_pose_error = (rob_state.head(2) - _cache.start_state.head(2)).norm() + _params.orientation_weight * std::abs(rob_state[2] - _cache.start_state[2]);
         // // if we the robot is too far off from its desired state, move it there first

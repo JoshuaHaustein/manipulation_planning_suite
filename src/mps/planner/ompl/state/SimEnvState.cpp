@@ -1394,9 +1394,9 @@ bool SimEnvValidityChecker::CollisionPolicy::collisionAllowed(sim_env::ObjectCon
     } else {
         collision_permitted = collisionAllowed(obj1->getName(), obj2->getName());
     }
-    mps_logging::logDebug(boost::format("Collision between %1% and %2% is permitted: %3%")
-            % obj1->getName() % obj2->getName() % collision_permitted,
-        log_prefix);
+    // mps_logging::logDebug(boost::format("Collision between %1% and %2% is permitted: %3%")
+    //         % obj1->getName() % obj2->getName() % collision_permitted,
+    //     log_prefix);
     return collision_permitted;
 }
 
@@ -1464,9 +1464,9 @@ bool SimEnvValidityChecker::isValid(const ::ompl::base::State* state) const
     bool valid = isWorldStateValid(false);
     // restore whatever state the world was in before
     _world->restoreState();
-    if (valid) {
-        mps_logging::logDebug("The state " + world_state->toString() + " is valid.", "[SimEnvValidityChecker::isValid]");
-    }
+    // if (valid) {
+    //     mps_logging::logDebug("The state " + world_state->toString() + " is valid.", "[SimEnvValidityChecker::isValid]");
+    // }
     return valid;
 }
 
@@ -1572,8 +1572,10 @@ bool SimEnvValidityChecker::isValidIntermediate(std::vector<sim_env::Contact>& c
     for (auto contact : contacts) {
         bool contact_ok = checkContact(contact);
         if (!contact_ok) {
+#ifdef DEBUG_PRINTOUTS
             mps_logging::logDebug("Rejecting state due to violation of contact constraints.",
                 "[mps::planner::ompl::state::SimEnvValidityChecker::isValidIntermediate]");
+#endif
             return false;
         }
     }

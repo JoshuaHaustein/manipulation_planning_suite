@@ -73,15 +73,18 @@ void TimedWaypoints::print(std::ostream& out) const
     out << std::endl;
 }
 
-TimedWaypoints::WaypointIterator TimedWaypoints::beginWaypoints() const {
+TimedWaypoints::WaypointIterator TimedWaypoints::beginWaypoints() const
+{
     return _waypoints.begin();
 }
 
-TimedWaypoints::WaypointIterator TimedWaypoints::endWaypoints() const {
+TimedWaypoints::WaypointIterator TimedWaypoints::endWaypoints() const
+{
     return _waypoints.end();
 }
 
-unsigned int TimedWaypoints::numWaypoints() const {
+unsigned int TimedWaypoints::numWaypoints() const
+{
     return _waypoints.size();
 }
 
@@ -107,6 +110,10 @@ void TimedWaypoints::getPosition(float t, Eigen::VectorXf& position) const
     assert(!_waypoints.empty());
     if (_waypoints.size() == 1) {
         position = _waypoints.at(0).second;
+        return;
+    }
+    if (t >= _waypoints.back().first) {
+        position = _waypoints.back().second;
         return;
     }
     // assuming waypoint[0].first == 0.0

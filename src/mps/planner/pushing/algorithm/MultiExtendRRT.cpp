@@ -610,7 +610,7 @@ std::tuple<GreedyMultiExtendRRT::PushResult, PushMotionPtr> GreedyMultiExtendRRT
         MovableSet tmp_blockers;
         bool valid_blockers = getPushBlockers(tmp_approach_motion, tmp_pushing_motion, target_slice, movables, tmp_blockers, pb);
         // check whether the newly sampled push is better than what we had before
-        if (valid_blockers and made_progress and blockers.size() < min_num_blockers) {
+        if (valid_blockers and made_progress and tmp_blockers.size() < min_num_blockers) {
             blockers = tmp_blockers;
             min_num_blockers = blockers.size();
             _si->copyState(approach_motion->getState(), tmp_approach_motion->getState());
