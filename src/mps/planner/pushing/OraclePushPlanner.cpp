@@ -657,7 +657,7 @@ void OraclePushPlanner::createAlgorithm()
             mps::planner::pushing::oracle::PushingOracle::ObjectData data;
             data.mass = object->getMass();
             data.inertia = object->getInertia();
-            data.mu = object->getGroundFriction();
+            data.mu = object->getConstBaseLink()->getGroundFrictionCoefficient();
             auto aabb = object->getLocalAABB();
             data.width = aabb.getWidth();
             data.height = aabb.getHeight();
