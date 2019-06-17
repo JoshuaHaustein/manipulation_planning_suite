@@ -37,14 +37,12 @@ RampComputer& RampComputer::operator=(const RampComputer& other) {
     return *this;
 }
 
-void mps::planner::pushing::oracle::RampComputer::steer(const Eigen::VectorXf &current_robot_state,
-                                                        const Eigen::VectorXf &desired_robot_state,
-                                                        std::vector<Eigen::VectorXf> &control_params) const {
+void mps::planner::pushing::oracle::RampComputer::steer(const Eigen::VectorXf& relative_state_dir,
+    std::vector<Eigen::VectorXf> & control_params) const {
     static const std::string log_prefix("[mps::planner::pusing::oracle::RampComputer::steer");
     std::stringstream debug_ss;
-    Eigen::VectorXf dir;
-    _robot_space->computeDirection(current_robot_state, desired_robot_state, dir);
 
+    Eigen::VectorXf dir(relative_state_dir);
     float distance = dir.norm();
     dir.normalize();
 
@@ -89,6 +87,14 @@ void mps::planner::pushing::oracle::RampComputer::steer(const Eigen::VectorXf &c
         control_params.push_back(_ramp_control->getParameters());
         distance = distance - max_plateau_dist;
     }
+}
+
+void mps::planner::pushing::oracle::RampComputer::steer(const Eigen::VectorXf &current_robot_state,
+                                                        const Eigen::VectorXf &desired_robot_state,
+                                                        std::vector<Eigen::VectorXf> &control_params) const {
+    Eigen::VectorXf dir;
+    _robot_space->computeDirection(current_robot_state, desired_robot_state, dir);
+    steer(dir, control_params);
 }
 
 

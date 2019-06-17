@@ -22,6 +22,9 @@ namespace mps {
                         ~RampComputer() override;
                         RampComputer& operator=(const RampComputer& other);
 
+                        void steer(const Eigen::VectorXf &relative_state_dir,
+                                   std::vector<Eigen::VectorXf> &control_params) const;
+
                         void steer(const Eigen::VectorXf &current_robot_state,
                                    const Eigen::VectorXf &desired_robot_state,
                                    std::vector<Eigen::VectorXf> &control_params) const override;
