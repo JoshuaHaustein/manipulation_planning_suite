@@ -1575,3 +1575,10 @@ bool SimEnvValidityChecker::checkContact(const sim_env::Contact& contact) const
     }
     return collision_policy.collisionAllowed(obj1, obj2);
 }
+
+bool SimEnvValidityChecker::checkContact(sim_env::LinkPtr a, sim_env::LinkPtr b) const
+{
+    auto obj_a = a->getObject();
+    auto obj_b = b->getObject();
+    return collision_policy.collisionAllowed(obj_a, obj_b);
+}

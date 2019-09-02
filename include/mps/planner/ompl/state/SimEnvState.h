@@ -544,6 +544,12 @@ namespace planner {
                      * Checks whether a given contact is permitted.
                      */
                 bool checkContact(const sim_env::Contact&) const;
+
+                /**
+                 *  Returns whether the a contact between the two links is permitted.
+                 */
+                bool checkContact(sim_env::LinkPtr a, sim_env::LinkPtr b) const;
+
                 /**
                      * Public access to collision policy
                      */
